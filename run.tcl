@@ -37,6 +37,7 @@ package require tls
 http::register https 443 [list tls::socket]
 
 # run sample project without building
+# NOTE: package versions are not respected!!!
 #source sample/main.tcl
 
 
@@ -69,12 +70,12 @@ proc get-fetchnames {os arch pkgname ver} {
       if {$os eq "windows"} {
         set res $res.exe
       }
+      return $res
     }
     default {
-      #TODO now 2 possibilites zip or tm
+      return [list "package-$pkgname-$ver-tcl.tm" "package-$pkgname-$ver-[osext $os]-$arch.zip"]
     }
   }
-  return $res
 }
 
 
@@ -85,14 +86,30 @@ proc wget {url filepath} {
   set fo [open $filepath w]
   set tok [http::geturl $url -channel $fo]
   close $fo
-  foreach {name value} [http::meta $tok] {
-    puts "$name: $value"
+  if {[http::ncode $tok] != 200} {
+    file delete $filepath
+    set retcode [http::code $tok]
+    http::cleanup $tok
+    return $retcode
   }
+  #puts "http::status: [http::status $tok]"
+  #puts "http::code: [http::code $tok]"
+  #puts "http::ncode: [http::ncode $tok]"
+  #foreach {name value} [http::meta $tok] {
+  #  puts "$name: $value"
+  #}
   http::cleanup $tok
+  return
 }
 
 
 
+
+
+proc copy-base {os arch pkgname ver proj} {
+  prepare-pkg $os $arch $pkgname $ver
+  file copy -force [file join lib $os-$arch $pkgname-$ver] [file join build $proj $os-$arch]
+}
 
 # Package presence is checked in the following order:
 # 1. is pkg-ver in lib?          => copy to build dir
@@ -100,58 +117,81 @@ proc wget {url filepath} {
 # 3. is pkg-ver in github?       => fetch to downloads dir
 proc copy-pkg {os arch pkgname ver proj} {
   prepare-pkg $os $arch $pkgname $ver
-  #TODO if build/$proj/$os-$arch is dir
-  file copy -force [file join lib $os-$arch $pkgname-$ver] [file join build $proj $os-$arch]
-  # copy regular packages to build dir
-  # recognize base-tcl packages and place them properly
-  # delete if another package version present
+  if {\
+    [catch {file copy -force [file join lib $os-$arch $pkgname-$ver] [file join build $proj $os-$arch]}] &&\
+    [catch {file copy -force [file join lib generic $pkgname-$ver]   [file join build $proj $os-$arch]}]} {
+      #if both copy attempts failed raise error
+      error "Could not find $pkgname-$ver neither in lib/$os-$arch nor lib/generic"
+  }
 }
+
 
 proc prepare-pkg {os arch pkgname ver} {
-  
+  set target_path_depend [file join lib $os-$arch $pkgname-$ver]
+  set target_path_indep [file join lib generic $pkgname-$ver]
+  # nothing to do if pkg exists in lib dir, it may be file or dir
+  if {[file exists $target_path_depend] || [file exists $target_path_indep]} {
+    return
+  }
   fetch-pkg $os $arch $pkgname $ver
-  switch -glob $pkgname {
-    base-* {
-      set fetchnames [get-fetchnames $os $arch $pkgname $ver]
-      if {[llength $fetchnames] == 1} {
-        #TODO check if we can use base-tcl without exe extension for starpacks on Windows
-        file copy -force [file join downloads $fetchnames] [file join lib $os-$arch $pkgname-$ver]
-      } else {
-        error "should be only one fetchname"
+  set candidates [get-fetchnames $os $arch $pkgname $ver]
+  foreach cand $candidates {
+    set cand_path [file join downloads $cand]
+    if {[file isfile $cand_path]} {
+      switch -glob $cand {
+        application-* {
+          #TODO check if we can use base-tcl without exe extension for starpacks on Windows
+          file copy -force $cand_path $target_path_depend
+          return 
+        }
+        package-*.zip {
+          file mkdir $target_path_depend
+          return
+        }
+        package-*-tcl.tm {
+          file mkdir $target_path_indep
+          file copy $cand_path [file join $target_path_indep $pkgname-$ver.tcl]
+          pkg_mkIndex $target_path_indep
+          return
+        }
+        default {}
       }
-
-    }
-    default {
     }
   }
-
+  error
 }
+ 
+
 
 proc fetch-pkg {os arch pkgname ver} {
-  set fetchnames [get-fetchnames $os $arch $pkgname $ver]
+  set candidates [get-fetchnames $os $arch $pkgname $ver]
   # return if at least one candidate exists in downloads
-  foreach name $fetchnames {
-    if {[file isfile [file join downloads $name]]} {
+  foreach cand $candidates {
+    if {[file isfile [file join downloads $cand]]} {
       return
     }
   }
   set repourl https://raw.githubusercontent.com/skrepo/activestate/master/teacup/$pkgname
-  foreach name $fetchnames {
-    set url $repourl/$name
-    #TODO check wget status and return if downloaded
-    wget $url [file join downloads $name]
+  foreach cand $candidates {
+    set url $repourl/$cand
+    # return on first successful download
+    if {[wget $url [file join downloads $cand]] eq ""} {
+      return
+    }
   }
-  #raise error if we got here
+  error "Could not fetch package $pkgname-$ver for $os-$arch"
 }
 
 
 
 
 
-proc build {os arch proj {packages {}}} {
+proc build {os arch proj base {packages {}}} {
   set bld [file join build $proj $os-$arch]
   file delete -force $bld
   file mkdir $bld
+  file mkdir downloads
+  copy-base $os $arch {*}[split-last-dash $base] $proj
   foreach pkgver $packages {
     copy-pkg $os $arch {*}[split-last-dash $pkgver] $proj
   }
@@ -160,9 +200,9 @@ proc build {os arch proj {packages {}}} {
 }
 
 
-build linux ix86 another {base-tcl-8.6.3.1}
+build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3}
 
-#build linux ix86 another {base-tcl-8.6.3.1 tls-1.6.4}
-#build win32 ix86 another {base-tcl-8.6.3.1 tls-1.6.4}
+#build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
+#build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
 
 
