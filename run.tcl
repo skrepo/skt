@@ -36,40 +36,45 @@ package require aes
 # run sample project without building
 #source sample/main.tcl
 
-linux ix86
-win32 ix86
-
 # Package presence is checked in the following order:
-# 1. is pkg-ver in lib?          => copy to build_* dir
+# 1. is pkg-ver in lib?          => copy to build dir
 # 2. is pkg-ver in downloads?    => prepare, unpack to lib dir, delete other versions in lib dir
 # 3. is pkg-ver in github?       => fetch to downloads dir
-proc copy-pkg {os arch name ver build_dir clean_other_ver} {
-  #add version, download and make the package ready to use
+proc copy-pkg {os arch pkgname ver proj} {
+  # copy regular packages to build dir
+  # recognize base-tcl packages and place them properly
   # delete if another package version present
 }
 
-proc prepare-pkg {os arch name ver} {
+proc prepare-pkg {os arch pkgname ver} {
 }
 
-proc fetch-pkg {os arch name ver} {
+proc fetch-pkg {os arch pkgname ver} {
 
 }
 
 
-set pkgname(base-tk-thread-linux-ix86) application-base-tk-thread-8.6.4.0.298892-linux-glibc2.3-ix86
 
-https://github.com/skrepo/activestate/blob/master/teacup/base-tk-thread/application-base-tk-thread-8.6.4.0.298892-linux-glibc2.3-ix86
+#https://github.com/skrepo/activestate/blob/master/teacup/base-tk-thread/application-base-tk-thread-8.6.4.0.298892-linux-glibc2.3-ix86
 
-
-
+# convert pkg-name-1.2.3 into "pkg-name 1.2.3"
+proc split-pkg-ver {pkgver} {
+  set dashpos [string last - $pkgver]
+  if {$dashpos > 0} {
+    return [string replace $pkgver $dashpos $dashpos " "]
+  } else {
+    error "Wrong package name: $pkgver. It should be pkgname-1.2.3"
+  }
+}
 
 proc build {os arch proj {packages {}}} {
-  set bld build_$proj
+  set bld [file join build $proj $os-$arch]
   file delete -force $bld
   file mkdir $bld
-  #::puts [info nameofexecutable]
-  ::file copy ./lib/linux/ix86/application-base-tcl-8.6.3.1.298685-linux-glibc2.3-ix86 $bld
-  #exec cp [info nameofexecutable] $bld
+  foreach pkgver $packages {
+    copy-pkg $os $arch {*}[split-pkg-ver $pkgver] $proj
+
+  }
 
 
 }
