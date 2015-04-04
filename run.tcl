@@ -34,13 +34,20 @@ lappend auto_path lib/generic
 package require aes
 package require http
 package require tls
+package require vfs::zip
 http::register https 443 [list tls::socket]
 
 # run sample project without building
 # NOTE: package versions are not respected!!!
 #source sample/main.tcl
 
-
+proc unzip {zipfile {destdir .}} {
+  set mntfile [vfs::zip::Mount $zipfile $zipfile]
+  foreach f [glob $zipfile/*] {
+    file copy $f $destdir
+  }
+  vfs::zip::Unmount $mntfile $zipfile
+}
 
 
 
@@ -67,7 +74,7 @@ proc get-fetchnames {os arch pkgname ver} {
   switch -glob $pkgname {
     base-* {
       set res "application-$pkgname-$ver-[osext $os]-$arch"
-      if {$os eq "windows"} {
+      if {$os eq "win32"} {
         set res $res.exe
       }
       return $res
@@ -146,6 +153,7 @@ proc prepare-pkg {os arch pkgname ver} {
         }
         package-*.zip {
           file mkdir $target_path_depend
+          unzip $cand_path $target_path_depend
           return
         }
         package-*-tcl.tm {
@@ -174,6 +182,7 @@ proc fetch-pkg {os arch pkgname ver} {
   set repourl https://raw.githubusercontent.com/skrepo/activestate/master/teacup/$pkgname
   foreach cand $candidates {
     set url $repourl/$cand
+    #puts "Trying url: $url"
     # return on first successful download
     if {[wget $url [file join downloads $cand]] eq ""} {
       return
@@ -200,7 +209,8 @@ proc build {os arch proj base {packages {}}} {
 }
 
 
-build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3}
+build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
+build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
 
 #build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
 #build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
