@@ -239,11 +239,6 @@ proc build {os arch proj base {packages {}}} {
 
 #platforminfo
 
-#build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4}
-#build win32 ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3}
-
-# run sample project without building
-# NOTE: package versions are not respected!!!
-#source sample/main.tcl
+source build.tcl
 
 

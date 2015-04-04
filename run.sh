@@ -1,4 +1,4 @@
 #!/bin/sh
 
-./base-tcl-linux run.tcl "$@"
+./base-tcl-linux bootstrap.tcl "$@"
 

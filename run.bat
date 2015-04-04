@@ -1,2 +1,2 @@
-base-tcl-win32.exe run.tcl %*
+base-tcl-win32.exe bootstrap.tcl %*
 
