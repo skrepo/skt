@@ -1,10 +1,28 @@
 # This should be the preamble to every application
-# It makes it possible to run as starpack or as sourced script
+# It makes it possible to run as starpack or as a sourced script
 if {![catch {package require starkit}]} {
   #this is to initialize starkit variables
   starkit::startup
 }
 
+proc this-platform-path {} {
+    # assume ix86 - hopefully only 32-bit builds needed
+    switch -glob $::tcl_platform(os) {
+        Linux {return linux-ix86}
+        Windows* {return win32-ix86}
+        default {error "Unrecognized platform"}
+    }
+}
+
+# path to platform dependent libs in the lib dir
+lappend auto_path [file join lib [this-platform-path]]
+# path to generic libs in the lib dir
+lappend auto_path [file join lib generic]
+
+package require http
+package require vfs::zip
+package require tls
+http::register https 443 [list tls::socket]
 
 
 proc platforminfo {} {
@@ -23,28 +41,6 @@ proc platforminfo {} {
     parray ::tcl_platform
 }
 
-
-platforminfo
-
-proc platform_path {} {
-    # assume ix86 - hopefully only 32-bit builds needed
-    switch -glob $::tcl_platform(os) {
-        Linux {return lib/linux-ix86}
-        Windows* {return lib/win32-ix86}
-        default {error "Unrecognized platform"}
-    }
-}
-
-lappend auto_path [platform_path]
-lappend auto_path lib/generic
-
-# test package/module
-package require http
-package require tls
-package require vfs::zip
-http::register https 443 [list tls::socket]
-
-
 proc unzip {zipfile {destdir .}} {
   set mntfile [vfs::zip::Mount $zipfile $zipfile]
   foreach f [glob [file join $zipfile *]] {
@@ -52,8 +48,6 @@ proc unzip {zipfile {destdir .}} {
   }
   vfs::zip::Unmount $mntfile $zipfile
 }
-
-
 
 # convert pkg-name-1.2.3 into "pkg-name 1.2.3" or
 # convert linux-ix86 into "linux ix86"
@@ -66,7 +60,7 @@ proc split-last-dash {s} {
   }
 }
 
-proc osext {os} {
+proc oscompiler {os} {
   if {$os eq "linux"} {
     return $os-glibc2.3
   } else {
@@ -74,17 +68,19 @@ proc osext {os} {
   }
 }
 
+
+# based on the pkgname return candidate names of remote files (to be used in url)
 proc get-fetchnames {os arch pkgname ver} {
   switch -glob $pkgname {
     base-* {
-      set res "application-$pkgname-$ver-[osext $os]-$arch"
+      set res "application-$pkgname-$ver-[oscompiler $os]-$arch"
       if {$os eq "win32"} {
         set res $res.exe
       }
       return $res
     }
     default {
-      return [list "package-$pkgname-$ver-tcl.tm" "package-$pkgname-$ver-[osext $os]-$arch.zip"]
+      return [list "package-$pkgname-$ver-tcl.tm" "package-$pkgname-$ver-[oscompiler $os]-$arch.zip"]
     }
   }
 }
@@ -103,12 +99,6 @@ proc wget {url filepath} {
     http::cleanup $tok
     return $retcode
   }
-  #puts "http::status: [http::status $tok]"
-  #puts "http::code: [http::code $tok]"
-  #puts "http::ncode: [http::ncode $tok]"
-  #foreach {name value} [http::meta $tok] {
-  #  puts "$name: $value"
-  #}
   http::cleanup $tok
   return
 }
@@ -126,32 +116,41 @@ proc wget {url filepath} {
 # 1. is pkg-ver in lib?          => copy to build dir
 # 2. is pkg-ver in downloads?    => prepare, unpack to lib dir, delete other versions in lib dir
 # 3. is pkg-ver in github?       => fetch to downloads dir
+
+
+# first prepare-pkg and copy from lib to build
 proc copy-pkg {os arch pkgname ver proj} {
   prepare-pkg $os $arch $pkgname $ver
+  set libdir [file join build $proj $os-$arch $proj.vfs lib]
+  puts "Copying package $pkgname-$ver to $libdir"
   if {\
-    [catch {file copy -force [file join lib $os-$arch $pkgname-$ver] [file join build $proj $os-$arch $proj.vfs lib]}] &&\
-    [catch {file copy -force [file join lib generic $pkgname-$ver]   [file join build $proj $os-$arch $proj.vfs lib]}]} {
+    [catch {file copy -force [file join lib $os-$arch $pkgname-$ver] $libdir}] &&\
+    [catch {file copy -force [file join lib generic $pkgname-$ver]   $libdir}]} {
       #if both copy attempts failed raise error
       error "Could not find $pkgname-$ver neither in lib/$os-$arch nor lib/generic"
   }
 }
 
-
 proc prepare-pkg {os arch pkgname ver} {
   set target_path_depend [file join lib $os-$arch $pkgname-$ver]
   set target_path_indep [file join lib generic $pkgname-$ver]
   # nothing to do if pkg exists in lib dir, it may be file or dir
-  if {[file exists $target_path_depend] || [file exists $target_path_indep]} {
+  if {[file exists $target_path_depend]} {
+    puts "Already prepared: $target_path_depend"
+    return
+  }
+  if {[file exists $target_path_indep]} {
+    puts "Already prepared: $target_path_indep"
     return
   }
   fetch-pkg $os $arch $pkgname $ver
+  puts "Preparing package $pkgname-$ver to place in lib folder"
   set candidates [get-fetchnames $os $arch $pkgname $ver]
   foreach cand $candidates {
     set cand_path [file join downloads $cand]
     if {[file isfile $cand_path]} {
       switch -glob $cand {
         application-* {
-          #TODO check if we can use base-tcl without exe extension for starpacks on Windows
           file copy -force $cand_path $target_path_depend
           return 
         }
@@ -170,7 +169,7 @@ proc prepare-pkg {os arch pkgname ver} {
       }
     }
   }
-  error
+  error "Could not find existing file from candidates: $candidates"
 }
  
 
@@ -181,16 +180,21 @@ proc fetch-pkg {os arch pkgname ver} {
   # return if at least one candidate exists in downloads
   foreach cand $candidates {
     if {[file isfile [file join downloads $cand]]} {
+      puts "Already downloaded: $cand"
       return
     }
   }
   set repourl https://raw.githubusercontent.com/skrepo/activestate/master/teacup/$pkgname
   foreach cand $candidates {
+    puts -nonewline "Trying to download $cand...     "
+    flush stdout
     set url $repourl/$cand
-    #puts "Trying url: $url"
     # return on first successful download
     if {[wget $url [file join downloads $cand]] eq ""} {
+      puts "DONE"
       return
+    } else {
+      puts "FAIL"
     }
   }
   error "Could not fetch package $pkgname-$ver for $os-$arch"
@@ -208,7 +212,13 @@ proc suffix_exec {os} {
 
 
 proc build {os arch proj base {packages {}}} {
+  puts "\nStarting build ($os $arch $proj $base $packages)"
+  if {![file isdirectory $proj]} {
+    puts "Could not find project dir $proj"
+    return
+  }
   set bld [file join build $proj $os-$arch]
+  puts "Cleaning build dir $bld"
   file delete -force $bld
   file mkdir [file join $bld $proj.vfs lib]
   # we don't copy base-tcl/tk to build folder, only in lib is enough - hence prepare-pkg
@@ -216,27 +226,24 @@ proc build {os arch proj base {packages {}}} {
   foreach pkgver $packages {
     copy-pkg $os $arch {*}[split-last-dash $pkgver] $proj
   }
+  set vfs [file join $bld $proj.vfs]
+  puts "Copying project source files to $vfs"
   foreach f [glob [file join $proj *]] {
-    file copy $f [file join $bld $proj.vfs]
+    file copy $f $vfs
   }
-
-  #./base-tcl-linux sdx.kit wrap build/sample/linux-ix86/sam -vfs build/sample/linux-ix86/sample.vfs -runtime lib/linux-ix86/base-tcl-8.6.3.1 
-
   set cmd [list [info nameofexecutable] sdx.kit wrap [file join $bld $proj[suffix_exec $os]] -vfs [file join $bld $proj.vfs] -runtime [file join lib $os-$arch $base]]
-
+  puts "Building starpack"
   puts $cmd
   exec {*}$cmd
 }
 
+#platforminfo
 
-build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4}
-build win32 ix86 sample base-tcl-8.6.3.1 {tls-1.6.4}
-
-#build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
-#build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
+#build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4}
+#build win32 ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3}
 
 # run sample project without building
 # NOTE: package versions are not respected!!!
-source sample/main.tcl
+#source sample/main.tcl
 
 
