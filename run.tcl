@@ -42,7 +42,7 @@ http::register https 443 [list tls::socket]
 
 proc unzip {zipfile {destdir .}} {
   set mntfile [vfs::zip::Mount $zipfile $zipfile]
-  foreach f [glob $zipfile/*] {
+  foreach f [glob [file join $zipfile *]] {
     file copy $f $destdir
   }
   vfs::zip::Unmount $mntfile $zipfile
@@ -112,10 +112,10 @@ proc wget {url filepath} {
 
 
 
-proc copy-base {os arch pkgname ver proj} {
-  prepare-pkg $os $arch $pkgname $ver
-  file copy -force [file join lib $os-$arch $pkgname-$ver] [file join build $proj $os-$arch]
-}
+#proc copy-base {os arch pkgname ver proj} {
+#  prepare-pkg $os $arch $pkgname $ver
+#  file copy -force [file join lib $os-$arch $pkgname-$ver] [file join build $proj $os-$arch]
+#}
 
 # Package presence is checked in the following order:
 # 1. is pkg-ver in lib?          => copy to build dir
@@ -124,8 +124,8 @@ proc copy-base {os arch pkgname ver proj} {
 proc copy-pkg {os arch pkgname ver proj} {
   prepare-pkg $os $arch $pkgname $ver
   if {\
-    [catch {file copy -force [file join lib $os-$arch $pkgname-$ver] [file join build $proj $os-$arch]}] &&\
-    [catch {file copy -force [file join lib generic $pkgname-$ver]   [file join build $proj $os-$arch]}]} {
+    [catch {file copy -force [file join lib $os-$arch $pkgname-$ver] [file join build $proj $os-$arch $proj.vfs lib]}] &&\
+    [catch {file copy -force [file join lib generic $pkgname-$ver]   [file join build $proj $os-$arch $proj.vfs lib]}]} {
       #if both copy attempts failed raise error
       error "Could not find $pkgname-$ver neither in lib/$os-$arch nor lib/generic"
   }
@@ -171,6 +171,7 @@ proc prepare-pkg {os arch pkgname ver} {
 
 
 proc fetch-pkg {os arch pkgname ver} {
+  file mkdir downloads
   set candidates [get-fetchnames $os $arch $pkgname $ver]
   # return if at least one candidate exists in downloads
   foreach cand $candidates {
@@ -191,30 +192,43 @@ proc fetch-pkg {os arch pkgname ver} {
 }
 
 
+proc suffix_exec {os} {
+  array set os_suffix {
+    linux .bin
+    win32 .exe
+  }
+  return $os_suffix($os)
+}
 
 
 
 proc build {os arch proj base {packages {}}} {
   set bld [file join build $proj $os-$arch]
   file delete -force $bld
-  file mkdir $bld
-  file mkdir downloads
-  copy-base $os $arch {*}[split-last-dash $base] $proj
+  file mkdir [file join $bld $proj.vfs lib]
+  # we don't copy base-tcl/tk to build folder, only in lib is enough - hence prepare-pkg
+  prepare-pkg $os $arch {*}[split-last-dash $base]
   foreach pkgver $packages {
     copy-pkg $os $arch {*}[split-last-dash $pkgver] $proj
   }
+  foreach f [glob [file join $proj *]] {
+    file copy $f [file join $bld $proj.vfs]
+  }
 
+  #./base-tcl-linux sdx.kit wrap build/sample/linux-ix86/sam -vfs build/sample/linux-ix86/sample.vfs -runtime lib/linux-ix86/base-tcl-8.6.3.1 
 
+  set cmd [list [info nameofexecutable] sdx.kit wrap [file join $bld $proj[suffix_exec $os]] -vfs [file join $bld $proj.vfs] -runtime [file join lib $os-$arch $base]]
+
+  puts $cmd
+  exec {*}$cmd
 }
 
 
-build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
-build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
+build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4}
+build win32 ix86 sample base-tcl-8.6.3.1 {tls-1.6.4}
 
 #build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
 #build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
 
-#build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
-#build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
 
 
