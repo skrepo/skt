@@ -1,4 +1,14 @@
-#!/usr/bin/env tclsh
+# This should be the preamble to every application
+# It makes it possible to run as starpack or as a sourced script
+if {![catch {package require starkit}]} {
+  #this is to initialize starkit variables
+  if {[starkit::startup] ne "sourced"} {
+      rename ::source ::the-real-source
+      proc ::source {args} {
+          uplevel ::the-real-source [file join $starkit::topdir $args]
+      }
+  }
+}
 
 #TODO
 # if necessary save config files in /etc/openvpn/skt - not needed, don't save anything from SKD, stateless across SKD reboots
@@ -14,6 +24,7 @@
  
 # package vs source principle: sourced file may have back/circular references to the caller
 package require cmd
+
 source skutil.tcl
 source skmgmt.tcl
 
@@ -284,6 +295,7 @@ proc OvpnExit {code} {
 
 
 ResetMgmtState
+puts "Starting SKD server"
 socket -server SkdNewConnection 7777
 vwait forever
 

@@ -5,7 +5,8 @@ if {![catch {package require starkit}]} {
   starkit::startup
 }
 
-proc this-platform-path {} {
+# it simplifies the architecture - always returns ix86 !!!
+proc this-platform {} {
     # assume ix86 - hopefully only 32-bit builds needed
     switch -glob $::tcl_platform(os) {
         Linux {return linux-ix86}
@@ -15,7 +16,7 @@ proc this-platform-path {} {
 }
 
 # path to platform dependent libs in the lib dir
-lappend auto_path [file join lib [this-platform-path]]
+lappend auto_path [file join lib [this-platform]]
 # path to generic libs in the lib dir
 lappend auto_path [file join lib generic]
 
@@ -209,6 +210,21 @@ proc suffix_exec {os} {
   return $os_suffix($os)
 }
 
+# recursively copy contents of the $from dir to the $to dir 
+# while overwriting items in $to if necessary
+proc copy-merge {from to} {
+    foreach f [glob [file join $from *]] {
+        if {[file isdirectory $f]} {
+            set tail [lindex [file split $f] end]
+            set new_to [file join $to $tail]
+            file mkdir $new_to
+            copy-merge $f $new_to
+        } else {
+            #puts "Copying $f"
+            file copy -force $f $to
+        }
+    }
+}
 
 
 proc build {os arch proj base {packages {}}} {
@@ -228,13 +244,21 @@ proc build {os arch proj base {packages {}}} {
   }
   set vfs [file join $bld $proj.vfs]
   puts "Copying project source files to $vfs"
-  foreach f [glob [file join $proj *]] {
-    file copy $f $vfs
-  }
+
+  copy-merge $proj $vfs
   set cmd [list [info nameofexecutable] sdx.kit wrap [file join $bld $proj[suffix_exec $os]] -vfs [file join $bld $proj.vfs] -runtime [file join lib $os-$arch $base]]
   puts "Building starpack"
   puts $cmd
   exec {*}$cmd
+}
+
+proc run {proj} {
+    exec [info nameofexecutable] [file join build $proj [this-platform] $proj.vfs main.tcl] >@stdout
+}
+
+proc launch {proj} {
+    set os [lindex [split [this-platform] -] 0]
+    exec [file join build $proj [this-platform] $proj[suffix_exec $os]] >@stdout
 }
 
 #platforminfo

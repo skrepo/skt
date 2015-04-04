@@ -11,10 +11,12 @@
 
 # Example
 # Build project sample for linux-ix86 with basekit base-tcl-8.6.3.1 and packages tls-1.6.4 autoproxy-1.5.3
-# build win32 ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3}
+# build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3}
+#
 
-# Run sample project without building
-# NOTE: package versions are not respected!!!
-# source sample/main.tcl
+# Run project sample not as starpack but from unwrapped vfs
+# Project must be built for this platform first!
+# run sample
 
-
+# Run project sample as starpack
+# launch sample
