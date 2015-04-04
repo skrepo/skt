@@ -31,7 +31,6 @@ lappend auto_path [platform_path]
 lappend auto_path lib/generic
 
 # test package/module
-package require aes
 package require http
 package require tls
 package require vfs::zip
@@ -209,8 +208,11 @@ proc build {os arch proj base {packages {}}} {
 }
 
 
-build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
-build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
+build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
+build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
+
+#build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
+#build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
 
 #build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
 #build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4}
