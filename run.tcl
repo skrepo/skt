@@ -1,3 +1,11 @@
+# This should be the preamble to every application
+# It makes it possible to run as starpack or as sourced script
+if {![catch {package require starkit}]} {
+  #this is to initialize starkit variables
+  starkit::startup
+}
+
+
 
 proc platforminfo {} {
     puts "Script name: $::argv0"
@@ -36,9 +44,6 @@ package require tls
 package require vfs::zip
 http::register https 443 [list tls::socket]
 
-# run sample project without building
-# NOTE: package versions are not respected!!!
-#source sample/main.tcl
 
 proc unzip {zipfile {destdir .}} {
   set mntfile [vfs::zip::Mount $zipfile $zipfile]
@@ -230,5 +235,8 @@ build win32 ix86 sample base-tcl-8.6.3.1 {tls-1.6.4}
 #build linux ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
 #build win32 ix86 another base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 Thread-2.7.2}
 
+# run sample project without building
+# NOTE: package versions are not respected!!!
+source sample/main.tcl
 
 

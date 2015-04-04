@@ -1,4 +1,8 @@
-lappend auto_path lib/linux-ix86
+if {![catch {package require starkit}]} {
+  #this is to initialize starkit variables
+  starkit::startup
+}
+
 
 
 package require http
