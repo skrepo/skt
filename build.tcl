@@ -20,3 +20,17 @@
 
 # Run project sample as starpack
 # launch sample
+
+
+# copy from common library
+file copy -force [file join skcommon skutil.tcl] skd
+file attributes [file join skd skutil.tcl] -permissions a-w
+
+# copy from common library
+file copy -force [file join skcommon skutil.tcl] sku
+file attributes [file join sku skutil.tcl] -permissions a-w
+
+build linux ix86 sku base-tcl-8.6.3.1 {}
+
+build linux ix86 skd base-tcl-8.6.3.1 {}
+run skd

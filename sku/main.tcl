@@ -1,4 +1,15 @@
-#!/usr/bin/env tclsh
+# This should be the preamble to every application
+# It makes it possible to run as starpack or as a sourced script
+if {![catch {package require starkit}]} {
+  #this is to initialize starkit variables
+  if {[starkit::startup] ne "sourced"} {
+      rename ::source ::the-real-source
+      proc ::source {args} {
+          uplevel ::the-real-source [file join $starkit::topdir $args]
+      }
+  }
+}
+
 
 source skutil.tcl
 
