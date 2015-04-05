@@ -10,8 +10,7 @@ if {![catch {package require starkit}]} {
   }
 }
 
-
-source skutil.tcl
+package require skutil
 
 proc SkConnect {port} {
     #TODO handle error

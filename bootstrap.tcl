@@ -261,6 +261,15 @@ proc launch {proj} {
     exec [file join build $proj [this-platform] $proj[suffix_exec $os]] >@stdout
 }
 
+proc prepare-lib {pkgname ver} {
+    set dest [file join lib generic $pkgname-$ver]
+    file delete -force $dest
+    file mkdir $dest
+    copy-merge $pkgname $dest
+    pkg_mkIndex $dest
+}
+
+
 #platforminfo
 
 source build.tcl

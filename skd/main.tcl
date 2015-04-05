@@ -25,7 +25,7 @@ if {![catch {package require starkit}]} {
 # package vs source principle: sourced file may have back/circular references to the caller
 package require cmd
 
-source skutil.tcl
+package require skutil
 source skmgmt.tcl
 
 

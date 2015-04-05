@@ -1,4 +1,4 @@
-#!/usr/bin/env tclsh
+package provide skutil 0.0.0
 
 # Keep application state in global nested dictionary called ::state
 # If the last argument is a list, the list should be key value pairs 
