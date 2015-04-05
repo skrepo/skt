@@ -1,3 +1,6 @@
+#
+# sku.tcl
+#
 # This should be the preamble to every application
 # It makes it possible to run as starpack or as a sourced script
 if {![catch {package require starkit}]} {

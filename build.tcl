@@ -28,9 +28,9 @@
 #run sample
 
 
-prepare-lib skcommon 0.0.0
+prepare-lib sklib 0.0.0
 
-build linux ix86 sku base-tcl-8.6.3.1 {skcommon-0.0.0}
+build linux ix86 sku base-tcl-8.6.3.1 {sklib-0.0.0}
 
-build linux ix86 skd base-tcl-8.6.3.1 {skcommon-0.0.0}
+build linux ix86 skd base-tcl-8.6.3.1 {sklib-0.0.0}
 run skd

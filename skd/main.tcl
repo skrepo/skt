@@ -1,3 +1,6 @@
+#
+# skd/main.tcl
+#
 # This should be the preamble to every application
 # It makes it possible to run as starpack or as a sourced script
 if {![catch {package require starkit}]} {
@@ -11,14 +14,12 @@ if {![catch {package require starkit}]} {
 }
 
 #TODO
-# if necessary save config files in /etc/openvpn/skt - not needed, don't save anything from SKD, stateless across SKD reboots
-# run as daemon with sudo
-# communicate with non-admin client - API: config, start, stop
-# config API - how to pass config with cert files?
-# prefixes: stdout, stderr, ctrl, stat
-# periodic health check
-# pass config as one line command to SKD. If SKU client got openvpn inline file it must parse and split to separate files ca.crt,client.crt,client.key
+# don't save config or anything from SKD, should be stateless across SKD reboots
+# run as daemon with sudo, do initial check to report missing privileges early
+# document API for SKU: config, start, stop
+# config API - how to pass config with cert files? SKU to provide absolute paths, and split single ovpn file to config and certs/keys if necessary
 # (OpenVPN allows including files in the main configuration for the --ca, --cert, --dh, --extra-certs, --key, --pkcs12, --secret and --tls-auth options.)
+# periodic health check
 # make the config file parser, various formats, canonical way of submitting them to SKD - this should be on SKU client
 # make SKD as close to plain OpenVPN functionality as possible. keep only current config, handle multiple remote, how to handle relative paths to client.crt, should we add mgmt interface listen entry if missing? Also set verbosity to standard level
  
