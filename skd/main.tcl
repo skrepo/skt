@@ -14,14 +14,20 @@ if {![catch {package require starkit}]} {
 }
 
 #TODO
-# don't save config or anything from SKD, should be stateless across SKD reboots
 # run as daemon with sudo, do initial check to report missing privileges early
 # document API for SKU: config, start, stop
 # config API - how to pass config with cert files? SKU to provide absolute paths, and split single ovpn file to config and certs/keys if necessary
 # (OpenVPN allows including files in the main configuration for the --ca, --cert, --dh, --extra-certs, --key, --pkcs12, --secret and --tls-auth options.)
 # periodic health check
-# make the config file parser, various formats, canonical way of submitting them to SKD - this should be on SKU client
+# SKU: make config file parser, various formats, canonical way of submitting to SKD
+# SKD and SKU: config modifications, work on a raw string with helper functions:
+#   ovconf package: canonical representation is "--opt val" string, parse (from multiline), get $opt, set $opt $val, del $opt, extract , save, zip, unzip 
+# SKD: on linux replace resolv.conf, how to ensure it is restored? Copy to ".orig" file, SIGINT hook, don't copy/overwrite if resolv.conf already with correct content
 # make SKD as close to plain OpenVPN functionality as possible. keep only current config, handle multiple remote, how to handle relative paths to client.crt, should we add mgmt interface listen entry if missing? Also set verbosity to standard level
+# don't save config or anything from SKD, should be stateless across SKD reboots
+# Linux installer: gui and cmdline version, borrow from activetcl installer script, user to enter sudo password either from gui or cmdline. Or maybe easier to tell user to run with sudo from command line. Eventually installer must be started from command line.
+# SKU: check for SKD upgrades, SKU download the upgrade and call SKD to install (because SKD already has sudo)
+# Do we need to secure the SKD-SKU channel?
  
 # package vs source principle: sourced file may have back/circular references to the caller
 package require cmd

@@ -1,4 +1,6 @@
-#!/usr/bin/env tclsh
+#
+# skd/skmgmt.tcl
+#
 
 proc MgmtConnect {port} {
     #TODO handle error

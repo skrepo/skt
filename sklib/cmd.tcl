@@ -1,5 +1,3 @@
-#!/usr/bin/env tclsh
-
 package provide cmd 0.0.0
 
 namespace eval ::cmd {
