@@ -13,11 +13,14 @@ if {![catch {package require starkit}]} {
   }
 }
 
+proc bgerror {msg} {
+    puts "bgerror: $msg"
+}
+
 #TODO
 # run as daemon with sudo, do initial check to report missing privileges early
 # document API for SKU: config, start, stop
 # config API - how to pass config with cert files? SKU to provide absolute paths, and split single ovpn file to config and certs/keys if necessary
-# (OpenVPN allows including files in the main configuration for the --ca, --cert, --dh, --extra-certs, --key, --pkcs12, --secret and --tls-auth options.)
 # periodic health check
 # SKU: make config file parser, various formats, canonical way of submitting to SKD
 # SKD and SKU: config modifications, work on a raw string with helper functions:
@@ -33,6 +36,7 @@ if {![catch {package require starkit}]} {
 package require cmd
 
 package require skutil
+package require ovconf
 source skmgmt.tcl
 
 
@@ -68,7 +72,7 @@ state ovpn {
     pid 0
     # current openvpn status: connected, disconnected
     connstatus disconnected
-    # config dictionary, initially empty
+    # OpenVPN config as double-dashed one-line string
     config ""
 }
 
@@ -113,36 +117,26 @@ proc SkdWrite {prefix msg} {
     }
 }
 
-# return error description on parse error, otherwise empty string
-# TODO consider storing config as a string and write accessor/mutator functions
-proc ParseOvpnConfig {s} {
-    set s [string trim $s]
-    if {[regexp -- {^--} $s]} {
-        set k ""
-        set v ""
-        foreach w $s {
-            if {[regexp -- {^(--.+)$} $w _ option]} {
-                if {$k ne ""} {
-                    state ovpn config [list $k $v]
-                }
-                set k $option
-                set v ""
-            } else {
-                set v [string trim "$v $w"]
-            }
-        }
-        state ovpn config [list $k $v]
+proc adjust-config {conf} {
+    set mgmt [::ovconf::get $conf management]
+    if {[lindex $mgmt 0] in {localhost 127.0.0.1} && [lindex $mgmt 1]>0 && [lindex $mgmt 1]<65536} {
+        # it's OK
     } else {
-        return "OpenVPN config line should start with '--'"
+        set conf [::ovconf::set $conf management {127.0.0.1 42385}]
     }
-    #TODO add validation of cert and key file existence
-    #TODO add adjustments: verbosity, management port
-    #puts [state ovpn config]
-    return
+    set conf [::ovconf::set $conf verb 3]
+    return $conf
 }
 
-proc SerializeOvpnConfig {c} {
-    return [join $c]
+proc load-config {conf} {
+    #TODO add validation of cert and key file existence
+    set patherror [::ovconf::check-paths-exist $conf]
+    if {$patherror ne ""} {
+        return $patherror
+    }
+    # the quotes below are essential! Without, $conf would be substituted to multiple words and not the quoted list
+    state ovpn {config $conf}
+    return ""
 }
 
 proc SkdRead {} {
@@ -177,10 +171,7 @@ proc SkdRead {} {
                 SkdWrite ctrl "OpenVPN already running with pid $pid"
                 return
             } else {
-                set config [state ovpn config]
-                #set ovpncmd {openvpn --client --pull --dev tun --proto tcp --remote 46.165.208.40 443 --resolv-retry infinite --nobind --persist-key --persist-tun --mute-replay-warnings --ca ca.crt --cert client.crt --key client.key --ns-cert-type server --comp-lzo --verb 3 --keepalive 5 28 --route-delay 3 --management localhost 8888}
-                #set ovpncmd {openvpn --client --pull --dev tun --proto udp --remote 46.165.208.40 123 --resolv-retry infinite --nobind --persist-key --persist-tun --mute-replay-warnings --ca ca.crt --cert client.crt --key client.key --ns-cert-type server --comp-lzo --verb 3 --keepalive 5 28 --route-delay 3 --management localhost 8888}
-                set ovpncmd "openvpn [SerializeOvpnConfig $config]"
+                set ovpncmd "openvpn [state ovpn config]"
                 set chan [cmd invoke $ovpncmd OvpnExit OvpnRead OvpnErrRead]
                 set pid [pid $chan]
                 state ovpn {pid $pid}
@@ -191,12 +182,12 @@ proc SkdRead {} {
         }
         {^config (.*)$} {
             set config [lindex $tokens 1]
-            set parseerror [ParseOvpnConfig $config]
-            if {$parseerror eq ""} {
-                #config accepted
+            set config [adjust-config $config]
+            set configerror [load-config $config]
+            if {$configerror eq ""} {
                 SkdWrite ctrl "Config loaded"
             } else {
-                SkdWrite ctrl $parseerror
+                SkdWrite ctrl $configerror
             }
             return
         }
@@ -299,6 +290,7 @@ proc OvpnExit {code} {
     state ovpn {pid 0}
     ResetMgmtState
 }
+
 
 
 ResetMgmtState

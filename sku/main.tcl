@@ -14,6 +14,7 @@ if {![catch {package require starkit}]} {
 }
 
 package require skutil
+package require ovconf
 
 proc SkConnect {port} {
     #TODO handle error
@@ -33,7 +34,8 @@ proc SkRead {sock} {
     }
     switch -regexp -matchvar tokens $line {
         {Welcome to SKD} {
-            catch {puts $sock {config --client --pull --dev tun --proto tcp --remote 46.165.208.40 443 --resolv-retry infinite --nobind --persist-key --persist-tun --mute-replay-warnings --ca ca.crt --cert client.crt --key client.key --ns-cert-type server --comp-lzo --verb 3 --keepalive 5 28 --route-delay 3 --management localhost 8888}}
+            set conf [::ovconf::parse /home/sk/openvpn/Lodz_193_107_90_205_tcp_443.ovpn]
+            catch {puts $sock "config $conf"}
         }
         {Config loaded} {
             catch {puts $sock start}

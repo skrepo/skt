@@ -116,15 +116,15 @@ proc ::ovconf::strip-comments {s_var {comment_chars "#"}} {
 #TODO test it on Windows with \r\n
 proc ::ovconf::strip-headtail-empty-lines {s_var} {
     upvar $s_var s
-    regsub -all {^[\n]+} $s "" s
-    regsub -all {[\n]+$} $s "" s
+    regsub -all {^\s*\n+} $s "" s
+    regsub -all {\s*\n+$} $s "" s
 }
 
 #TODO test it on Windows with \r\n
 proc ::ovconf::strip-empty-lines {s_var} {
     upvar $s_var s
-    regsub -all {\n\n[\n]*} $s "\n" s
-    regsub -all {^[\n]+} $s "" s
+    regsub -all {\s*\n(\s*\n)+} $s "\n" s
+    ::ovconf::strip-headtail-empty-lines s
 }
 
 
@@ -142,15 +142,15 @@ proc ::ovconf::csection {config_var filepath tag} {
     if {$istart != -1 && $iend != -1 && $istart < $iend} {
         ::set section [string range $config [expr {$istart+[string length "<$tag>"]}] [expr {$iend-1}]]
         ::ovconf::strip-headtail-empty-lines section
-        ::set config [string replace $config $istart [expr {$iend+[string length "</$tag"]}]]
         ::set keydir [file join [file dirname $filepath] [file rootname $filepath]_keys]
         file mkdir $keydir
         ::set path [file join $keydir $tag]
         ::set fp [open $path w]
         puts -nonewline $fp $section
+        ::set config [string replace $config $istart [expr {$iend+[string length "</$tag"]}]]
+        append config "$tag \"$path\"\n"
         close $fp
     }
-    puts "path1=$path"
     return $path
 }
 
@@ -192,11 +192,25 @@ proc ::ovconf::parse {config_file} {
         puts -nonewline $fp $config
         close $fp
     }
-    puts "***$config***"
-    
+    # convert config to dashed one-line format
+    regsub -all -line {^} $config "--" config
+    regsub -all {\n} $config " " config
+    return $config
+}
+
+proc ::ovconf::check-paths-exist {conf} {
+    ::set keys {dh extra-certs pkcs12 secret tls-auth ca cert key}
+    foreach k $keys {
+        ::set v [::ovconf::get $conf $k]
+        if {$v ne "" && ![file isfile $v]} {
+            return "The $k file $v does not exist"
+        }
+    }
+    return ""
 }
 
 
+if 0 {
 ::set c {--client --pull --dev tun --proto tcp --remote 46.165.208.40 443 --resolv-retry infinite --remote 1.2.3.4 9876 --nobind --persist-key --persist-tun --mute-replay-warnings --ca ca.crt --cert client.crt --key client.key --ns-cert-type server --comp-lzo --verb 3 --keepalive 5 28 --route-delay 3 --management localhost 8888}
 
 puts [::ovconf::get $c remote]
@@ -234,5 +248,7 @@ puts [::ovconf::set $c dev tap]
 puts [::ovconf::set $c dev]
 puts [::ovconf::set $c blabla]
 
-::ovconf::parse /home/sk/openvpn/Lodz_193_107_90_205_tcp_443.ovpn
+puts [::ovconf::parse /home/sk/openvpn/Lodz_193_107_90_205_tcp_443.ovpn]
+
+}
 
