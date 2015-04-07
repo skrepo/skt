@@ -103,6 +103,33 @@ proc ::ovconf::add {conf key value} {
     return $conf
 }
 
+proc ::ovconf::strip-comments {s_var {comment_chars "#"}} {
+    upvar $s_var s
+    # Switch the RE engine into line-respecting mode instead of the default whole-string mode
+    regsub -all -line "\[$comment_chars\].*$" $s "" temp
+    # Now strip the whitespace
+    regsub -all -line {^(.*\S)?[ \t\r]*$} $temp {\1} s
+}
+
+
+
+#TODO test it on Windows with \r\n
+proc ::ovconf::strip-headtail-empty-lines {s_var} {
+    upvar $s_var s
+    regsub -all {^[\n]+} $s "" s
+    regsub -all {[\n]+$} $s "" s
+}
+
+#TODO test it on Windows with \r\n
+proc ::ovconf::strip-empty-lines {s_var} {
+    upvar $s_var s
+    regsub -all {\n\n[\n]*} $s "\n" s
+    regsub -all {^[\n]+} $s "" s
+}
+
+
+
+
 # For config with inline certificates, extract <$tag></$tag> section 
 # and save in created directory with the _key suffix
 # Return path to created section file
@@ -113,9 +140,9 @@ proc ::ovconf::csection {config_var filepath tag} {
     ::set istart [string first "<$tag>" $config]
     ::set iend [string first "</$tag>" $config]
     if {$istart != -1 && $iend != -1 && $istart < $iend} {
-        incr iend [string length "</$tag"]
-        ::set section [string range $config $istart $iend]
-        ::set config [string replace $config $istart $iend]
+        ::set section [string range $config [expr {$istart+[string length "<$tag>"]}] [expr {$iend-1}]]
+        ::ovconf::strip-headtail-empty-lines section
+        ::set config [string replace $config $istart [expr {$iend+[string length "</$tag"]}]]
         ::set keydir [file join [file dirname $filepath] [file rootname $filepath]_keys]
         file mkdir $keydir
         ::set path [file join $keydir $tag]
@@ -125,21 +152,6 @@ proc ::ovconf::csection {config_var filepath tag} {
     }
     puts "path1=$path"
     return $path
-}
-
-proc ::ovconf::strip-comments {s_var {comment_chars "#"}} {
-    upvar $s_var s
-    # Switch the RE engine into line-respecting mode instead of the default whole-string mode
-    regsub -all -line "\[$comment_chars\].*$" $s "" temp
-    # Now strip the whitespace
-    regsub -all -line {^(.*\S)?[ \t\r]*$} $temp {\1} s
-}
-
-#TODO test it on Windows with \r\n
-proc ::ovconf::strip-empty-lines {s_var} {
-    upvar $s_var s
-    regsub -all {\n\n[\n]*} $s "\n" s
-    regsub -all {^[\n]+} $s "" s
 }
 
 
@@ -171,14 +183,15 @@ proc ::ovconf::parse {config_file} {
     ::set paths [lfilter path $paths {
         expr {$path ne ""}
     }]
-    puts "paths=$paths"
     ::ovconf::strip-empty-lines config
-    #puts "path2=$path"
-    #::set fp [open [file join [file dirname $path] config] w]
-    #puts -nonewline $fp $config
-    #close $fp
-
-    
+    # if has inline sections
+    if {[llength $paths] > 0} {
+        # save also config
+        ::set fname [file join [file dirname [lindex $paths 0]] config]
+        ::set fp [open $fname w]
+        puts -nonewline $fp $config
+        close $fp
+    }
     puts "***$config***"
     
 }
