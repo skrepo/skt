@@ -114,17 +114,17 @@ proc ::ovconf::strip-comments {s_var {comment_chars "#"}} {
 
 
 #TODO test it on Windows with \r\n
-proc ::ovconf::strip-headtail-empty-lines {s_var} {
+proc ::ovconf::strip-headtail-blank-lines {s_var} {
     upvar $s_var s
     regsub -all {^\s*\n+} $s "" s
     regsub -all {\s*\n+$} $s "" s
 }
 
 #TODO test it on Windows with \r\n
-proc ::ovconf::strip-empty-lines {s_var} {
+proc ::ovconf::strip-blank-lines {s_var} {
     upvar $s_var s
     regsub -all {\s*\n(\s*\n)+} $s "\n" s
-    ::ovconf::strip-headtail-empty-lines s
+    ::ovconf::strip-headtail-blank-lines s
 }
 
 
@@ -133,7 +133,7 @@ proc ::ovconf::strip-empty-lines {s_var} {
 # For config with inline certificates, extract <$tag></$tag> section 
 # and save in created directory with the _key suffix
 # Return path to created section file
-# Delete that section from given config variable
+# Delete that section from given config variable and add proper tag option with path as value
 proc ::ovconf::csection {config_var filepath tag} {
     upvar $config_var config
     ::set path ""
@@ -141,7 +141,7 @@ proc ::ovconf::csection {config_var filepath tag} {
     ::set iend [string first "</$tag>" $config]
     if {$istart != -1 && $iend != -1 && $istart < $iend} {
         ::set section [string range $config [expr {$istart+[string length "<$tag>"]}] [expr {$iend-1}]]
-        ::ovconf::strip-headtail-empty-lines section
+        ::ovconf::strip-headtail-blank-lines section
         ::set keydir [file join [file dirname $filepath] [file rootname $filepath]_keys]
         file mkdir $keydir
         ::set path [file join $keydir $tag]
@@ -171,19 +171,20 @@ proc lfilter {x l body} {
 # Parse config file
 # If inline certs and keys, create directory and extract them to separate files and adjust config entries
 proc ::ovconf::parse {config_file} {
+    ::set config_file [file normalize $config_file]
     ::set fp [open $config_file r]
     ::set config [read $fp]
     close $fp
     ::ovconf::strip-comments config
     # first try to extract inline cert sections
-    ::set sections {dh extra-certs pkcs12 secret tls-auth ca cert key}
-    ::set paths [lmap sect $sections {
-        ::ovconf::csection config $config_file $sect
+    ::set snames {dh extra-certs pkcs12 secret tls-auth ca cert key}
+    ::set paths [lmap sn $snames {
+        ::ovconf::csection config $config_file $sn
     }]
     ::set paths [lfilter path $paths {
         expr {$path ne ""}
     }]
-    ::ovconf::strip-empty-lines config
+    ::ovconf::strip-blank-lines config
     # if has inline sections
     if {[llength $paths] > 0} {
         # save also config
@@ -195,6 +196,14 @@ proc ::ovconf::parse {config_file} {
     # convert config to dashed one-line format
     regsub -all -line {^} $config "--" config
     regsub -all {\n} $config " " config
+
+    foreach sn $snames {
+        ::set sv [::ovconf::get $config $sn]
+        if {$sv ne "" && [file pathtype $sv] ne "absolute"} {
+            ::set abs [file join [file dirname $config_file] $sv]
+            ::set config [::ovconf::set $config $sn [file normalize $abs]]
+        }
+    }
     return $config
 }
 

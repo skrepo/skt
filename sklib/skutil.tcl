@@ -1,5 +1,6 @@
 package provide skutil 0.0.0
 
+#TODO test it on Windows with \r\n
 proc strip-blank-lines {s} {
     set s [string trim $s]
     set s [regsub -all {\s*\n(\s*\n)+} $s "\n"]

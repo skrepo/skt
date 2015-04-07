@@ -134,7 +134,6 @@ proc load-config {conf} {
     if {$patherror ne ""} {
         return $patherror
     }
-    # the quotes below are essential! Without, $conf would be substituted to multiple words and not the quoted list
     state ovpn {config $conf}
     return ""
 }
@@ -184,6 +183,7 @@ proc SkdRead {} {
             set config [lindex $tokens 1]
             set config [adjust-config $config]
             set configerror [load-config $config]
+            puts "config $config"
             if {$configerror eq ""} {
                 SkdWrite ctrl "Config loaded"
             } else {
