@@ -13,6 +13,18 @@ if {![catch {package require starkit}]} {
   }
 }
 
+proc background-error {msg e} {
+    set pref [lindex [info level 0] 0]
+    puts "$pref: $msg"
+    dict for {k v} $e {
+        puts "$pref: $k: $v"
+    }
+}
+
+interp bgerror "" background-error
+#after 2000 {error "This is my bg error"}
+
+
 package require skutil
 package require ovconf
 

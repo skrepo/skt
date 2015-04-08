@@ -13,9 +13,16 @@ if {![catch {package require starkit}]} {
   }
 }
 
-proc bgerror {msg} {
-    puts "bgerror: $msg"
+proc background-error {msg e} {
+    set pref [lindex [info level 0] 0]
+    puts "$pref: $msg"
+    dict for {k v} $e {
+        puts "$pref: $k: $v"
+    }
 }
+
+interp bgerror "" background-error
+#after 2000 {error "This is my bg error"}
 
 #TODO
 # run as daemon with sudo, do initial check to report missing privileges early
@@ -118,18 +125,23 @@ proc SkdWrite {prefix msg} {
 }
 
 proc adjust-config {conf} {
+    # adjust management port
     set mgmt [::ovconf::get $conf management]
     if {[lindex $mgmt 0] in {localhost 127.0.0.1} && [lindex $mgmt 1]>0 && [lindex $mgmt 1]<65536} {
         # it's OK
     } else {
         set conf [::ovconf::set $conf management {127.0.0.1 42385}]
     }
+    # adjust verbosity
     set conf [::ovconf::set $conf verb 3]
+    # adjust windows specific options
+    if {$::tcl_platform(platform) ne "windows"} {
+        set conf [::ovconf::del-win-specific $conf]
+    }
     return $conf
 }
 
 proc load-config {conf} {
-    #TODO add validation of cert and key file existence
     set patherror [::ovconf::check-paths-exist $conf]
     if {$patherror ne ""} {
         return $patherror

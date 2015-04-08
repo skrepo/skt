@@ -10,6 +10,7 @@ package provide ovconf 0.0.0
 # parse (from multiline), get $opt, set $opt $val, del $opt, extract , save, zip, unzip 
 
 namespace eval ::ovconf {
+    variable win_specific {ip-win32 route-method dhcp-option tap-sleep show-net-up dhcp-renew dhcp-release pause-exit service show-adapters show-valid-subnets show-net win-sys}
     namespace export parse get set del index ddash
     namespace ensemble create
 }
@@ -217,6 +218,15 @@ proc ::ovconf::check-paths-exist {conf} {
     }
     return ""
 }
+
+proc ::ovconf::del-win-specific {conf} {
+    variable win_specific
+    foreach k $win_specific {
+        ::set conf [::ovconf::del $conf $k]
+    }
+    return $conf
+}
+
 
 
 if 0 {
