@@ -307,6 +307,79 @@ proc OvpnExit {code} {
 
 
 
+#>>ovpn: Wed Apr 08 09:26:43 2015 TAP-WIN32 device [Local Area Connection 2] opened: \\.\Global\{BDCE36A3-CE0B-4370-900A-03F12CDD67C5}.tap
+#>>ovpn: Wed Apr 08 09:26:43 2015 TAP-Windows Driver Version 9.8
+#>>ovpn: Wed Apr 08 09:26:43 2015 MANAGEMENT: Client disconnected
+#>>ovpn: Wed Apr 08 09:26:43 2015 ERROR:  This version of OpenVPN requires a TAP-Windows driver that is at least version 9.9 -- If you recently upgraded your OpenVPN distribution, a reboot is probably required at this point to get Windows to see the new driver.
+
+#Ethernet adapter Local Area Connection 3:
+#
+#        Media State . . . . . . . . . . . : Media disconnected
+#        Description . . . . . . . . . . . : TAP-Win32 Adapter V9 #2
+#        Physical Address. . . . . . . . . : 00-FF-3E-A0-C7-D3
+#
+#Ethernet adapter Local Area Connection 2:
+#
+#        Connection-specific DNS Suffix  . :
+#        Description . . . . . . . . . . . : TAP-Win32 Adapter V9
+#        Physical Address. . . . . . . . . : 00-FF-BD-CE-36-A3
+#        Dhcp Enabled. . . . . . . . . . . : Yes
+#        Autoconfiguration Enabled . . . . : Yes
+#        IP Address. . . . . . . . . . . . : 10.11.5.22
+#        Subnet Mask . . . . . . . . . . . : 255.255.255.252
+#        Default Gateway . . . . . . . . . : 10.11.5.21
+#        DHCP Server . . . . . . . . . . . : 10.11.5.21
+#        DNS Servers . . . . . . . . . . . : 10.11.0.1
+#        Lease Obtained. . . . . . . . . . : 8 kwietnia 2015 09:35:58
+#        Lease Expires . . . . . . . . . . : 7 kwietnia 2016 09:35:58
+
+
+# On Windows to check installed drivers:
+# driverquery /FO list /v
+# sample output:
+# ...
+#Link Date:         2008-04-13 20:15:55
+#Path:              C:\WINDOWS\system32\drivers\sysaudio.sys
+#Init(bytes):       2˙816,00
+#
+#Module Name:       tap0901
+#Display Name:      TAP-Win32 Adapter V9
+#Description:       TAP-Win32 Adapter V9
+#Driver Type:       Kernel 
+#Start Mode:        Manual
+#State:             Running
+#Status:            OK
+#Accept Stop:       TRUE
+#Accept Pause:      FALSE
+#Paged Pool(bytes): 0,00
+#Code(bytes):       20˙480,00
+#BSS(bytes):        0,00
+#Link Date:         2011-03-24 21:20:11
+#Path:              C:\WINDOWS\system32\DRIVERS\tap0901.sys
+#Init(bytes):       4˙096,00
+#
+#Module Name:       Tcpip
+#Display Name:      TCP/IP Protocol Driver
+#Description:       TCP/IP Protocol Driver
+#...
+
+# After tun/tap driver update to OpenVPN 2.3.6 the only things that have changed in driver data:
+#Code(bytes):       19˙968,00
+#Link Date:         2013-08-22 13:40:00
+#Path:              C:\WINDOWS\system32\DRIVERS\tap0901.sys
+#Init(bytes):       1˙664,00
+
+# Consider including sysinternals sigcheck in deployment that will produce the following:
+#        Verified:       Signed
+#        Signing date:   13:40 2013-08-22
+#        Publisher:      OpenVPN Technologies
+#        Description:    TAP-Windows Virtual Network Driver
+#        Product:        TAP-Windows Virtual Network Driver
+#        Prod version:   9.9.2 9/9
+#        File version:   9.9.2 9/9 built by: WinDDK
+#        MachineType:    32-bit
+
+
 ResetMgmtState
 puts "Starting SKD server"
 socket -server SkdNewConnection 7777
