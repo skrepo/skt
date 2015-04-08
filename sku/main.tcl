@@ -46,8 +46,13 @@ proc SkRead {sock} {
     }
     switch -regexp -matchvar tokens $line {
         {Welcome to SKD} {
-            #set conf [::ovconf::parse /home/sk/openvpn/Lodz_193_107_90_205_tcp_443.ovpn]
-            set conf [::ovconf::parse /home/sk/openvpn/securitykiss_winopenvpn_client00000001/openvpn.conf]
+            if {$::tcl_platform(platform) eq windows} {
+                #set conf [::ovconf::parse {c:\temp\Warsaw_195_162_24_220_tcp_443.ovpn}]
+                set conf [::ovconf::parse {c:\temp\securitykiss_winopenvpn_client00000001\openvpn.conf}]
+            } else {
+                #set conf [::ovconf::parse /home/sk/openvpn/Lodz_193_107_90_205_tcp_443.ovpn]
+                set conf [::ovconf::parse /home/sk/openvpn/securitykiss_winopenvpn_client00000001/openvpn.conf]
+            }
             catch {puts $sock "config $conf"}
         }
         {Config loaded} {

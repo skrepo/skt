@@ -138,6 +138,8 @@ proc adjust-config {conf} {
     if {$::tcl_platform(platform) ne "windows"} {
         set conf [::ovconf::del-win-specific $conf]
     }
+    # adjust deprecated options
+    set conf [::ovconf::del-deprecated $conf]
     return $conf
 }
 
