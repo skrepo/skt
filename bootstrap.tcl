@@ -257,6 +257,7 @@ proc run {proj} {
 }
 
 proc launch {proj} {
+    puts "Launching $proj"
     set os [lindex [split [this-platform] -] 0]
     exec [file join build $proj [this-platform] $proj[suffix_exec $os]] >@stdout
 }
