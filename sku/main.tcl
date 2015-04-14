@@ -5,12 +5,7 @@
 # It makes it possible to run as starpack or as a sourced script
 if {![catch {package require starkit}]} {
   #this is to initialize starkit variables
-  if {[starkit::startup] ne "sourced"} {
-      rename ::source ::the-real-source
-      proc ::source {args} {
-          uplevel ::the-real-source [file join $starkit::topdir $args]
-      }
-  }
+  starkit::startup
 }
 
 proc background-error {msg e} {
@@ -27,6 +22,58 @@ interp bgerror "" background-error
 
 package require skutil
 package require ovconf
+package require Tk 
+package require Tkhtml
+package require tls
+package require http
+http::register https 443 [list tls::socket]
+
+
+
+
+proc curl {url data_var} {
+    upvar $data_var data
+    set tok [http::geturl $url]
+    set ncode [http::ncode $tok]
+    set data [http::data $tok]
+    http::cleanup $tok
+    return $ncode
+}
+ 
+
+set url "https://www.securitykiss.com/sk/app/display.php?c=client00000001&v=0.3.0"
+set ncode [curl $url welcome]
+if {$ncode != 200} {
+    error "Could not retrieve ($url). HTTP code: $ncode"
+}
+puts $welcome
+
+set url "https://www.securitykiss.com/sk/app/usage.php?c=client00000001"
+set ncode [curl $url usage]
+if {$ncode != 200} {
+    error "Could not retrieve ($url). HTTP code: $ncode"
+}
+
+
+# Create and populate an html widget.
+  html .p1 -shrink 1
+  .p1 parse -final $welcome
+  grid .p1
+  html .p2 -shrink 1
+  .p2 parse -final $usage
+  grid .p2
+  frame .p3
+  button .p3.connect -text Connect
+  button .p3.disconnect -text Disconnect
+  grid .p3.connect .p3.disconnect -ipadx 5 -ipady 5 -padx 10 -pady 10
+  grid .p3
+  label .p4 -text Status
+  grid .p4 -sticky w -padx 5 -pady 5
+
+
+
+vwait forever
+
 
 proc SkConnect {port} {
     #TODO handle error
