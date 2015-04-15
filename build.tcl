@@ -28,32 +28,56 @@
 #run sample
 
 
+proc generalize-arch {arch} {
+    switch -glob $arch {
+        i?86 {return ix86}
+        x86_64 {return x86_64}
+        default {error "Unrecognized CPU architecture"}
+    }
+}
+
+proc build-deb-rpm {arch_exact} {
+    set arch [generalize-arch $arch_exact]
+    puts "Building deb/rpm dist package"
+    if {$::tcl_platform(platform) eq "unix"} { 
+        set distdir dist/linux-$arch
+        file delete -force $distdir
+        file mkdir $distdir
+        file mkdir $distdir/usr/local/sbin
+        file copy build/skd/linux-$arch/skd.bin $distdir/usr/local/sbin/skd
+        file copy skd/etc $distdir
+        file mkdir $distdir/usr/local/bin
+        file copy build/sku/linux-$arch/sku.bin $distdir/usr/local/bin/sku
+        cd $distdir
+        set fpmopts "-a $arch_exact -s dir -n skapp -v 0.4.0 --before-install ../../skd/skd.preinst --after-install ../../skd/skd.postinst --before-remove ../../skd/skd.prerm --after-remove ../../skd/skd.postrm usr etc"
+        exec fpm -t deb {*}$fpmopts >&@ stdout
+        exec fpm -t rpm {*}$fpmopts >&@ stdout
+        cd ../..
+    } 
+}
+
+
+
 prepare-lib sklib 0.0.0
 
-build linux ix86 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4}
+#build win32 x86_64 sku base-tk-8.6.3.1 {tls-1.6.4}
 
-build linux ix86 skd base-tcl-8.6.3.1 {sklib-0.0.0 Expect-5.45.3 cmdline-1.5}
+build linux ix86   sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4}
+build linux x86_64 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4}
 
+build linux ix86   skd base-tcl-8.6.3.1 {sklib-0.0.0 Expect-5.45.3 cmdline-1.5}
+build linux x86_64 skd base-tcl-8.6.3.1 {sklib-0.0.0 Expect-5.45.3 cmdline-1.5}
 
-puts "Building deb/rpm dist package"
-if {$::tcl_platform(platform) eq "unix"} { 
-    set distdir dist/linux-ix86
-    file delete -force $distdir
-    file mkdir $distdir
-    file mkdir $distdir/usr/local/sbin
-    file copy build/skd/linux-ix86/skd.bin $distdir/usr/local/sbin/skd
-    file copy skd/etc $distdir
-    file mkdir $distdir/usr/local/bin
-    file copy build/sku/linux-ix86/sku.bin $distdir/usr/local/bin/sku
-    cd $distdir
-    set fpmopts "-s dir -n skapp -v 0.4.0 --before-install ../../skd/skd.preinst --after-install ../../skd/skd.postinst --before-remove ../../skd/skd.prerm --after-remove ../../skd/skd.postrm usr etc"
-    exec fpm -t deb {*}$fpmopts
-    exec fpm -t rpm {*}$fpmopts
-    puts "Install from dpkg"
-    exec sudo dpkg -i skapp_0.4.0_amd64.deb >&@ stdout
-    cd ../..
-} 
+build-deb-rpm i686
+build-deb-rpm x86_64
 
+puts "Install from dpkg"
+exec sudo dpkg -i ./dist/linux-x86_64/skapp_0.4.0_amd64.deb >&@ stdout
+#exec sudo dpkg -i ./dist/linux-ix86/skapp_0.4.0_i686.deb >&@ stdout
+
+#apt-get update --fix-missing
+#apt-get -fy install git ruby-dev gcc rpm
+#gem install fpm
 
 launch sku
 #exec ./build/sku/linux-ix86/sku.bin

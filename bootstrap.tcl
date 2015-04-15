@@ -5,18 +5,25 @@ if {![catch {package require starkit}]} {
   starkit::startup
 }
 
-# it simplifies the architecture - always returns ix86 !!!
-proc this-platform {} {
-    # assume ix86 - hopefully only 32-bit builds needed
-    switch -glob $::tcl_platform(os) {
-        Linux {return linux-ix86}
-        Windows* {return win32-ix86}
-        default {error "Unrecognized platform"}
+proc this-arch {} {
+    switch -glob $::tcl_platform(machine) {
+        i?86 {return ix86}
+        x86_64 {return x86_64}
+        default {error "Unrecognized CPU architecture"}
     }
 }
 
-# path to platform dependent libs in the lib dir
-lappend auto_path [file join lib [this-platform]]
+proc this-os {} {
+    switch -glob $::tcl_platform(os) {
+        Linux {return linux}
+        Windows* {return win32}
+        default {error "Unrecognized OS"}
+    }
+}
+
+
+# path to platform dependent libs in the lib dir - this is for the need of the build script - ix86 only!!! Should work on 64-bit as well
+lappend auto_path [file join lib [this-os]-ix86]
 # path to generic libs in the lib dir
 lappend auto_path [file join lib generic]
 
@@ -133,6 +140,7 @@ proc copy-pkg {os arch pkgname ver proj} {
 }
 
 proc prepare-pkg {os arch pkgname ver} {
+  file mkdir [file join lib $os-$arch]
   set target_path_depend [file join lib $os-$arch $pkgname-$ver]
   set target_path_indep [file join lib generic $pkgname-$ver]
   # nothing to do if pkg exists in lib dir, it may be file or dir
@@ -253,13 +261,12 @@ proc build {os arch proj base {packages {}}} {
 }
 
 proc run {proj} {
-    exec [info nameofexecutable] [file join build $proj [this-platform] $proj.vfs main.tcl] >@stdout
+    exec [info nameofexecutable] [file join build $proj [this-os]-[this-arch] $proj.vfs main.tcl] >@stdout
 }
 
 proc launch {proj} {
     puts "Launching $proj"
-    set os [lindex [split [this-platform] -] 0]
-    exec [file join build $proj [this-platform] $proj[suffix_exec $os]] >@stdout
+    exec [file join build $proj [this-os]-[this-arch] $proj[suffix_exec [this-os]]] >@stdout
 }
 
 proc prepare-lib {pkgname ver} {
