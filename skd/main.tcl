@@ -24,6 +24,10 @@ proc background-error {msg e} {
 interp bgerror "" background-error
 #after 2000 {error "This is my bg error"}
 
+
+
+
+
 #TODO
 # run as daemon with sudo, do initial check to report missing privileges early
 # document API for SKU: config, start, stop
@@ -44,7 +48,34 @@ package require cmd
 
 package require skutil
 package require ovconf
+package require Expect
+#package require cmdline
 source skmgmt.tcl
+
+
+proc create-pidfile {} {
+    set fd [open /var/run/skd.pid w]
+    puts $fd [pid]
+    close $fd
+}
+
+proc delete-pidfile {} {
+    file delete /var/run/skd.pid
+}
+
+# TODO how it works on Windows? Also pidfile
+proc sigint_handler {} {
+    puts "Gracefully exiting SKD"
+    #TODO wind up
+    delete-pidfile
+    exit 0
+}
+ 
+# intercept termination signals
+trap sigint_handler {SIGINT SIGTERM SIGQUIT}
+# ignore disconnecting terminal - it's supposed to be a daemon. This is causing problem - do not enable. Use linux nohup
+#trap SIG_IGN SIGHUP
+
 
 
 proc ResetMgmtState {} {
@@ -380,8 +411,36 @@ proc OvpnExit {code} {
 #        MachineType:    32-bit
 
 
+# cmdline options not really needed yet
+#set options {
+#            {a             "set the atime only"}
+#            {m             "set the mtime only"}
+#            {p.arg  57328  "skd port"}
+#            {r.arg  ""     "use time from ref_file"}
+#            {t.arg  -1     "use specified time"}
+#        }
+#set usage ": skd \[options]\noptions:"
+#if {[catch {array set params [::cmdline::getoptions argv $options $usage]}]} {
+#    puts [cmdline::usage $options $usage]
+#    exit -1
+#}
+#
+#set has_t [expr {$params(t) != -1}]
+#set has_r [expr {[string length $params(r)] > 0}]
+#if {$has_t && $has_r} {
+#    return -code error "Cannot specify both -r and -t"
+#} elseif {$has_t} {
+#...
+#}
+#parray params
+
+#set SKDPORT $params(p)
+
+create-pidfile
+
 ResetMgmtState
 puts "Starting SKD server"
 socket -server SkdNewConnection 7777
 vwait forever
+delete-pidfile
 

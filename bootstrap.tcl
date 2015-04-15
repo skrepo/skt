@@ -247,7 +247,7 @@ proc build {os arch proj base {packages {}}} {
 
   copy-merge $proj $vfs
   set cmd [list [info nameofexecutable] sdx.kit wrap [file join $bld $proj[suffix_exec $os]] -vfs [file join $bld $proj.vfs] -runtime [file join lib $os-$arch $base]]
-  puts "Building starpack"
+  puts "Building starpack $proj"
   puts $cmd
   exec {*}$cmd
 }

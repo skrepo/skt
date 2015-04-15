@@ -1,0 +1,58 @@
+#!/bin/sh
+#
+# Works only on Linux systems since it uses the /proc filesystem. 
+# TODO Consider using kill -0 instead, not sure if POSIX
+
+EXEC=/usr/local/sbin/skd
+PIDFILE=/var/run/skd.pid
+LOGFILE=/var/log/skd.log
+
+touch $LOGFILE >> /dev/null 2>&1
+OUT=$?
+if [ "$OUT" -ne "0" ]; then
+    echo "You need to be root"
+    exit 1
+fi
+
+
+case "$1" in
+    start)
+        if [ -f $PIDFILE ]; then
+            echo "$PIDFILE exists, process is already running or crashed"
+        else
+            nohup $EXEC > $LOGFILE 2>&1 &
+            for i in 1 2 3 4; do
+                sleep 1
+                if [ -f $PIDFILE ]; then
+                    PID=$(cat $PIDFILE)
+                    #TODO consider using kill -0 instead
+                    if [ -x /proc/${PID} ]; then
+                        echo "SKD Started"
+                        exit 0
+                    fi
+                fi
+            done
+            echo "Could not start SKD. See $LOGFILE"
+        fi
+        ;;
+    stop)
+        if [ ! -f $PIDFILE ]; then
+            echo "$PIDFILE does not exist, process is not running"
+        else
+            PID=$(cat $PIDFILE)
+            kill $PID
+            for i in 1 2 3 4; do
+                sleep 1
+                #TODO consider using kill -0 instead
+                if [ ! -x /proc/${PID} ]; then
+                    echo "SKD stopped"
+                    exit 0
+                fi
+            done
+            echo "Could not stop SKD. See $LOGFILE"
+        fi
+        ;;
+    *)
+        echo "Please use start or stop as first argument"
+        ;;
+esac

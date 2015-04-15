@@ -32,7 +32,7 @@ package require http
 http::register https 443 [list tls::socket]
 
 
-
+#TODO move to sklib
 proc slurp {path} {
     set fd [open $path r]
     set data [read $fd]

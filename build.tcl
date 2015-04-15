@@ -32,7 +32,27 @@ prepare-lib sklib 0.0.0
 
 build linux ix86 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4}
 
-#build linux ix86 skd base-tcl-8.6.3.1 {sklib-0.0.0}
+build linux ix86 skd base-tcl-8.6.3.1 {sklib-0.0.0 Expect-5.45.3 cmdline-1.5}
+
+
+puts "Building deb/rpm dist package"
+if {$::tcl_platform(platform) eq "unix"} { 
+    set distdir dist/linux-ix86
+    file delete -force $distdir
+    file mkdir $distdir
+    file mkdir $distdir/usr/local/sbin
+    file copy build/skd/linux-ix86/skd.bin $distdir/usr/local/sbin/skd
+    file copy skd/etc $distdir
+    file mkdir $distdir/usr/local/bin
+    file copy build/sku/linux-ix86/sku.bin $distdir/usr/local/bin/sku
+    cd $distdir
+    exec fpm -s dir -t deb -n skapp -v 0.4.0 usr etc
+    exec fpm -s dir -t rpm -n skapp -v 0.4.0 usr etc
+    cd ../..
+} 
+
 
 launch sku
 #exec ./build/sku/linux-ix86/sku.bin
+
+
