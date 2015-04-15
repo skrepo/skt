@@ -46,7 +46,7 @@ if {$::tcl_platform(platform) eq "unix"} {
     file mkdir $distdir/usr/local/bin
     file copy build/sku/linux-ix86/sku.bin $distdir/usr/local/bin/sku
     cd $distdir
-    set fpmopts "-s dir -n skapp -v 0.4.0 --before-install ../../skd/skd.preinst --after-install ../../skd/skd.postinst --before-remove ../../skd.prerm --after-remove ../../skd.postrm --usr etc"
+    set fpmopts "-s dir -n skapp -v 0.4.0 --before-install ../../skd/skd.preinst --after-install ../../skd/skd.postinst --before-remove ../../skd/skd.prerm --after-remove ../../skd/skd.postrm usr etc"
     exec fpm -t deb {*}$fpmopts
     exec fpm -t rpm {*}$fpmopts
     puts "Install from dpkg"
