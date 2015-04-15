@@ -62,7 +62,7 @@ proc create-pidfile {} {
 proc delete-pidfile {} {
     file delete /var/run/skd.pid
 }
-
+ 
 # TODO how it works on Windows? Also pidfile
 proc sigint_handler {} {
     puts "Gracefully exiting SKD"
