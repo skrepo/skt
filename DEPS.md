@@ -36,6 +36,22 @@ In order to see the real (X11) dependencies we need to examine tk.so library:
     libXdmcp.so.6 => /usr/lib/x86_64-linux-gnu/libXdmcp.so.6 (0x00007f52e6187000)
 
 
+Of the above the relevant ones (non-libc):
+
+libXft.so.2             apt-get install libxft2
+libX11.so.6             apt-get install libx11-6
+libfreetype.so.6        apt-get install libfreetype6
+libfontconfig.so.1      apt-get install libfontconfig1
+libXrender.so.1         apt-get install libxrender1
+libXss.so.1             apt-get install libxss1
+libXext.so.6            apt-get install libxext6
+libz.so.1               apt-get install zlib1g
+libxcb.so.1             apt-get install libxcb1
+libexpat.so.1           apt-get install libexpat1
+libXau.so.6             apt-get install libxau6
+libXdmcp.so.6           apt-get install libxdmcp6
+
+
 TLS dependencies
 ================
 
@@ -88,6 +104,9 @@ rpmbuild -tb openvpn-2.3.6.tar.gz
 	libselinux.so.1 => /lib64/libselinux.so.1 (0x00007f3e5df19000)
 	libpcre.so.1 => /lib64/libpcre.so.1 (0x00007f3e5dcab000)
 	liblzma.so.5 => /lib64/liblzma.so.5 (0x00007f3e5da86000)
+
+
+
 
 
 # rpm dependecies
