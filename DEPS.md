@@ -38,18 +38,18 @@ In order to see the real (X11) dependencies we need to examine tk.so library:
 
 Of the above the relevant ones (non-libc):
 
-libXft.so.2             apt-get install libxft2
-libX11.so.6             apt-get install libx11-6
-libfreetype.so.6        apt-get install libfreetype6
-libfontconfig.so.1      apt-get install libfontconfig1
-libXrender.so.1         apt-get install libxrender1
-libXss.so.1             apt-get install libxss1
-libXext.so.6            apt-get install libxext6
-libz.so.1               apt-get install zlib1g
-libxcb.so.1             apt-get install libxcb1
-libexpat.so.1           apt-get install libexpat1
-libXau.so.6             apt-get install libxau6
-libXdmcp.so.6           apt-get install libxdmcp6
+libXft.so.2             apt-get install libxft2		zypper install libXft2
+libX11.so.6             apt-get install libx11-6	zypper install libX11-6
+libfreetype.so.6        apt-get install libfreetype6	zypper install libfreetype6
+libfontconfig.so.1      apt-get install libfontconfig1	zypper install fontconfig
+libXrender.so.1         apt-get install libxrender1	zypper install libXrender1
+libXss.so.1             apt-get install libxss1		zypper install libXss1
+libXext.so.6            apt-get install libxext6	zypper install libXext6
+libz.so.1               apt-get install zlib1g		zypper install libz1
+libxcb.so.1             apt-get install libxcb1		zypper install libxcb1
+libexpat.so.1           apt-get install libexpat1	zypper install libexpat1
+libXau.so.6             apt-get install libxau6		zypper install libXau6
+libXdmcp.so.6           apt-get install libxdmcp6	zypper install libXdmcp6
 
 
 TLS dependencies
