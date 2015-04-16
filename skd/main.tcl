@@ -54,6 +54,7 @@ source skmgmt.tcl
 
 
 proc create-pidfile {} {
+    # TODO do we need to catch permission denied or let it crash with stacktrace
     set fd [open /var/run/skd.pid w]
     puts $fd [pid]
     close $fd

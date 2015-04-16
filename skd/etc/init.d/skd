@@ -2,11 +2,14 @@
 #
 # Works only on Linux systems since it uses the /proc filesystem. 
 # TODO Consider using kill -0 instead, not sure if POSIX
+# TODO See openvpn init script for inspiration
 
 EXEC=/usr/local/sbin/skd
 PIDFILE=/var/run/skd.pid
 LOGFILE=/var/log/skd.log
 
+
+#TODO this check should be only for start/stop. Allow check status for regular users
 touch $LOGFILE >> /dev/null 2>&1
 OUT=$?
 if [ "$OUT" -ne "0" ]; then
@@ -52,6 +55,7 @@ case "$1" in
             echo "Could not stop SKD. See $LOGFILE"
         fi
         ;;
+    #TODO provide status
     *)
         echo "Please use start or stop as first argument"
         ;;

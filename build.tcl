@@ -50,8 +50,8 @@ proc build-deb-rpm {arch_exact} {
         file copy build/sku/linux-$arch/sku.bin $distdir/usr/local/bin/sku
         cd $distdir
         set fpmopts "-a $arch_exact -s dir -n skapp -v 0.4.0 --before-install ../../skd/skd.preinst --after-install ../../skd/skd.postinst --before-remove ../../skd/skd.prerm --after-remove ../../skd/skd.postrm usr etc"
-        exec fpm -t deb {*}$fpmopts >&@ stdout
-        exec fpm -t rpm {*}$fpmopts >&@ stdout
+        exec fpm -t deb -d openvpn -d libxss1 {*}$fpmopts >&@ stdout
+        exec fpm -t rpm --rpm-autoreqprov -d openvpn -d libXScrnSaver {*}$fpmopts >&@ stdout
         cd ../..
     } 
 }
@@ -68,7 +68,7 @@ build linux x86_64 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4}
 build linux ix86   skd base-tcl-8.6.3.1 {sklib-0.0.0 Expect-5.45.3 cmdline-1.5}
 build linux x86_64 skd base-tcl-8.6.3.1 {sklib-0.0.0 Expect-5.45.3 cmdline-1.5}
 
-build-deb-rpm i686
+build-deb-rpm i386
 build-deb-rpm x86_64
 
 puts "Install from dpkg"
