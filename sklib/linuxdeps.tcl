@@ -82,8 +82,8 @@ proc ::linuxdeps::tk-missing-dep {} {
         #puts "ERR: $err"
         switch -regexp -matchvar tokens $out {
             {^can't find package (.*)} {
-              #the entire Tk package is missing - propagate the error
-              package require Tk
+                #the entire Tk package is missing - propagate the error
+                package require Tk
             }
             {^couldn't load file ".*": (.*): cannot open shared object file.*} {
               return [lindex $tokens 1]
@@ -111,25 +111,40 @@ proc ::linuxdeps::tk-missing-dep {} {
     }
 }
 
-proc ::linuxdeps::tk-install-lib {pkg_mgr lib} {
+proc ::linuxdeps::tk-install-lib {lib} {
     variable pkgmgr2cmd
     variable lib2pkg
-
-    set cmd [dict get $pkgmgr2cmd $pkg_mgr]
-    # TODO handle libraries not found in lib2pkg
-    set pkg [dict get $lib2pkg $pkg_mgr $lib]
-
-    exec {*}$cmd $pkg >&@ stdout
+    set pkg_mgr [find-pkg-mgr]
+    # Best effort principle, no error if it could not find pkg_mgr or package
+    if {[llength $pkg_mgr] > 0} {
+        set cmd [dict get $pkgmgr2cmd $pkg_mgr]
+        if {[dict exists $lib2pkg $pkg_mgr $lib]} {
+            set pkg [dict get $lib2pkg $pkg_mgr $lib]
+            exec {*}$cmd $pkg >&@ stdout
+        } else {
+            puts "Could not locate $lib"
+        }
+    } else {
+        puts "Could not locate $lib"
+    }
 }
 
 
 
 proc ::linuxdeps::install {} {
-    set pkg_mgr [find-pkg-mgr]
-    puts $pkg_mgr
-    set missing_lib [tk-missing-dep]
-    puts $missing_lib
-    if {[llength $missing_lib] != 0} {
-        tk-install-lib $pkg_mgr $missing_lib
+    set last_missing_lib ""
+    for {set i 0} {$i<5} {incr i} {
+        set missing_lib [tk-missing-dep]
+        puts $missing_lib
+        if {[llength $missing_lib] != 0 && $missing_lib ne $last_missing_lib} {
+            tk-install-lib $missing_lib
+            set last_missing_lib $missing_lib
+        } else {
+            break
+        }
     }
 }
+
+
+
+
