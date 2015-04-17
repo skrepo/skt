@@ -51,7 +51,7 @@ proc state {args} {
     return $::state
 }
 
-proc ParseIp {s} {
+proc parse-ip {s} {
     if {[regexp {^\d+\.\d+\.\d+\.\d+$} $s]
         && [scan $s %d.%d.%d.%d a b c d] == 4
         && 0 <= $a && $a <= 255 && 0 <= $b && $b <= 255
@@ -62,8 +62,8 @@ proc ParseIp {s} {
     }
 }
 
-proc IsValidIp {s} {
-    set parsed [ParseIp $s]
+proc is-valid-ip {s} {
+    set parsed [parse-ip $s]
     return [expr {$parsed ne ""}]
 }
 

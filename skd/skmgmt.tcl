@@ -30,7 +30,7 @@ proc MgmtRead {sock} {
                 set vip [lindex $tokens 4]
                 set rip [lindex $tokens 5]
                 # it's a state cmd update only if vip and rip are IPs or empty
-                if {([IsValidIp $vip] || $vip eq "") && ([IsValidIp $rip] || $rip eq "")} {
+                if {([is-valid-ip $vip] || $vip eq "") && ([is-valid-ip $rip] || $rip eq "")} {
                     state mgmt {connstatus [lindex $tokens 2]}
                     state mgmt {vip [lindex $tokens 4]}
                     state mgmt {rip [lindex $tokens 5]}
