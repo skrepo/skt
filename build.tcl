@@ -21,19 +21,17 @@
 #build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3}
 
 # Run project sample as starpack - recommended since it tests end-to-end
-#launch sample
+#exec ./build/sample/linux-ix86/sample.bin
 
 # Run project sample not as starpack but from unwrapped vfs
 # Project must be built for this platform first!
 #run sample
 
 
-proc generalize-arch {arch} {
-    switch -glob $arch {
-        i?86 {return ix86}
-        x86_64 {return x86_64}
-        default {error "Unrecognized CPU architecture"}
-    }
+proc install-fpm {} {
+    exec -- apt-get update --fix-missing
+    exec -- apt-get -fy install git ruby-dev gcc rpm
+    exec -- gem install fpm
 }
 
 proc build-deb-rpm {arch_exact} {
@@ -45,41 +43,32 @@ proc build-deb-rpm {arch_exact} {
         file mkdir $distdir
         file mkdir $distdir/usr/local/sbin
         file copy build/skd/linux-$arch/skd.bin $distdir/usr/local/sbin/skd
-        file copy skd/etc $distdir
+        file copy skd/exclude/etc $distdir
         file mkdir $distdir/usr/local/bin
         file copy build/sku/linux-$arch/sku.bin $distdir/usr/local/bin/sku
         cd $distdir
-        set fpmopts "-a $arch_exact -s dir -n skapp -v 0.4.0 --before-install ../../skd/skd.preinst --after-install ../../skd/skd.postinst --before-remove ../../skd/skd.prerm --after-remove ../../skd/skd.postrm usr etc"
-        exec fpm -t deb -d openvpn -d libxss1 {*}$fpmopts >&@ stdout
-        exec fpm -t rpm --rpm-autoreqprov -d openvpn -d libXScrnSaver {*}$fpmopts >&@ stdout
+        set fpmopts "-a $arch_exact -s dir -n skapp -v 0.4.0 --before-install ../../skd/exclude/skd.preinst --after-install ../../skd/exclude/skd.postinst --before-remove ../../skd/exclude/skd.prerm --after-remove ../../skd/exclude/skd.postrm usr etc"
+        exec fpm -t deb {*}$fpmopts >&@ stdout
+        exec fpm -t rpm --rpm-autoreqprov {*}$fpmopts >&@ stdout
         cd ../..
     } 
 }
 
-
+proc build-skd-sku {} {
+    foreach arch_exact {i386 x86_64} {
+        #build win32 $arch_exact sku base-tk-8.6.3.1 {tls-1.6.4}
+        build linux $arch_exact sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4}
+        build linux $arch_exact skd base-tcl-8.6.3.1 {sklib-0.0.0 Expect-5.45.3 cmdline-1.5}
+        build-deb-rpm $arch_exact
+    }
+    puts "Install from dpkg"
+    exec sudo dpkg -i ./dist/linux-x86_64/skapp_0.4.0_amd64.deb >&@ stdout
+    exec ./build/sku/linux-ix86/sku.bin
+}
 
 prepare-lib sklib 0.0.0
 
-#build win32 x86_64 sku base-tk-8.6.3.1 {tls-1.6.4}
+#build-skd-sku
 
-build linux ix86   sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4}
-build linux x86_64 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4}
-
-build linux ix86   skd base-tcl-8.6.3.1 {sklib-0.0.0 Expect-5.45.3 cmdline-1.5}
-build linux x86_64 skd base-tcl-8.6.3.1 {sklib-0.0.0 Expect-5.45.3 cmdline-1.5}
-
-build-deb-rpm i386
-build-deb-rpm x86_64
-
-puts "Install from dpkg"
-exec sudo dpkg -i ./dist/linux-x86_64/skapp_0.4.0_amd64.deb >&@ stdout
-#exec sudo dpkg -i ./dist/linux-ix86/skapp_0.4.0_i686.deb >&@ stdout
-
-#apt-get update --fix-missing
-#apt-get -fy install git ruby-dev gcc rpm
-#gem install fpm
-
-launch sku
-#exec ./build/sku/linux-ix86/sku.bin
-
-
+build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0}
+exec ./build/sandbox/linux-x86_64/sandbox.bin

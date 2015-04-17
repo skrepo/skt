@@ -38,18 +38,18 @@ In order to see the real (X11) dependencies we need to examine tk.so library:
 
 Of the above the relevant ones (non-libc):
 
-libXft.so.2             apt-get libxft2		zypper libXft2		yum libXft
-libX11.so.6             apt-get libx11-6	zypper libX11-6		yum libX11
+libXft.so.2             apt-get libxft2		    zypper libXft2		yum libXft
+libX11.so.6             apt-get libx11-6	    zypper libX11-6		yum libX11
 libfreetype.so.6        apt-get libfreetype6	zypper libfreetype6	yum freetype
 libfontconfig.so.1      apt-get libfontconfig1	zypper fontconfig	yum fontconfig
-libXrender.so.1         apt-get libxrender1	zypper libXrender1	yum libXrender
-libXss.so.1             apt-get libxss1		zypper libXss1		yum libXScrnSaver
-libXext.so.6            apt-get libxext6	zypper libXext6		yum libXext
-libz.so.1               apt-get zlib1g		zypper libz1		yum zlib
-libxcb.so.1             apt-get libxcb1		zypper libxcb1		yum libxcb
-libexpat.so.1           apt-get libexpat1	zypper libexpat1	yum expat
-libXau.so.6             apt-get libxau6		zypper libXau6		yum libXau
-libXdmcp.so.6           apt-get libxdmcp6	zypper libXdmcp6	yum libXdmcp
+libXrender.so.1         apt-get libxrender1	    zypper libXrender1	yum libXrender
+libXss.so.1             apt-get libxss1		    zypper libXss1		yum libXScrnSaver
+libXext.so.6            apt-get libxext6	    zypper libXext6		yum libXext
+libz.so.1               apt-get zlib1g		    zypper libz1		yum zlib
+libxcb.so.1             apt-get libxcb1		    zypper libxcb1		yum libxcb
+libexpat.so.1           apt-get libexpat1	    zypper libexpat1	yum expat
+libXau.so.6             apt-get libxau6		    zypper libXau6		yum libXau
+libXdmcp.so.6           apt-get libxdmcp6	    zypper libXdmcp6	yum libXdmcp
 
 
 TLS dependencies
@@ -128,3 +128,4 @@ rpmlib(PayloadIsXz) <= 5.2-1
 
 This is getting messy. Solution: use openvpn provided by OS package manager, and add dependency in deb/rpm package. Check openvpn and openssl version in SKD/SKU
 
+Also we need to avoid unfriendly "missing dependencies error" when installing with dpkg/rpm. Let it install even without openvpn or X11 libraries and cope with it dynamically when loading Tk and OpenVPN. We need root for that so the Tcl script should be started from postinst. That must be the skt with proper option for checking Tk and any (skt/skd) for checking openvpn.

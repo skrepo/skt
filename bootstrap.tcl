@@ -5,12 +5,16 @@ if {![catch {package require starkit}]} {
   starkit::startup
 }
 
-proc this-arch {} {
-    switch -glob $::tcl_platform(machine) {
+proc generalize-arch {arch} {
+    switch -glob $arch {
         i?86 {return ix86}
         x86_64 {return x86_64}
         default {error "Unrecognized CPU architecture"}
     }
+}
+
+proc this-arch {} {
+    return generalize-arch $::tcl_platform(machine)
 }
 
 proc this-os {} {
@@ -20,7 +24,6 @@ proc this-os {} {
         default {error "Unrecognized OS"}
     }
 }
-
 
 # path to platform dependent libs in the lib dir - this is for the need of the build script - ix86 only!!! Should work on 64-bit as well
 lappend auto_path [file join lib [this-os]-ix86]
@@ -111,14 +114,6 @@ proc wget {url filepath} {
   return
 }
 
-
-
-
-
-#proc copy-base {os arch pkgname ver proj} {
-#  prepare-pkg $os $arch $pkgname $ver
-#  file copy -force [file join lib $os-$arch $pkgname-$ver] [file join build $proj $os-$arch]
-#}
 
 # Package presence is checked in the following order:
 # 1. is pkg-ver in lib?          => copy to build dir
@@ -220,54 +215,54 @@ proc suffix_exec {os} {
 
 # recursively copy contents of the $from dir to the $to dir 
 # while overwriting items in $to if necessary
-proc copy-merge {from to} {
+# ignore files matching glob pattern $ignore
+proc copy-merge {from to {ignore ""}} {
     foreach f [glob [file join $from *]] {
-        if {[file isdirectory $f]} {
-            set tail [lindex [file split $f] end]
-            set new_to [file join $to $tail]
-            file mkdir $new_to
-            copy-merge $f $new_to
-        } else {
-            #puts "Copying $f"
-            file copy -force $f $to
+        set tail [file tail $f]
+        if {![string match $ignore $tail]} {
+            if {[file isdirectory $f]} {
+                set new_to [file join $to $tail]
+                file mkdir $new_to
+                copy-merge $f $new_to
+            } else {
+                #puts "Copying $f"
+                file copy -force $f $to
+            }
         }
     }
 }
 
 
-proc build {os arch proj base {packages {}}} {
-  puts "\nStarting build ($os $arch $proj $base $packages)"
-  if {![file isdirectory $proj]} {
-    puts "Could not find project dir $proj"
-    return
-  }
-  set bld [file join build $proj $os-$arch]
-  puts "Cleaning build dir $bld"
-  file delete -force $bld
-  file mkdir [file join $bld $proj.vfs lib]
-  # we don't copy base-tcl/tk to build folder, only in lib is enough - hence prepare-pkg
-  prepare-pkg $os $arch {*}[split-last-dash $base]
-  foreach pkgver $packages {
-    copy-pkg $os $arch {*}[split-last-dash $pkgver] $proj
-  }
-  set vfs [file join $bld $proj.vfs]
-  puts "Copying project source files to $vfs"
-
-  copy-merge $proj $vfs
-  set cmd [list [info nameofexecutable] sdx.kit wrap [file join $bld $proj[suffix_exec $os]] -vfs [file join $bld $proj.vfs] -runtime [file join lib $os-$arch $base]]
-  puts "Building starpack $proj"
-  puts $cmd
-  exec {*}$cmd
+proc build {os arch_exact proj base {packages {}}} {
+    set arch [generalize-arch $arch_exact]
+    puts "\nStarting build ($os $arch $proj $base $packages)"
+    if {![file isdirectory $proj]} {
+      puts "Could not find project dir $proj"
+      return
+    }
+    set bld [file join build $proj $os-$arch]
+    puts "Cleaning build dir $bld"
+    file delete -force $bld
+    file mkdir [file join $bld $proj.vfs lib]
+    # we don't copy base-tcl/tk to build folder. Having it in lib is enough - hence prepare-pkg
+    prepare-pkg $os $arch {*}[split-last-dash $base]
+    foreach pkgver $packages {
+      copy-pkg $os $arch {*}[split-last-dash $pkgver] $proj
+    }
+    set vfs [file join $bld $proj.vfs]
+    puts "Copying project source files to VFS dir: $vfs"
+  
+    copy-merge $proj $vfs exclude
+    set cmd [list [info nameofexecutable] sdx.kit wrap [file join $bld $proj[suffix_exec $os]] -vfs [file join $bld $proj.vfs] -runtime [file join lib $os-$arch $base]]
+    puts "Building starpack $proj"
+    puts $cmd
+    exec {*}$cmd
 }
 
 proc run {proj} {
     exec [info nameofexecutable] [file join build $proj [this-os]-[this-arch] $proj.vfs main.tcl] >@stdout
 }
 
-proc launch {proj} {
-    puts "Launching $proj"
-    exec [file join build $proj [this-os]-[this-arch] $proj[suffix_exec [this-os]]] >@stdout
-}
 
 proc prepare-lib {pkgname ver} {
     set dest [file join lib generic $pkgname-$ver]
