@@ -111,7 +111,7 @@ proc ::linuxdeps::tk-missing-dep {} {
     }
 }
 
-proc tk-install-lib {pkg_mgr lib} {
+proc ::linuxdeps::tk-install-lib {pkg_mgr lib} {
     variable pkgmgr2cmd
     variable lib2pkg
 
