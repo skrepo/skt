@@ -13,7 +13,6 @@ signal trap {SIGTERM SIGINT SIGQUIT} signal-handler
 
 puts "is X running: [unix is-x-running]"
 
-vwait forever
 
 puts "id user: [id user]"
 puts "id group: [id group]"
@@ -22,7 +21,7 @@ puts "RRRRRR: [unix relinquish-root]"
 puts "id user: [id user]"
 puts "id group: [id group]"
 exec touch file2222
-exit
+vwait forever
 
 puts "BEFORE linuxdeps"
 linuxdeps install

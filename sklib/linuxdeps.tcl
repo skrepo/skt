@@ -106,6 +106,24 @@ proc ::linuxdeps::tk-missing-dep {} {
         #    ("package ifneeded Tk 8.6.3" script)
         #    invoked from within
         #"package require Tk"} -errorline 2
+
+# When no X11 running:
+#root@ubuntu:~# tclsh
+#% package require Tk
+#no display name and no $DISPLAY environment variable
+#% catch {[package require Tk]} out err
+#1
+#% puts $out
+#no display name and no $DISPLAY environment variable
+#% puts $err
+#-code 1 -level 0 -errorstack {INNER {load /usr/lib/x86_64-linux-gnu/libtk8.6.so Tk}} -errorcode {TK NO_DISPLAY} -errorinfo {no display name and no $DISPLAY environment variable
+#    while executing
+#"load /usr/lib/x86_64-linux-gnu/libtk8.6.so Tk"
+#    ("package ifneeded Tk 8.6.1" script)
+#    invoked from within
+#"package require Tk"} -errorline 1
+
+
     } else {
         return ""
     }

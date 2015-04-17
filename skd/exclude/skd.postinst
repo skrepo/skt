@@ -1,6 +1,13 @@
 #!/bin/sh
 
 if [ -x "/etc/init.d/skd" ]; then
+    
+    #TODO
+    #sku --install-deps
+   
+
+
+
     # Some distros like OpenSUSE keep rcN.d dirs within init.d
     if [ -d "/etc/init.d/rc2.d" ]; then
         RCROOT="/etc/init.d"
@@ -19,5 +26,11 @@ if [ -x "/etc/init.d/skd" ]; then
     done
     
     /etc/init.d/skd start
+
+
+    #TODO
+    #sku --generate-keys
+    #nohup sku GUI  &
+ 
 fi
 
