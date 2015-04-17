@@ -5,6 +5,11 @@ if {![catch {package require starkit}]} {
   starkit::startup
 }
 
+
+proc ex {args} {
+    return [exec -- {*}$args >&@ stdout]
+}
+
 proc generalize-arch {arch} {
     switch -glob $arch {
         i?86 {return ix86}
@@ -25,9 +30,9 @@ proc this-os {} {
     }
 }
 
-# path to platform dependent libs in the lib dir - this is for the need of the build script - ix86 only!!! Should work on 64-bit as well
+# this is only to provide tls support for the build script
+# path to platform dependent libs in the lib dir - this is for the need of the build script - ix86 only!!! The reason is that we use base-tcl-ix86 anyway. Should work on 64-bit as well
 lappend auto_path [file join lib [this-os]-ix86]
-# path to generic libs in the lib dir
 lappend auto_path [file join lib generic]
 
 package require http
@@ -256,11 +261,11 @@ proc build {os arch_exact proj base {packages {}}} {
     set cmd [list [info nameofexecutable] sdx.kit wrap [file join $bld $proj[suffix_exec $os]] -vfs [file join $bld $proj.vfs] -runtime [file join lib $os-$arch $base]]
     puts "Building starpack $proj"
     puts $cmd
-    exec {*}$cmd
+    ex {*}$cmd
 }
 
 proc run {proj} {
-    exec [info nameofexecutable] [file join build $proj [this-os]-[this-arch] $proj.vfs main.tcl] >@stdout
+    ex [info nameofexecutable] [file join build $proj [this-os]-[this-arch] $proj.vfs main.tcl]
 }
 
 

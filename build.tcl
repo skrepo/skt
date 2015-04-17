@@ -21,7 +21,7 @@
 #build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3}
 
 # Run project sample as starpack - recommended since it tests end-to-end
-#exec ./build/sample/linux-ix86/sample.bin
+#ex ./build/sample/linux-ix86/sample.bin
 
 # Run project sample not as starpack but from unwrapped vfs
 # Project must be built for this platform first!
@@ -29,9 +29,9 @@
 
 
 proc install-fpm {} {
-    exec -- apt-get update --fix-missing
-    exec -- apt-get -fy install git ruby-dev gcc rpm
-    exec -- gem install fpm
+    ex apt-get update --fix-missing
+    ex apt-get -fy install git ruby-dev gcc rpm
+    ex gem install fpm
 }
 
 proc build-deb-rpm {arch_exact} {
@@ -48,8 +48,8 @@ proc build-deb-rpm {arch_exact} {
         file copy build/sku/linux-$arch/sku.bin $distdir/usr/local/bin/sku
         cd $distdir
         set fpmopts "-a $arch_exact -s dir -n skapp -v 0.4.0 --before-install ../../skd/exclude/skd.preinst --after-install ../../skd/exclude/skd.postinst --before-remove ../../skd/exclude/skd.prerm --after-remove ../../skd/exclude/skd.postrm usr etc"
-        exec fpm -t deb {*}$fpmopts >&@ stdout
-        exec fpm -t rpm --rpm-autoreqprov {*}$fpmopts >&@ stdout
+        ex fpm -t deb {*}$fpmopts
+        ex fpm -t rpm --rpm-autoreqprov {*}$fpmopts
         cd ../..
     } 
 }
@@ -62,8 +62,8 @@ proc build-skd-sku {} {
         build-deb-rpm $arch_exact
     }
     puts "Install from dpkg"
-    exec sudo dpkg -i ./dist/linux-x86_64/skapp_0.4.0_amd64.deb >&@ stdout
-    exec ./build/sku/linux-ix86/sku.bin
+    ex sudo dpkg -i ./dist/linux-x86_64/skapp_0.4.0_amd64.deb
+    ex ./build/sku/linux-ix86/sku.bin
 }
 
 prepare-lib sklib 0.0.0
@@ -71,4 +71,4 @@ prepare-lib sklib 0.0.0
 #build-skd-sku
 
 build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0}
-exec ./build/sandbox/linux-x86_64/sandbox.bin
+ex ./build/sandbox/linux-x86_64/sandbox.bin
