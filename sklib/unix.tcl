@@ -2,7 +2,7 @@ package provide unix 0.0.0
 package require Tclx
 
 namespace eval ::unix {
-    namespace export relinquish-root
+    namespace export relinquish-root is-x-running
     namespace ensemble create
 }
 
@@ -25,4 +25,11 @@ proc ::unix::relinquish-root {} {
     id group $primary_group
     id user $logname
     return $logname
+}
+
+
+# Check if X11 server is running
+# by probing existence of $DISPLAY env variable
+proc ::unix::is-x-running {} {
+    return [expr {[array get ::env DISPLAY] ne ""}]
 }

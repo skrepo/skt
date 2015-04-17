@@ -48,7 +48,7 @@ package require cmd
 
 package require skutil
 package require ovconf
-package require Expect
+package require Tclx
 #package require cmdline
 source skmgmt.tcl
 
@@ -65,7 +65,7 @@ proc delete-pidfile {} {
 }
  
 # TODO how it works on Windows? Also pidfile
-proc sigint_handler {} {
+proc sigint-handler {} {
     puts "Gracefully exiting SKD"
     #TODO wind up
     delete-pidfile
@@ -73,9 +73,9 @@ proc sigint_handler {} {
 }
  
 # intercept termination signals
-trap sigint_handler {SIGINT SIGTERM SIGQUIT}
+signal trap {SIGTERM SIGINT SIGQUIT} signal-handler
 # ignore disconnecting terminal - it's supposed to be a daemon. This is causing problem - do not enable. Use linux nohup
-#trap SIG_IGN SIGHUP
+#signal ignore SIGHUP
 
 
 
