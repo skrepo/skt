@@ -30,35 +30,35 @@ proc ::linuxdeps::tk-missing-dep {} {
   if {[catch {package require Tk} out err]} {
     #puts "OUT: $out"
     #puts "ERR: $err"
-
-  switch -regexp -matchvar tokens $out {
-    {^can't find package (.*)} {
-      #the entire Tk package is missing - propagate the error
-      package require [lindex $tokens 1]
+    switch -regexp -matchvar tokens $out {
+      {^can't find package (.*)} {
+        #the entire Tk package is missing - propagate the error
+        package require Tk
+      }
+      {^couldn't load file ".*": (.*): cannot open shared object file.*} {
+        return [lindex $tokens 1]
+      }
+      default {
+        package require Tk
+      }
     }
-    {^couldn't load file ".*": (.*): cannot open shared object file.*} {
-      return [lindex $tokens 1]
-    }
-    {^$} {
-      return ""
-    }
+    # When Tk package missing:
+    #OUT: can't find package dksjfds
+    #ERR: -code 1 -level 0 -errorstack {INNER {invokeStk1 package require dksjfds} CALL tk-missing-dep} -errorcode {TCL PACKAGE UNFOUND} -errorinfo {can't find package dksjfds
+    #    while executing
+    #"package require dksjfds"} -errorline 2
+    
+    # When OS library is missing:
+    #OUT: couldn't load file "/tmp/tcl_CJ5xeo": libXss.so.1: cannot open shared object file: No such file or directory
+    #ERR: -code 1 -level 0 -errorstack {INNER {load /home/sk/skt/build/sandbox/linux-ix86/sandbox.bin/lib/libtk8.6.so Tk} UP 2 CALL tk-missing-dep} -errorcode NONE -errorinfo {couldn't load file "/tmp/tcl_CJ5xeo": libXss.so.1: cannot open shared object file: No such file or directory
+    #    while executing
+    #"load /home/sk/skt/build/sandbox/linux-ix86/sandbox.bin/lib/libtk8.6.so Tk"
+    #    ("package ifneeded Tk 8.6.3" script)
+    #    invoked from within
+    #"package require Tk"} -errorline 2
+  } else {
+    return ""
   }
-# When Tk package missing:
-#OUT: can't find package dksjfds
-#ERR: -code 1 -level 0 -errorstack {INNER {invokeStk1 package require dksjfds} CALL tk-missing-dep} -errorcode {TCL PACKAGE UNFOUND} -errorinfo {can't find package dksjfds
-#    while executing
-#"package require dksjfds"} -errorline 2
-
-# When OS library is missing:
-#OUT: couldn't load file "/tmp/tcl_CJ5xeo": libXss.so.1: cannot open shared object file: No such file or directory
-#ERR: -code 1 -level 0 -errorstack {INNER {load /home/sk/skt/build/sandbox/linux-ix86/sandbox.bin/lib/libtk8.6.so Tk} UP 2 CALL tk-missing-dep} -errorcode NONE -errorinfo {couldn't load file "/tmp/tcl_CJ5xeo": libXss.so.1: cannot open shared object file: No such file or directory
-#    while executing
-#"load /home/sk/skt/build/sandbox/linux-ix86/sandbox.bin/lib/libtk8.6.so Tk"
-#    ("package ifneeded Tk 8.6.3" script)
-#    invoked from within
-#"package require Tk"} -errorline 2
-
-  
 }
 
 proc ::linuxdeps::install {} {
