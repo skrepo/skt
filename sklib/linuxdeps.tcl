@@ -120,7 +120,7 @@ proc ::linuxdeps::tk-install-lib {lib} {
         set cmd [dict get $pkgmgr2cmd $pkg_mgr]
         if {[dict exists $lib2pkg $pkg_mgr $lib]} {
             set pkg [dict get $lib2pkg $pkg_mgr $lib]
-            exec {*}$cmd $pkg >&@ stdout
+            exec sudo {*}$cmd $pkg >&@ stdout
         } else {
             puts "Could not locate $lib"
         }

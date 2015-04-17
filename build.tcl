@@ -29,9 +29,9 @@
 
 
 proc install-fpm {} {
-    ex apt-get update --fix-missing
-    ex apt-get -fy install git ruby-dev gcc rpm
-    ex gem install fpm
+    ex sudo apt-get update --fix-missing
+    ex sudo apt-get -fy install git ruby-dev gcc rpm
+    ex sudo gem install fpm
 }
 
 proc build-deb-rpm {arch_exact} {
