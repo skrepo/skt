@@ -74,3 +74,10 @@ proc slurp {path} {
     close $fd
     return $data
 }
+
+
+proc is-tk-loaded {} {
+    catch {package require Tk} out
+    return [regexp {^[0-9.]+$} $out]
+}
+

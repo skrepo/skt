@@ -32,12 +32,23 @@ package require unix
 package require linuxdeps
 http::register https 443 [list tls::socket]
 
+state sku {
+    # SKD connection socket 
+    skd_sock ""
+    # User Interface (gui or cli)
+    ui ""
+    # Start retries
+    start_retries 0
+}
+
+
 # Parse command line options and launch proper task
 # It may set global variables
 proc main {} {
     # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one
     puts "argv1: $::argv"
     set options {
+            {cli            "Run command line interface (CLI) instead of GUI"}
             {generate-keys  "Generate private key and certificate signing request"}
             {version        "Print version"}
             {p              "Print anything"}
@@ -63,34 +74,96 @@ proc main {} {
     }
 
     unix relinquish-root
-    if {[unix is-x-running]} {
-        main-gui
+    if {$params(cli) || ![unix is-x-running]} {
+        state sku {ui cli}
     } else {
-        main-cli
+        state sku {ui gui}
+    }
+    set sock [SkConnect 7777]
+    #TODO handle SKD connection error here - display emergency Tk dialog or cli to inform user about SKD service not running
+    #in-ui error
+    puts "Before main-start"
+    after idle main-start
+    puts "After main-start"
+}
+
+# it may be called many times by events retrying to start after lib install
+proc main-start {} {
+
+    set retries [state sku start_retries]
+    state sku {start_retries [incr retries]}
+    puts "start_retries: [state sku start_retries]"
+    # give up after a number of retries
+    if {$retries > 5} {
+        in-ui error "Could not main-start after a number of retries"
+        return
+    }
+
+    puts "RUNNING: check-openvpn-deps"
+    # Ignore result of openvpn install - it may be handled later, when GUI is running
+    # TODO save openvpn install result in state - user to be informed
+    check-openvpn-deps
+
+    if {[state sku ui] eq "gui"} {
+        puts "RUNNING: check-tk-deps"
+        # if no missing libs start UI
+        if {![check-tk-deps]} {
+            in-ui main
+        }
+    }
+}
+
+# Combine $fun and $ui to run proper procedure in gui or cli
+proc in-ui {fun args} {
+    set ui [state sku ui]
+    puts "in-ui args: $args"
+    if {[llength $args] == 0} {
+        [join [list $fun $ui] -]
+    } else {
+        [join [list $fun $ui] -] {*}args
     }
 }
 
 
+proc error-gui {msg} {
+    # if Tk not functional downgrade displaying errors to cli
+    if {[is-tk-loaded]} {
+        #TODO displaying GUI errors
+        tk_messageBox -message $msg -type ok -icon error
+    } else {
+        error-cli $msg
+    }
+}
+
+proc error-cli {msg} {
+    puts stderr $msg
+}
+
+
+# Check if openvpn is installed. 
+# If not send pkg-install request to SKD
+# Return 1 if request sent, 0 otherwise
 proc check-openvpn-deps {} {
-    # check in SKU, actual install in SKD
-    if {[linuxdeps is-openvpn-installed]} {
-        puts $::sock "pkg-install openvpn"
-        #TODO handle return messages from SKD
+    #TODO handle return messages from SKD
+    if {![linuxdeps is-openvpn-installed]} {
+        puts [state sku skd_sock] "pkg-install openvpn"
+        return 1
+    } else {
+        return 0
     }
 }
 
+# Check if there is a missing lib that Tk depends on
+# If so send lib-install request to SKD
+# Return 1 if request sent, 0 otherwise
 proc check-tk-deps {} {
-    #TODO we must split Tk import testing from install in linuxdeps
-    set last_missing_lib ""
-    for {set i 0} {$i<5} {incr i} {
-        set missing_lib [linuxdeps tk-missing-lib]
-        puts $missing_lib
-        if {$missing_lib eq $last_missing_lib} {
-            break
-        }
-        if {[llength $missing_lib] != 0} {
-            puts $::sock "lib-install $missing_lib"
-        }
+    set missing_lib [linuxdeps tk-missing-lib]
+    puts $missing_lib
+    if {[llength $missing_lib] != 0} {
+        puts [state sku skd_sock] "lib-install $missing_lib"
+        return 1
+    } else {
+        return 0
     }
 }
 
@@ -102,21 +175,10 @@ proc main-version {} {
 }
 proc main-cli {} {
     puts "Running CLI"
-    set ::sock [SkConnect 7777]
-    check-openvpn-deps
 }
 
 proc main-gui {} {
-    #TODO remove
-    after 2000 
-
     puts "Running GUI"
-    set ::sock [SkConnect 7777]
-
-    puts check-openvpn-deps
-    check-openvpn-deps
-    puts check-tk-deps
-    check-tk-deps
 
     package require Tk 
     package require Tkhtml
@@ -173,7 +235,7 @@ proc SkConnect {port} {
     set sock [socket 127.0.0.1 $port]
     chan configure $sock -blocking 0 -buffering line
     chan event $sock readable [list SkRead $sock]
-    state skd {sock $sock}
+    state sku {skd_sock $sock}
     return $sock
 }
 
@@ -205,6 +267,10 @@ proc SkRead {sock} {
                 {^Config loaded} {
                     catch {puts $sock start}
                 }
+                {^pkg-install ended with result} {
+                    after idle main-start
+                }
+
             }
         }
         {^ovpn: (.*)$} {
@@ -294,14 +360,13 @@ proc ClickConnect {} {
     set proto [lindex $::serverdesc 2]
     set port [lindex $::serverdesc 3]
     append localconf "--proto $proto --remote $ip $port"
-    puts $::sock "config $localconf"
+    puts [state sku skd_sock] "config $localconf"
 }
 
 proc ClickDisconnect {} {
-    puts $::sock "stop"
+    puts [state sku skd_sock] "stop"
 }
 
 
 main
-
-
+vwait forever

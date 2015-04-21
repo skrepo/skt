@@ -52,6 +52,10 @@ namespace eval ::linuxdeps {
     dict set lib2pkg yum        libXdmcp.so.6           libXdmcp
 
 
+    #TODO remove temporary testing hack
+    variable templib libz.so.1
+
+
     namespace export tk-install openvpn-install is-openvpn-installed find-pkg-mgr find-pkg-mgr-cmd lib-to-pkg tk-missing-lib
     namespace ensemble create
 }
@@ -90,9 +94,13 @@ proc ::linuxdeps::find-pkg-mgr-cmd {} {
 # If Tk loaded OK or no X11 or no Tk at all return empty string
 proc ::linuxdeps::tk-missing-lib {} {
 
-
     #TODO remove
-    return libz.so.1
+    variable templib
+    if {[llength $templib] > 0} {
+        set temp $templib
+        set templib ""
+        return $temp
+    }
 
     if {[catch {package require Tk} out err]} {
         #puts "OUT: $out"

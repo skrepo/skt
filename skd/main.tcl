@@ -259,20 +259,19 @@ proc SkdRead {} {
     }
 }
 
-
+# Queue pkg-install requests and trigger event for processing the queue
 proc pkg-install {pkgname} {
-    # TODO push to queue instead of locking
     set q [state skd pkg_install_q]
     lappend q $pkgname
     state skd {pkg_install_q $q}
-
     puts "INSTALL_QUEUE: [state skd pkg_install_q]"
-
-    after idle PkgMgrTrigger
+    # Trigger package processing with delay
+    after 2000 PkgMgrQProcess
 }
 
 
-proc PkgMgrTrigger {} {
+# Process the pkg-install queue
+proc PkgMgrQProcess {} {
     if {[state skd pkg_lock]} {
         return
     }
@@ -299,8 +298,8 @@ proc PkgMgrTrigger {} {
 proc PkgMgrExit {code} {
     state skd {pkg_lock 0}
     SkdWrite ctrl "pkg-install ended with result $code"
-    # go for the next pkg in the queue
-    after idle PkgMgrTrigger
+    # go for the next pkg in the queue after some delay
+    after 2000 PkgMgrQProcess
 }
 proc PkgMgrRead {line} {
     SkdWrite pkg $line
