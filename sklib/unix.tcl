@@ -16,15 +16,23 @@ proc ::unix::relinquish-root {} {
     if {[id user] ne "root"} {
         return [id user]
     }
-    set logname [exec logname]
-    if {$logname eq "root"} {
+    # When running starpack in background (with &) logname may error with "logname: no login name"
+    if {[catch {exec logname} user]} {
+        # Fall back to checking SUDO_USER
+        set user $::env(SUDO_USER)
+        # If empty then I don't know, assume root
+        if {[llength $user] == 0} {
+            set user root
+        }
+    }
+    if {$user eq "root"} {
         return root
     }
-    set primary_group [exec id -g -n $logname]
+    set primary_group [exec id -g -n $user]
     # the order is relevant - first change gid then uid
     id group $primary_group
-    id user $logname
-    return $logname
+    id user $user
+    return $user
 }
 
 

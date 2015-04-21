@@ -49,7 +49,7 @@ package require cmd
 package require skutil
 package require ovconf
 package require Tclx
-#package require cmdline
+package require linuxdeps
 source skmgmt.tcl
 
 
@@ -65,7 +65,7 @@ proc delete-pidfile {} {
 }
  
 # TODO how it works on Windows? Also pidfile
-proc sigint-handler {} {
+proc signal-handler {} {
     puts "Gracefully exiting SKD"
     #TODO wind up
     delete-pidfile
@@ -103,6 +103,10 @@ proc ResetMgmtState {} {
 state skd {
     # skd client socket, also indicates if skd client connected
     sock ""
+    # pkg manager lock - the internal SKD one, not the OS one
+    pkg_lock 0
+    # pkg install queue - store pkg-install requests in queue
+    pkg_install_q {}
 }
 
 
@@ -225,7 +229,7 @@ proc SkdRead {} {
                 return
             }
         }
-        {^config (.*)$} {
+        {^config (.+)$} {
             set config [lindex $tokens 1]
             set config [adjust-config $config]
             set configerror [load-config $config]
@@ -237,11 +241,73 @@ proc SkdRead {} {
             }
             return
         }
+        {^pkg-install (.+)$} {
+            puts "pkg-install: $line"
+            #TODO list of allowed packages - for security
+            set pkgname [lindex $tokens 1]
+            pkg-install $pkgname
+        }
+        {^lib-install (.+)$} {
+            puts "lib-install $line"
+            set lib [lindex $tokens 1]
+            set pkgname [linuxdeps::lib-to-pkg $lib]
+            if {[llength $pkgname] > 0} {
+                pkg-install $pkgname
+            }
+        }
 
     }
 }
 
 
+proc pkg-install {pkgname} {
+    # TODO push to queue instead of locking
+    set q [state skd pkg_install_q]
+    lappend q $pkgname
+    state skd {pkg_install_q $q}
+
+    puts "INSTALL_QUEUE: [state skd pkg_install_q]"
+
+    after idle PkgMgrTrigger
+}
+
+
+proc PkgMgrTrigger {} {
+    if {[state skd pkg_lock]} {
+        return
+    }
+    set q [state skd pkg_install_q]
+    if {[llength $q] == 0} {
+        return
+    }
+    # take pkgname from the queue and lock pkg manager
+    set pkgname [lindex $q 0]
+    set q [lrange $q 1 end]
+    state skd {pkg_install_q $q}
+    state skd {pkg_lock 1}
+    set pkgcmd [linuxdeps find-pkg-mgr-cmd]
+    if {[llength $pkgcmd] > 0} {
+        set pkgcmd "$pkgcmd $pkgname"
+        set chan [cmd invoke $pkgcmd PkgMgrExit PkgMgrRead PkgMgrErrRead]
+        SkdWrite ctrl "pkg-install started"
+        SkdWrite ctrl "pkg-install installing: $pkgname"
+    } else {
+        #TODO handle missing pkg mgr
+    }
+}
+
+proc PkgMgrExit {code} {
+    state skd {pkg_lock 0}
+    SkdWrite ctrl "pkg-install ended with result $code"
+    # go for the next pkg in the queue
+    after idle PkgMgrTrigger
+}
+proc PkgMgrRead {line} {
+    SkdWrite pkg $line
+}
+proc PkgMgrErrRead {line} {
+    SkdWrite pkg $line
+}
 
 proc OvpnRead {line} {
     set ignoreline 0
@@ -320,13 +386,14 @@ proc OvpnRead {line} {
 #ovpn: Mon Mar 30 15:15:52 2015 ERROR: Linux route add command failed: external program exited with error status: 7
 
 
-proc OvpnErrRead {s} {
-    puts "stderr: $s"
+proc OvpnErrRead {line} {
+    #TODO communicate error to user. gui and cli
+    puts "stderr: $line"
+    SkdWrite ovpn "stderr: $line"
 }
 
 # should be idempotent, as may be called many times on openvpn shutdown
 proc OvpnExit {code} {
-    #TODO research OpenVPN exit codes and possibly use for troubleshooting
     set pid [state ovpn pid]
     if {$pid != 0} {
         SkdWrite ctrl "OpenVPN with pid $pid stopped"
@@ -410,32 +477,6 @@ proc OvpnExit {code} {
 #        Prod version:   9.9.2 9/9
 #        File version:   9.9.2 9/9 built by: WinDDK
 #        MachineType:    32-bit
-
-
-# cmdline options not really needed yet
-#set options {
-#            {a             "set the atime only"}
-#            {m             "set the mtime only"}
-#            {p.arg  57328  "skd port"}
-#            {r.arg  ""     "use time from ref_file"}
-#            {t.arg  -1     "use specified time"}
-#        }
-#set usage ": skd \[options]\noptions:"
-#if {[catch {array set params [::cmdline::getoptions argv $options $usage]}]} {
-#    puts [cmdline::usage $options $usage]
-#    exit -1
-#}
-#
-#set has_t [expr {$params(t) != -1}]
-#set has_r [expr {[string length $params(r)] > 0}]
-#if {$has_t && $has_r} {
-#    return -code error "Cannot specify both -r and -t"
-#} elseif {$has_t} {
-#...
-#}
-#parray params
-
-#set SKDPORT $params(p)
 
 create-pidfile
 

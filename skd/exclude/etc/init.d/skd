@@ -55,7 +55,9 @@ case "$1" in
             echo "Could not stop SKD. See $LOGFILE"
         fi
         ;;
+    #TODO provide restart/cleanup
     #TODO provide status
+    #TODO provide version
     *)
         echo "Please use start or stop as first argument"
         ;;

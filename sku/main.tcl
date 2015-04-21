@@ -25,22 +25,148 @@ interp bgerror "" background-error
 
 package require skutil
 package require ovconf
-package require Tk 
-package require Tkhtml
 package require tls
 package require http
+package require cmdline
+package require unix
+package require linuxdeps
 http::register https 443 [list tls::socket]
 
+# Parse command line options and launch proper task
+# It may set global variables
+proc main {} {
+    # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one
+    puts "argv1: $::argv"
+    set options {
+            {generate-keys  "Generate private key and certificate signing request"}
+            {version        "Print version"}
+            {p              "Print anything"}
+            {ra             "Print anything"}
+        }
+    set usage ": sku \[options]\noptions:"
+    if {[catch {array set params [::cmdline::getoptions ::argv $options $usage]}]} {
+        puts [cmdline::usage $options $usage]
+        exit 1
+    }
+    parray params
+    puts "argv2: $::argv"
 
-#TODO move to sklib
-proc slurp {path} {
-    set fd [open $path r]
-    set data [read $fd]
-    close $fd
-    return $data
+    if {$params(generate-keys)} {
+        unix relinquish-root
+        main-generate-keys
+        exit
+    }
+    if {$params(version)} {
+        unix relinquish-root
+        main-version
+        exit
+    }
+
+    unix relinquish-root
+    if {[unix is-x-running]} {
+        main-gui
+    } else {
+        main-cli
+    }
 }
 
 
+proc check-openvpn-deps {} {
+    # check in SKU, actual install in SKD
+    if {[linuxdeps is-openvpn-installed]} {
+        puts $::sock "pkg-install openvpn"
+        #TODO handle return messages from SKD
+    }
+}
+
+proc check-tk-deps {} {
+    #TODO we must split Tk import testing from install in linuxdeps
+    set last_missing_lib ""
+    for {set i 0} {$i<5} {incr i} {
+        set missing_lib [linuxdeps tk-missing-lib]
+        puts $missing_lib
+        if {$missing_lib eq $last_missing_lib} {
+            break
+        }
+        if {[llength $missing_lib] != 0} {
+            puts $::sock "lib-install $missing_lib"
+        }
+    }
+}
+
+proc main-generate-keys {} {
+    puts "Generating keys"
+}
+proc main-version {} {
+    puts "SKU Version: "
+}
+proc main-cli {} {
+    puts "Running CLI"
+    set ::sock [SkConnect 7777]
+    check-openvpn-deps
+}
+
+proc main-gui {} {
+    #TODO remove
+    after 2000 
+
+    puts "Running GUI"
+    set ::sock [SkConnect 7777]
+
+    puts check-openvpn-deps
+    check-openvpn-deps
+    puts check-tk-deps
+    check-tk-deps
+
+    package require Tk 
+    package require Tkhtml
+
+    set clientNo [get-client-no OpenVPN/config/client.crt]
+    set url "https://www.securitykiss.com/sk/app/display.php?c=$clientNo&v=0.3.0"
+    set ncode [curl $url welcome]
+    if {$ncode != 200} {
+        error "Could not retrieve ($url). HTTP code: $ncode"
+    }
+    #puts $welcome
+    
+    set url "https://www.securitykiss.com/sk/app/usage.php?c=$clientNo"
+    set ncode [curl $url usage]
+    if {$ncode != 200} {
+        error "Could not retrieve ($url). HTTP code: $ncode"
+    }
+    
+    set serverlist [get-server-list $welcome]
+    set ::serverdesc [lindex $serverlist 0]
+    set ::status "Not connected"
+    
+    set config [get-ovpn-config $welcome]
+    set fp [open config.ovpn w]
+    puts $fp $config
+    close $fp
+    
+    
+    
+    ttk::label .p1 -text $clientNo
+    grid .p1 -pady 5
+    html .p2 -shrink 1
+    .p2 parse -final $usage
+    grid .p2
+    ttk::frame .p3
+    ttk::button .p3.connect -text Connect -command ClickConnect
+    ttk::button .p3.disconnect -text Disconnect -command ClickDisconnect
+    ttk::combobox .p3.combo -width 35 -textvariable ::serverdesc
+    .p3.combo configure -values $serverlist
+    .p3.combo state readonly
+    grid .p3.connect .p3.disconnect .p3.combo -padx 10 -pady 10
+    grid .p3
+    ttk::label .p4 -textvariable ::status
+    grid .p4 -sticky w -padx 5 -pady 5
+    
+    
+    set ::conf [::ovconf::parse config.ovpn]
+    
+
+}
 
 proc SkConnect {port} {
     #TODO handle error
@@ -51,6 +177,9 @@ proc SkConnect {port} {
     return $sock
 }
 
+
+#TODO detect disconnecting from SKD - sock monitoring?
+
 proc SkRead {sock} {
     if {[gets $sock line] < 0} {
         if {[eof $sock]} {
@@ -59,23 +188,33 @@ proc SkRead {sock} {
         return
     }
     switch -regexp -matchvar tokens $line {
-        {Welcome to SKD} {
-            if {$::tcl_platform(platform) eq "windows"} {
-                #set conf [::ovconf::parse {c:\temp\Warsaw_195_162_24_220_tcp_443.ovpn}]
-                #set conf [::ovconf::parse {c:\temp\securitykiss_winopenvpn_client00000001\openvpn.conf}]
-                #set conf [::ovconf::parse config.ovpn]
-            } else {
-                #set conf [::ovconf::parse /home/sk/openvpn/Lodz_193_107_90_205_tcp_443.ovpn]
-                #set conf [::ovconf::parse /home/sk/openvpn/securitykiss_winopenvpn_client00000001/openvpn.conf]
-                #set conf [::ovconf::parse config.ovpn]
+        {^ctrl: (.*)$} {
+            switch -regexp -matchvar details [lindex $tokens 1] {
+                {^Welcome to SKD} {
+                    if {$::tcl_platform(platform) eq "windows"} {
+                        #set conf [::ovconf::parse {c:\temp\Warsaw_195_162_24_220_tcp_443.ovpn}]
+                        #set conf [::ovconf::parse {c:\temp\securitykiss_winopenvpn_client00000001\openvpn.conf}]
+                        #set conf [::ovconf::parse config.ovpn]
+                    } else {
+                        #set conf [::ovconf::parse /home/sk/openvpn/Lodz_193_107_90_205_tcp_443.ovpn]
+                        #set conf [::ovconf::parse /home/sk/openvpn/securitykiss_winopenvpn_client00000001/openvpn.conf]
+                        #set conf [::ovconf::parse config.ovpn]
+                    }
+                    #catch {puts $sock "config $conf"}
+                }
+                {^Config loaded} {
+                    catch {puts $sock start}
+                }
             }
-            catch {puts $sock "config $conf"}
         }
-        {Config loaded} {
-            catch {puts $sock start}
-        }
-        {^ovpn:(.*)} {
+        {^ovpn: (.*)$} {
+            # Strip date from ovpn logs to display in status line
             set ::status [join [lrange [lindex $tokens 0] 6 end]]
+        }
+        {^pkg: (.*)$} {
+            #TODO can we parse pkg-mgr output to see success/failure? Aren't messages i18ned?
+
+
         }
 
     }
@@ -149,51 +288,6 @@ proc curl {url data_var} {
 }
  
 
-set clientNo [get-client-no OpenVPN/config/client.crt]
-set url "https://www.securitykiss.com/sk/app/display.php?c=$clientNo&v=0.3.0"
-set ncode [curl $url welcome]
-if {$ncode != 200} {
-    error "Could not retrieve ($url). HTTP code: $ncode"
-}
-#puts $welcome
-
-set url "https://www.securitykiss.com/sk/app/usage.php?c=$clientNo"
-set ncode [curl $url usage]
-if {$ncode != 200} {
-    error "Could not retrieve ($url). HTTP code: $ncode"
-}
-
-set serverlist [get-server-list $welcome]
-set serverdesc [lindex $serverlist 0]
-set status "Not connected"
-
-set config [get-ovpn-config $welcome]
-set fp [open config.ovpn w]
-puts $fp $config
-close $fp
-
-
-
-ttk::label .p1 -text $clientNo
-grid .p1 -pady 5
-html .p2 -shrink 1
-.p2 parse -final $usage
-grid .p2
-ttk::frame .p3
-ttk::button .p3.connect -text Connect -command ClickConnect
-ttk::button .p3.disconnect -text Disconnect -command ClickDisconnect
-ttk::combobox .p3.combo -width 35 -textvariable serverdesc
-.p3.combo configure -values $serverlist
-.p3.combo state readonly
-grid .p3.connect .p3.disconnect .p3.combo -padx 10 -pady 10
-grid .p3
-ttk::label .p4 -textvariable status
-grid .p4 -sticky w -padx 5 -pady 5
-
-
-set sock [SkConnect 7777]
-set conf [::ovconf::parse config.ovpn]
-
 proc ClickConnect {} {
     set localconf $::conf
     set ip [lindex $::serverdesc 1]
@@ -206,3 +300,8 @@ proc ClickConnect {} {
 proc ClickDisconnect {} {
     puts $::sock "stop"
 }
+
+
+main
+
+

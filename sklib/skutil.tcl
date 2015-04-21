@@ -68,3 +68,9 @@ proc is-valid-ip {s} {
 }
 
 
+proc slurp {path} {
+    set fd [open $path r]
+    set data [read $fd]
+    close $fd
+    return $data
+}

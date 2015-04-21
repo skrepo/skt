@@ -1,13 +1,12 @@
 #!/bin/sh
+    
+if [ -x /usr/local/bin/sku ]; then
+    # If needed install openvpn and Tk dependencies (X11 related and zlib)
+    # /usr/local/bin/sku --install-deps
+    :
+fi
 
 if [ -x "/etc/init.d/skd" ]; then
-    
-    #TODO
-    #sku --install-deps
-   
-
-
-
     # Some distros like OpenSUSE keep rcN.d dirs within init.d
     if [ -d "/etc/init.d/rc2.d" ]; then
         RCROOT="/etc/init.d"
@@ -26,11 +25,15 @@ if [ -x "/etc/init.d/skd" ]; then
     done
     
     /etc/init.d/skd start
-
-
-    #TODO
-    #sku --generate-keys
-    #nohup sku GUI  &
- 
 fi
 
+
+if [ -x /usr/local/bin/sku ]; then
+    # Create primary identity. sku should drop root privileges for that
+    # Generate private key and certificate signing request (CSR) and save in HOME
+    /usr/local/bin/sku --generate-keys
+
+    # Run sku client. sku responsible for dropping root privileges and logging to HOME
+    #nohup /usr/local/bin/sku >> /dev/null 2>&1 &
+    /usr/local/bin/sku &
+fi
