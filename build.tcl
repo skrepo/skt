@@ -45,7 +45,8 @@ proc build-deb-rpm {arch_exact} {
         file copy build/skd/linux-$arch/skd.bin $distdir/usr/local/sbin/skd
         file copy skd/exclude/etc $distdir
         file mkdir $distdir/usr/local/bin
-        file copy build/sku/linux-$arch/sku.bin $distdir/usr/local/bin/sku
+        file copy build/sku/linux-$arch/sku.bin $distdir/usr/local/bin/sku.bin
+        file copy sku/exclude/sku $distdir/usr/local/bin/sku
         cd $distdir
         set fpmopts "-a $arch_exact -s dir -n skapp -v 0.4.0 --before-install ../../skd/exclude/skd.preinst --after-install ../../skd/exclude/skd.postinst --before-remove ../../skd/exclude/skd.prerm --after-remove ../../skd/exclude/skd.postrm usr etc"
         ex fpm -t deb {*}$fpmopts

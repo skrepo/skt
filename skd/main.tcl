@@ -5,19 +5,24 @@
 # It makes it possible to run as starpack or as a sourced script
 if {![catch {package require starkit}]} {
   #this is to initialize starkit variables
-  if {[starkit::startup] ne "sourced"} {
-      rename ::source ::the-real-source
-      proc ::source {args} {
-          uplevel ::the-real-source [file join $starkit::topdir $args]
-      }
-  }
+  starkit::startup
 }
+
+
+# package vs source principle: sourced file may have back/circular references to the caller (to be avoided)
+package require cmd
+package require ovconf
+package require Tclx
+package require linuxdeps
+# skutil must be last required package in order to overwrite the log proc from Tclx
+package require skutil
+source [file join $starkit::topdir skmgmt.tcl]
 
 proc background-error {msg e} {
     set pref [lindex [info level 0] 0]
-    puts "$pref: $msg"
+    log $pref: $msg
     dict for {k v} $e {
-        puts "$pref: $k: $v"
+        log $pref: $k: $v
     }
 }
 
@@ -43,41 +48,47 @@ interp bgerror "" background-error
 # SKU: check for SKD upgrades, SKU download the upgrade and call SKD to install (because SKD already has sudo)
 # Do we need to secure the SKD-SKU channel?
  
-# package vs source principle: sourced file may have back/circular references to the caller
-package require cmd
-
-package require skutil
-package require ovconf
-package require Tclx
-package require linuxdeps
-source skmgmt.tcl
-
-
-proc create-pidfile {} {
-    # TODO do we need to catch permission denied or let it crash with stacktrace
-    set fd [open /var/run/skd.pid w]
-    puts $fd [pid]
-    close $fd
-}
-
-proc delete-pidfile {} {
-    file delete /var/run/skd.pid
-}
  
+proc main {} {
+    log Starting SKD server
+    # intercept termination signals
+    signal trap {SIGTERM SIGINT SIGQUIT} main-exit
+    # ignore disconnecting terminal - it's supposed to be a daemon. This is causing problem - do not enable. Use linux nohup
+    #signal ignore SIGHUP
+    
+    create-pidfile /var/run/skd.pid
+
+    state skd {
+        # skd client socket, also indicates if skd client connected
+        sock ""
+        # pkg manager lock - the internal SKD one, not the OS one
+        pkg_lock 0
+        # pkg install queue - store pkg-install requests in queue
+        pkg_install_q {}
+    }
+    
+    state ovpn {
+        # pid also determines openvpn status: started, stopped
+        pid 0
+        # current openvpn status: connected, disconnected
+        connstatus disconnected
+        # OpenVPN config as double-dashed one-line string
+        config ""
+    }
+
+    ResetMgmtState
+    socket -server SkdNewConnection 7777
+
+}
+
+
 # TODO how it works on Windows? Also pidfile
-proc signal-handler {} {
-    puts "Gracefully exiting SKD"
+proc main-exit {} {
+    log Gracefully exiting SKD
     #TODO wind up
-    delete-pidfile
+    delete-pidfile /var/run/skd.pid
     exit 0
 }
- 
-# intercept termination signals
-signal trap {SIGTERM SIGINT SIGQUIT} signal-handler
-# ignore disconnecting terminal - it's supposed to be a daemon. This is causing problem - do not enable. Use linux nohup
-#signal ignore SIGHUP
-
-
 
 proc ResetMgmtState {} {
     state mgmt {
@@ -99,29 +110,6 @@ proc ResetMgmtState {} {
         rip ""
     }
 }
-
-state skd {
-    # skd client socket, also indicates if skd client connected
-    sock ""
-    # pkg manager lock - the internal SKD one, not the OS one
-    pkg_lock 0
-    # pkg install queue - store pkg-install requests in queue
-    pkg_install_q {}
-}
-
-
-state ovpn {
-    # pid also determines openvpn status: started, stopped
-    pid 0
-    # current openvpn status: connected, disconnected
-    connstatus disconnected
-    # OpenVPN config as double-dashed one-line string
-    config ""
-}
-
-
-
-
 
 proc SkdReportState {} {
     SkdWrite stat [state]
@@ -170,6 +158,8 @@ proc adjust-config {conf} {
     }
     # adjust verbosity
     set conf [::ovconf::set $conf verb 3]
+    # add suppressing timestamps
+    set conf [::ovconf::set $conf suppress-timestamps]
     # adjust windows specific options
     if {$::tcl_platform(platform) ne "windows"} {
         set conf [::ovconf::del-win-specific $conf]
@@ -233,7 +223,7 @@ proc SkdRead {} {
             set config [lindex $tokens 1]
             set config [adjust-config $config]
             set configerror [load-config $config]
-            puts "config $config"
+            log config $config
             if {$configerror eq ""} {
                 SkdWrite ctrl "Config loaded"
             } else {
@@ -242,13 +232,13 @@ proc SkdRead {} {
             return
         }
         {^pkg-install (.+)$} {
-            puts "pkg-install: $line"
+            log pkg-install: $line
             #TODO list of allowed packages - for security
             set pkgname [lindex $tokens 1]
             pkg-install $pkgname
         }
         {^lib-install (.+)$} {
-            puts "lib-install $line"
+            log lib-install $line
             set lib [lindex $tokens 1]
             set pkgname [linuxdeps::lib-to-pkg $lib]
             if {[llength $pkgname] > 0} {
@@ -264,7 +254,7 @@ proc pkg-install {pkgname} {
     set q [state skd pkg_install_q]
     lappend q $pkgname
     state skd {pkg_install_q $q}
-    puts "INSTALL_QUEUE: [state skd pkg_install_q]"
+    log INSTALL_QUEUE: [state skd pkg_install_q]
     # Trigger package processing with delay
     after 2000 PkgMgrQProcess
 }
@@ -328,7 +318,7 @@ proc OvpnRead {line} {
         }
         {MANAGEMENT: Client disconnected} {
             #OvpnExit 1
-            puts "Client disconnected"
+            log Client disconnected
         }
         {MANAGEMENT: CMD 'state'} {
             set ignoreline 1
@@ -356,12 +346,12 @@ proc OvpnRead {line} {
             OvpnExit 0
         }
         default {
-            #puts "OPENVPN UNRECOGNIZED: $line"
+            #log OPENVPN UNRECOGNIZED: $line
         }
     }
     if {!$ignoreline} {
         SkdWrite ovpn $line
-        #puts "stdout: $line"
+        #log stdout: $line
     }
 }
 
@@ -387,7 +377,7 @@ proc OvpnRead {line} {
 
 proc OvpnErrRead {line} {
     #TODO communicate error to user. gui and cli
-    puts "stderr: $line"
+    log openvpn stderr: $line
     SkdWrite ovpn "stderr: $line"
 }
 
@@ -477,11 +467,7 @@ proc OvpnExit {code} {
 #        File version:   9.9.2 9/9 built by: WinDDK
 #        MachineType:    32-bit
 
-create-pidfile
+main
 
-ResetMgmtState
-puts "Starting SKD server"
-socket -server SkdNewConnection 7777
 vwait forever
-delete-pidfile
 

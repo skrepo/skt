@@ -81,3 +81,33 @@ proc is-tk-loaded {} {
     return [regexp {^[0-9.]+$} $out]
 }
 
+
+proc create-pidfile {path} {
+    # TODO do we need to catch permission denied or let it crash with stacktrace
+    set path [file normalize $path]
+    puts "create-pidfile $path"
+    set fd [open $path w]
+    puts $fd [pid]
+    close $fd
+}
+
+proc delete-pidfile {path} {
+    #TODO catch error
+    file delete $path
+}
+
+# log with timestamp to stdout
+proc log {args} {
+    puts [join [list [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"] {*}$args]]
+} 
+
+
+# log variable names and values
+proc dbg {args} {
+    foreach varname $args {
+        upvar $varname var
+        log variable $varname: $var
+    }
+}
+
+

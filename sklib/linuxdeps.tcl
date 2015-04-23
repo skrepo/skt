@@ -56,7 +56,7 @@ namespace eval ::linuxdeps {
     variable templib libz.so.1
 
 
-    namespace export tk-install openvpn-install is-openvpn-installed find-pkg-mgr find-pkg-mgr-cmd lib-to-pkg tk-missing-lib
+    namespace export is-openvpn-installed find-pkg-mgr find-pkg-mgr-cmd lib-to-pkg tk-missing-lib
     namespace ensemble create
 }
 
@@ -170,6 +170,7 @@ proc ::linuxdeps::lib-to-pkg {lib} {
  
 
 
+# @deprecated
 proc ::linuxdeps::tk-install-lib {lib} {
     variable pkgmgr2cmd
     variable lib2pkg
@@ -190,6 +191,7 @@ proc ::linuxdeps::tk-install-lib {lib} {
 
 
 
+# @deprecated
 proc ::linuxdeps::tk-install {} {
     set last_missing_lib ""
     for {set i 0} {$i<5} {incr i} {
@@ -214,6 +216,7 @@ proc ::linuxdeps::is-openvpn-installed {} {
 
 # Check if openvpn installed, install if needed
 # No errors raised, best effort
+# @deprecated
 proc ::linuxdeps::openvpn-install {} {
     variable pkgmgr2cmd
     if {![is-openvpn-installed]} {

@@ -30,10 +30,9 @@ fi
 
 if [ -x /usr/local/bin/sku ]; then
     # Create primary identity. sku should drop root privileges for that
-    # Generate private key and certificate signing request (CSR) and save in HOME
-    /usr/local/bin/sku --generate-keys
+    # Generate private key and certificate signing request (CSR) and save in ~/.sku
+    /usr/local/bin/sku.bin --generate-keys
 
-    # Run sku client. sku responsible for dropping root privileges and logging to HOME
-    #nohup /usr/local/bin/sku >> /dev/null 2>&1 &
-    /usr/local/bin/sku &
+    # Run sku client. sku responsible for dropping root privileges and logging to ~/.sku/sku.log
+    /usr/local/bin/sku
 fi

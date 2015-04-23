@@ -8,22 +8,14 @@ if {![catch {package require starkit}]} {
   starkit::startup
 }
 
-#TODO change user to non-root when run with sudo in order to not create files owned by root
-
-
 proc background-error {msg e} {
-    set pref [lindex [info level 0] 0]
-    puts "$pref: $msg"
-    dict for {k v} $e {
-        puts "$pref: $k: $v"
-    }
+    in-ui error "ERROR: $msg\n[dict get $e -errorinfo]"
 }
 
 interp bgerror "" background-error
-#after 2000 {error "This is my bg error"}
+#after 4000 {error "This is my bg error"}
 
 
-package require skutil
 package require ovconf
 package require tls
 package require http
@@ -31,20 +23,66 @@ package require cmdline
 package require unix
 package require linuxdeps
 http::register https 443 [list tls::socket]
+# skutil must be last required package in order to overwrite the log proc from Tclx
+package require skutil
 
-state sku {
-    # SKD connection socket 
-    skd_sock ""
-    # User Interface (gui or cli)
-    ui ""
-    # Start retries
-    start_retries 0
+#TODO logging moved inside sku
+
+namespace eval tolog {
+    variable fh
+    proc initialize {args} {
+        variable fh
+        # if for some reason cannot log to ~/.sku/sku.log log to stderr
+        #if {[catch {set fh [open $logfile]}]} {
+        #    set fh stderr
+        #}
+        set fh [open ~/.sku/sku.log w]
+        puts stderr [info procs]
+        info procs
+    }
+    proc finalize {args} {
+        variable fh
+        close $fh
+    }
+    proc clear {args} {}
+    proc flush {handle} {
+        variable fh
+        flush $fh
+    }
+    proc write {handle data} {
+        variable fh
+        puts -nonewline $fh $data
+    }
+    namespace export *
+    namespace ensemble create
 }
+
+
+
+proc redirect-stdout {} {
+    chan push stdout tolog
+}
+
 
 
 # Parse command line options and launch proper task
 # It may set global variables
 proc main {} {
+    set user [unix relinquish-root]
+    redirect-stdout
+    dbg user
+    
+
+    state sku {
+        # SKD connection socket 
+        skd_sock ""
+        # User Interface (gui or cli)
+        ui ""
+        # Start retries
+        start_retries 0
+    }
+
+
     # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one
     puts "argv1: $::argv"
     set options {
@@ -63,22 +101,22 @@ proc main {} {
     puts "argv2: $::argv"
 
     if {$params(generate-keys)} {
-        unix relinquish-root
         main-generate-keys
-        exit
+        main-exit
     }
     if {$params(version)} {
-        unix relinquish-root
         main-version
-        exit
+        main-exit
     }
 
-    unix relinquish-root
     if {$params(cli) || ![unix is-x-running]} {
         state sku {ui cli}
     } else {
         state sku {ui gui}
     }
+
+    #TODO catch error
+    create-pidfile ~/.sku/sku.pid
     set sock [SkConnect 7777]
     #TODO handle SKD connection error here - display emergency Tk dialog or cli to inform user about SKD service not running
     #in-ui error
@@ -86,6 +124,17 @@ proc main {} {
     after idle main-start
     puts "After main-start"
 }
+
+
+proc main-exit {} {
+    delete-pidfile ~/.sku/sku.pid
+    set ::until_exit 1
+    #TODO Disconnect and clean up
+    #TODO close connections
+    catch {destroy .}
+    exit
+}
+
 
 # it may be called many times by events retrying to start after lib install
 proc main-start {} {
@@ -116,20 +165,19 @@ proc main-start {} {
 # Combine $fun and $ui to run proper procedure in gui or cli
 proc in-ui {fun args} {
     set ui [state sku ui]
-    puts "in-ui args: $args"
-    if {[llength $args] == 0} {
-        [join [list $fun $ui] -]
-    } else {
-        [join [list $fun $ui] -] {*}args
-    }
+    [join [list $fun $ui] -] {*}$args
 }
 
 
 proc error-gui {msg} {
     # if Tk not functional downgrade displaying errors to cli
     if {[is-tk-loaded]} {
+        # hide toplevel window. Use wm deiconify to restore later
+        wm withdraw .
         #TODO displaying GUI errors
-        tk_messageBox -message $msg -type ok -icon error
+        #TODO delegate to separate proc with duplicate handling and default actions (hiding toplevel window)
+        tk_messageBox -title "SKU error" -message $msg -type ok -icon error -detail "Please check ~/.sku/sku.log for details"
+        #error-cli $msg
     } else {
         error-cli $msg
     }
@@ -163,18 +211,23 @@ proc check-tk-deps {} {
         puts [state sku skd_sock] "lib-install $missing_lib"
         return 1
     } else {
+        # hide toplevel window. Use wm deiconify to restore later
+        wm withdraw .
         return 0
     }
 }
 
 proc main-generate-keys {} {
-    puts "Generating keys"
+    puts "Generating keys with pid [pid]"
+    #TODO
 }
 proc main-version {} {
     puts "SKU Version: "
+    #TODO
 }
 proc main-cli {} {
     puts "Running CLI"
+    #TODO
 }
 
 proc main-gui {} {
@@ -182,6 +235,14 @@ proc main-gui {} {
 
     package require Tk 
     package require Tkhtml
+
+    wm deiconify .
+    wm protocol . WM_DELETE_WINDOW {
+        #TODO improve the message
+        if {[tk_messageBox -message "Quit?" -type yesno] eq "yes"} {
+            main-exit
+        }
+    }
 
     set clientNo [get-client-no OpenVPN/config/client.crt]
     set url "https://www.securitykiss.com/sk/app/display.php?c=$clientNo&v=0.3.0"
@@ -274,8 +335,7 @@ proc SkRead {sock} {
             }
         }
         {^ovpn: (.*)$} {
-            # Strip date from ovpn logs to display in status line
-            set ::status [join [lrange [lindex $tokens 0] 6 end]]
+            set ::status [lindex $tokens 0]
         }
         {^pkg: (.*)$} {
             #TODO can we parse pkg-mgr output to see success/failure? Aren't messages i18ned?
@@ -369,4 +429,5 @@ proc ClickDisconnect {} {
 
 
 main
-vwait forever
+
+vwait ::until_exit
