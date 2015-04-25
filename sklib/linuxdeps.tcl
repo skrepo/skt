@@ -53,7 +53,8 @@ namespace eval ::linuxdeps {
 
 
     #TODO remove temporary testing hack
-    variable templib libz.so.1
+    #variable templib libz.so.1
+    variable templib ""
 
 
     namespace export is-openvpn-installed find-pkg-mgr find-pkg-mgr-cmd lib-to-pkg tk-missing-lib

@@ -75,6 +75,12 @@ proc slurp {path} {
     return $data
 }
 
+proc spit {path content} {
+    set fd [open $path w]
+    puts $fd $content
+    close $fd
+}
+
 
 proc is-tk-loaded {} {
     catch {package require Tk} out
@@ -85,7 +91,7 @@ proc is-tk-loaded {} {
 proc create-pidfile {path} {
     # TODO do we need to catch permission denied or let it crash with stacktrace
     set path [file normalize $path]
-    puts "create-pidfile $path"
+    log create-pidfile $path
     set fd [open $path w]
     puts $fd [pid]
     close $fd

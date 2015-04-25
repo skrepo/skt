@@ -26,18 +26,16 @@ http::register https 443 [list tls::socket]
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
 
-#TODO logging moved inside sku
+set ::LOGFILE ~/.sku/sku.log
 
 namespace eval tolog {
     variable fh
     proc initialize {args} {
         variable fh
         # if for some reason cannot log to ~/.sku/sku.log log to stderr
-        #if {[catch {set fh [open $logfile]}]} {
-        #    set fh stderr
-        #}
-        set fh [open ~/.sku/sku.log w]
-        puts stderr [info procs]
+        if {[catch {set fh [open $::LOGFILE w]}]} {
+            set fh stderr
+        }
         info procs
     }
     proc finalize {args} {
@@ -84,7 +82,6 @@ proc main {} {
 
 
     # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one
-    puts "argv1: $::argv"
     set options {
             {cli            "Run command line interface (CLI) instead of GUI"}
             {generate-keys  "Generate private key and certificate signing request"}
@@ -94,11 +91,11 @@ proc main {} {
         }
     set usage ": sku \[options]\noptions:"
     if {[catch {array set params [::cmdline::getoptions ::argv $options $usage]}]} {
-        puts [cmdline::usage $options $usage]
+        log [cmdline::usage $options $usage]
         exit 1
     }
+    log Params:
     parray params
-    puts "argv2: $::argv"
 
     if {$params(generate-keys)} {
         main-generate-keys
@@ -120,9 +117,9 @@ proc main {} {
     set sock [SkConnect 7777]
     #TODO handle SKD connection error here - display emergency Tk dialog or cli to inform user about SKD service not running
     #in-ui error
-    puts "Before main-start"
+    log Before main-start
     after idle main-start
-    puts "After main-start"
+    log After main-start
 }
 
 
@@ -141,20 +138,20 @@ proc main-start {} {
 
     set retries [state sku start_retries]
     state sku {start_retries [incr retries]}
-    puts "start_retries: [state sku start_retries]"
+    log start_retries: [state sku start_retries]
     # give up after a number of retries
     if {$retries > 5} {
         in-ui error "Could not main-start after a number of retries"
         return
     }
 
-    puts "RUNNING: check-openvpn-deps"
+    log RUNNING: check-openvpn-deps
     # Ignore result of openvpn install - it may be handled later, when GUI is running
     # TODO save openvpn install result in state - user to be informed
     check-openvpn-deps
 
     if {[state sku ui] eq "gui"} {
-        puts "RUNNING: check-tk-deps"
+        log RUNNING: check-tk-deps
         # if no missing libs start UI
         if {![check-tk-deps]} {
             in-ui main
@@ -206,7 +203,6 @@ proc check-openvpn-deps {} {
 # Return 1 if request sent, 0 otherwise
 proc check-tk-deps {} {
     set missing_lib [linuxdeps tk-missing-lib]
-    puts $missing_lib
     if {[llength $missing_lib] != 0} {
         puts [state sku skd_sock] "lib-install $missing_lib"
         return 1
@@ -218,20 +214,20 @@ proc check-tk-deps {} {
 }
 
 proc main-generate-keys {} {
-    puts "Generating keys with pid [pid]"
+    log Generating keys with pid [pid]
     #TODO
 }
 proc main-version {} {
-    puts "SKU Version: "
+    log SKU Version:
     #TODO
 }
 proc main-cli {} {
-    puts "Running CLI"
+    log Running CLI
     #TODO
 }
 
 proc main-gui {} {
-    puts "Running GUI"
+    log Running GUI
 
     package require Tk 
     package require Tkhtml
@@ -245,29 +241,38 @@ proc main-gui {} {
     }
 
     set clientNo [get-client-no OpenVPN/config/client.crt]
+
+    #TODO remove caching
+    if 0 {
     set url "https://www.securitykiss.com/sk/app/display.php?c=$clientNo&v=0.3.0"
     set ncode [curl $url welcome]
     if {$ncode != 200} {
         error "Could not retrieve ($url). HTTP code: $ncode"
     }
-    #puts $welcome
+    spit display.htm $welcome
+    } else {
+        set welcome [slurp display.htm]
+    }
     
+    #TODO remove caching
+    if 0 {
     set url "https://www.securitykiss.com/sk/app/usage.php?c=$clientNo"
     set ncode [curl $url usage]
     if {$ncode != 200} {
         error "Could not retrieve ($url). HTTP code: $ncode"
     }
+    spit usage.htm $usage
+    } else {
+        set usage [slurp usage.htm]
+    }
+ 
     
     set serverlist [get-server-list $welcome]
     set ::serverdesc [lindex $serverlist 0]
     set ::status "Not connected"
     
     set config [get-ovpn-config $welcome]
-    set fp [open config.ovpn w]
-    puts $fp $config
-    close $fp
-    
-    
+    spit config.ovpn $config
     
     ttk::label .p1 -text $clientNo
     grid .p1 -pady 5
@@ -344,14 +349,15 @@ proc SkRead {sock} {
         }
 
     }
-    puts ">>$line"
-
+    log SKD>> $line
 }
 
+# Extract server list from welcome message
+# Return multi-line string with each line representing a server like:
+# LosAngeles 23.19.26.250 UDP 123
 proc get-server-list {s} {
     set res {}
     set lines [split $s \n]
-    #puts [llength $lines]
     foreach l $lines {
         if {[string first "<!-- " $l] != 0} {
             continue
@@ -367,7 +373,6 @@ proc get-server-list {s} {
             lappend res $serv
         }
     }
-    #puts [join $res \n]
     return $res
 }
 
@@ -424,7 +429,7 @@ proc ClickConnect {} {
 }
 
 proc ClickDisconnect {} {
-    puts [state sku skd_sock] "stop"
+    puts [state sku skd_sock] stop
 }
 
 
