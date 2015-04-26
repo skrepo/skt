@@ -89,7 +89,7 @@ proc is-tk-loaded {} {
 
 
 proc create-pidfile {path} {
-    # TODO do we need to catch permission denied or let it crash with stacktrace
+    # propagate error if it occurs
     set path [file normalize $path]
     log create-pidfile $path
     set fd [open $path w]
@@ -98,13 +98,14 @@ proc create-pidfile {path} {
 }
 
 proc delete-pidfile {path} {
-    #TODO catch error
+    # propagate error if it occurs
     file delete $path
 }
 
 # log with timestamp to stdout
 proc log {args} {
-    puts [join [list [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"] {*}$args]]
+    # swallow exception
+    catch {puts [join [list [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"] {*}$args]]}
 } 
 
 

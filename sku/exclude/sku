@@ -1,2 +1,2 @@
 #!/bin/sh
-exec nohup /usr/local/bin/sku.bin "$@" &
+exec /usr/local/bin/sku.bin "$@" >> /dev/null &

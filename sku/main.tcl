@@ -8,14 +8,6 @@ if {![catch {package require starkit}]} {
   starkit::startup
 }
 
-proc background-error {msg e} {
-    in-ui error "ERROR: $msg\n[dict get $e -errorinfo]"
-}
-
-interp bgerror "" background-error
-#after 4000 {error "This is my bg error"}
-
-
 package require ovconf
 package require tls
 package require http
@@ -28,11 +20,25 @@ package require skutil
 
 set ::LOGFILE ~/.sku/sku.log
 
+proc fatal {msg err} {
+    log $err
+    in-ui error $msg
+    main-exit
+}
+
+proc background-error {msg err} {
+    fatal $msg [dict get $err -errorinfo]
+}
+
+interp bgerror "" background-error
+#after 4000 {error "This is my bg error"}
+
+
 namespace eval tolog {
     variable fh
     proc initialize {args} {
         variable fh
-        # if for some reason cannot log to ~/.sku/sku.log log to stderr
+        # if for some reason cannot log to file, log to stderr
         if {[catch {set fh [open $::LOGFILE w]}]} {
             set fh stderr
         }
@@ -40,7 +46,7 @@ namespace eval tolog {
     }
     proc finalize {args} {
         variable fh
-        close $fh
+        catch {close $fh}
     }
     proc clear {args} {}
     proc flush {handle} {
@@ -49,7 +55,11 @@ namespace eval tolog {
     }
     proc write {handle data} {
         variable fh
-        puts -nonewline $fh $data
+        # again, downgrade to logging to stderr if problems with writing to file
+        if {[catch {puts -nonewline $fh $data}]} {
+            set fh stderr
+            puts -nonewline $fh $data
+        }
     }
     namespace export *
     namespace ensemble create
@@ -112,11 +122,10 @@ proc main {} {
         state sku {ui gui}
     }
 
-    #TODO catch error
-    create-pidfile ~/.sku/sku.pid
-    set sock [SkConnect 7777]
-    #TODO handle SKD connection error here - display emergency Tk dialog or cli to inform user about SKD service not running
-    #in-ui error
+    if {[catch {create-pidfile ~/.sku/sku.pid} out err]} {
+        fatal "Could not create ~/.sku/sku.pid file" $err
+    }
+    skd-connect 7777
     log Before main-start
     after idle main-start
     log After main-start
@@ -124,10 +133,15 @@ proc main {} {
 
 
 proc main-exit {} {
-    delete-pidfile ~/.sku/sku.pid
+    if {[catch {delete-pidfile ~/.sku/sku.pid} out err]} {
+        # don't use fatal here to avoid endless loop
+        puts stderr "Could not delete ~/.sku/sku.pid file"
+        puts stderr $err
+    }
     set ::until_exit 1
     #TODO Disconnect and clean up
     #TODO close connections
+    catch {close [state sku skd_sock]}
     catch {destroy .}
     exit
 }
@@ -170,17 +184,17 @@ proc error-gui {msg} {
     # if Tk not functional downgrade displaying errors to cli
     if {[is-tk-loaded]} {
         # hide toplevel window. Use wm deiconify to restore later
-        wm withdraw .
-        #TODO displaying GUI errors
+        catch {wm withdraw .}
         #TODO delegate to separate proc with duplicate handling and default actions (hiding toplevel window)
-        tk_messageBox -title "SKU error" -message $msg -type ok -icon error -detail "Please check ~/.sku/sku.log for details"
-        #error-cli $msg
+        log $msg
+        tk_messageBox -title "SKU error" -type ok -icon error -message ERROR -detail "$msg\n\nPlease check ~/.sku/sku.log for details"
     } else {
         error-cli $msg
     }
 }
 
 proc error-cli {msg} {
+    log $msg
     puts stderr $msg
 }
 
@@ -191,7 +205,7 @@ proc error-cli {msg} {
 proc check-openvpn-deps {} {
     #TODO handle return messages from SKD
     if {![linuxdeps is-openvpn-installed]} {
-        puts [state sku skd_sock] "pkg-install openvpn"
+        skd-write "pkg-instal openvpn"
         return 1
     } else {
         return 0
@@ -204,7 +218,7 @@ proc check-openvpn-deps {} {
 proc check-tk-deps {} {
     set missing_lib [linuxdeps tk-missing-lib]
     if {[llength $missing_lib] != 0} {
-        puts [state sku skd_sock] "lib-install $missing_lib"
+        skd-write "lib-install $missing_lib"
         return 1
     } else {
         # hide toplevel window. Use wm deiconify to restore later
@@ -296,22 +310,35 @@ proc main-gui {} {
 
 }
 
-proc SkConnect {port} {
+proc skd-connect {port} {
     #TODO handle error
-    set sock [socket 127.0.0.1 $port]
-    chan configure $sock -blocking 0 -buffering line
-    chan event $sock readable [list SkRead $sock]
+    if {[catch {set sock [socket 127.0.0.1 $port]} out err]} {
+        skd-close $err
+    }
     state sku {skd_sock $sock}
-    return $sock
+    chan configure $sock -blocking 0 -buffering line
+    chan event $sock readable skd-read
+}
+
+
+proc skd-write {msg} {
+    if {[catch {puts [state sku skd_sock] $msg} out err]} {
+        skd-close $err
+    }
+}
+
+proc skd-close {err} {
+    catch {close [state sku skd_sock]}
+    fatal "Could not communicate with SKD. Please check if skd service is running and check logs in /var/log/skd.log" $err
 }
 
 
 #TODO detect disconnecting from SKD - sock monitoring?
-
-proc SkRead {sock} {
+proc skd-read {} {
+    set sock [state sku skd_sock]
     if {[gets $sock line] < 0} {
         if {[eof $sock]} {
-            catch {close $sock}
+            skd-close "skd_sock EOF. Connection terminated"
         }
         return
     }
@@ -328,10 +355,10 @@ proc SkRead {sock} {
                         #set conf [::ovconf::parse /home/sk/openvpn/securitykiss_winopenvpn_client00000001/openvpn.conf]
                         #set conf [::ovconf::parse config.ovpn]
                     }
-                    #catch {puts $sock "config $conf"}
+                    #skd-write "config $conf"
                 }
                 {^Config loaded} {
-                    catch {puts $sock start}
+                    skd-write start
                 }
                 {^pkg-install ended with result} {
                     after idle main-start
@@ -425,11 +452,11 @@ proc ClickConnect {} {
     set proto [lindex $::serverdesc 2]
     set port [lindex $::serverdesc 3]
     append localconf "--proto $proto --remote $ip $port"
-    puts [state sku skd_sock] "config $localconf"
+    skd-write "config $localconf"
 }
 
 proc ClickDisconnect {} {
-    puts [state sku skd_sock] stop
+    skd-write stop
 }
 
 
