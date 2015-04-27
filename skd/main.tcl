@@ -317,7 +317,7 @@ proc replace-dns {} {
     }
     # Do not backup resolv.conf if existing resolv.conf was SKD generated
     # It prevents overwriting proper backup
-    if {![string match "*DO NOT MODIFY - SKD generated*"]} {
+    if {![string match "*DO NOT MODIFY - SKD generated*" $resolv]} {
         if {[catch {file rename -force /etc/resolv.conf /etc/resolv-skd.conf} out err]} {
             log $err
             return
@@ -328,7 +328,8 @@ proc replace-dns {} {
 
 proc restore-dns {} {
     if {[catch {file copy -force /etc/resolv-skd.conf /etc/resolv.conf} out err]} {
-        log $err
+        # Not really an error, resolv-skd.conf may be non-existing for many reasons
+        log "INFO: /etc/resolv-skd.conf does not exist"
     }
 }
 
@@ -388,12 +389,12 @@ proc OvpnRead {line} {
             }
         }
         default {
-            #log OPENVPN UNRECOGNIZED: $line
+            #log OPENVPN: $line
         }
     }
     if {!$ignoreline} {
         SkdWrite ovpn $line
-        #log stdout: $line
+        log OPENVPN: $line
     }
 }
 
