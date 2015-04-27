@@ -39,14 +39,16 @@ interp bgerror "" background-error
 # config API - how to pass config with cert files? SKU to provide absolute paths, and split single ovpn file to config and certs/keys if necessary
 # periodic health check
 # SKU: make config file parser, various formats, canonical way of submitting to SKD
-# SKD and SKU: config modifications, work on a raw string with helper functions:
-#   ovconf package: canonical representation is "--opt val" string, parse (from multiline), get $opt, set $opt $val, del $opt, extract , save, zip, unzip 
-# SKD: on linux replace resolv.conf, how to ensure it is restored? Copy to ".orig" file, SIGINT hook, don't copy/overwrite if resolv.conf already with correct content
 # make SKD as close to plain OpenVPN functionality as possible. keep only current config, handle multiple remote, how to handle relative paths to client.crt, should we add mgmt interface listen entry if missing? Also set verbosity to standard level
 # don't save config or anything from SKD, should be stateless across SKD reboots
-# Linux installer: gui and cmdline version, borrow from activetcl installer script, user to enter sudo password either from gui or cmdline. Or maybe easier to tell user to run with sudo from command line. Eventually installer must be started from command line.
 # SKU: check for SKD upgrades, SKU download the upgrade and call SKD to install (because SKD already has sudo)
-# Do we need to secure the SKD-SKU channel?
+# Do we need to secure the SKD-SKU channel? only for upgrades (installing arbitrary code) - the signature must be verified - public key distributed with skt. Check signatures with openssl
+#
+#       Sign some data using a private key:
+#       openssl pkeyutl -sign -in file -inkey key.pem -out sig
+#       Verify the signature (e.g. a DSA key):
+#       openssl pkeyutl -verify -in file -sigfile sig -inkey key.pem
+
  
  
 proc main {} {
@@ -65,18 +67,11 @@ proc main {} {
         pkg_lock 0
         # pkg install queue - store pkg-install requests in queue
         pkg_install_q {}
+        # OpenVPN config as double-dashed one-line string
+        ovpnconfig ""
     }
     
-    state ovpn {
-        # pid also determines openvpn status: started, stopped
-        pid 0
-        # current openvpn status: connected, disconnected
-        connstatus disconnected
-        # OpenVPN config as double-dashed one-line string
-        config ""
-    }
-
-    ResetMgmtState
+    reset-ovpn-state
     socket -server SkdNewConnection 7777
 
 }
@@ -90,7 +85,7 @@ proc main-exit {} {
     exit 0
 }
 
-proc ResetMgmtState {} {
+proc reset-ovpn-state {} {
     state mgmt {
         # mgmt port
         port 0
@@ -108,6 +103,14 @@ proc ResetMgmtState {} {
         vip ""
         # real IP
         rip ""
+    }
+    state ovpn {
+        # pid also determines openvpn status: started, stopped
+        pid 0
+        # current openvpn status: connected, disconnected
+        connstatus disconnected
+        # DNS pushed from the server
+        dns_ip ""
     }
 }
 
@@ -174,7 +177,7 @@ proc load-config {conf} {
     if {$patherror ne ""} {
         return $patherror
     }
-    state ovpn {config $conf}
+    state skd {ovpnconfig $conf}
     return ""
 }
 
@@ -201,7 +204,7 @@ proc SkdRead {} {
             }
         }
         {^start$} {
-            if {[state ovpn config] eq ""} {
+            if {[state skd ovpnconfig] eq ""} {
                 SkdWrite ctrl "No OpenVPN config loaded"
                 return
             }
@@ -210,7 +213,8 @@ proc SkdRead {} {
                 SkdWrite ctrl "OpenVPN already running with pid $pid"
                 return
             } else {
-                set ovpncmd "openvpn [state ovpn config]"
+                reset-ovpn-state
+                set ovpncmd "openvpn [state skd ovpnconfig]"
                 set chan [cmd invoke $ovpncmd OvpnExit OvpnRead OvpnErrRead]
                 set pid [pid $chan]
                 state ovpn {pid $pid}
@@ -298,6 +302,36 @@ proc PkgMgrErrRead {line} {
     SkdWrite pkg $line
 }
 
+
+proc replace-dns {} {
+    set dns_ip [state ovpn dns_ip]
+    # Do nothing if DNS was not pushed by the server
+    if {$dns_ip eq ""} {
+        return
+    }
+    # Read existing resolv.conf
+    if {[catch {set resolv [slurp /etc/resolv.conf]} out err]} {
+        # log and ignore error
+        log $err
+        set resolv ""
+    }
+    # Do not backup resolv.conf if existing resolv.conf was SKD generated
+    # It prevents overwriting proper backup
+    if {![string match "*DO NOT MODIFY - SKD generated*"]} {
+        if {[catch {file rename -force /etc/resolv.conf /etc/resolv-skd.conf} out err]} {
+            log $err
+            return
+        }
+    }
+    spit /etc/resolv.conf "#DO NOT MODIFY - SKD generated\nnameserver $dns_ip"
+}
+
+proc restore-dns {} {
+    if {[catch {file copy -force /etc/resolv-skd.conf /etc/resolv.conf} out err]} {
+        log $err
+    }
+}
+
 proc OvpnRead {line} {
     set ignoreline 0
     switch -regexp -matchvar tokens $line {
@@ -336,6 +370,7 @@ proc OvpnRead {line} {
         }
         {Initialization Sequence Completed} {
             state ovpn {connstatus connected}
+            replace-dns
         }
         {Network is unreachable} {
         }
@@ -344,6 +379,13 @@ proc OvpnRead {line} {
         }
         {SIGTERM.*received, process exiting} {
             OvpnExit 0
+        }
+        {PUSH: Received control message} {
+            # We need to handle PUSH commands from the openvpn server. Primarily DNS because we need to change resolv.conf
+            #PUSH: Received control message: 'PUSH_REPLY,redirect-gateway def1 bypass-dhcp,dhcp-option DNS 10.10.0.1,route 10.10.0.1,topology net30,ping 5,ping-restart 28,ifconfig 10.10.0.66 10.10.0.65'
+            if {[regexp {dhcp-option DNS (\d+\.\d+\.\d+\.\d+)} $line _ dns_ip]} {
+                state ovpn {dns_ip $dns_ip}
+            }
         }
         default {
             #log OPENVPN UNRECOGNIZED: $line
@@ -388,9 +430,8 @@ proc OvpnExit {code} {
         SkdWrite ctrl "OpenVPN with pid $pid stopped"
         after cancel SkdReportState
     }
-    state ovpn {connstatus disconnected}
-    state ovpn {pid 0}
-    ResetMgmtState
+    restore-dns
+    reset-ovpn-state
 }
 
 

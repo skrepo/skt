@@ -126,9 +126,7 @@ proc main {} {
         fatal "Could not create ~/.sku/sku.pid file" $err
     }
     skd-connect 7777
-    log Before main-start
     after idle main-start
-    log After main-start
 }
 
 
@@ -140,7 +138,6 @@ proc main-exit {} {
     }
     set ::until_exit 1
     #TODO Disconnect and clean up
-    #TODO close connections
     catch {close [state sku skd_sock]}
     catch {destroy .}
     exit
@@ -159,13 +156,11 @@ proc main-start {} {
         return
     }
 
-    log RUNNING: check-openvpn-deps
     # Ignore result of openvpn install - it may be handled later, when GUI is running
-    # TODO save openvpn install result in state - user to be informed
     check-openvpn-deps
 
     if {[state sku ui] eq "gui"} {
-        log RUNNING: check-tk-deps
+        log Running check-tk-deps
         # if no missing libs start UI
         if {![check-tk-deps]} {
             in-ui main
@@ -185,7 +180,6 @@ proc error-gui {msg} {
     if {[is-tk-loaded]} {
         # hide toplevel window. Use wm deiconify to restore later
         catch {wm withdraw .}
-        #TODO delegate to separate proc with duplicate handling and default actions (hiding toplevel window)
         log $msg
         tk_messageBox -title "SKU error" -type ok -icon error -message ERROR -detail "$msg\n\nPlease check ~/.sku/sku.log for details"
     } else {
@@ -203,9 +197,8 @@ proc error-cli {msg} {
 # If not send pkg-install request to SKD
 # Return 1 if request sent, 0 otherwise
 proc check-openvpn-deps {} {
-    #TODO handle return messages from SKD
     if {![linuxdeps is-openvpn-installed]} {
-        skd-write "pkg-instal openvpn"
+        skd-write "pkg-install openvpn"
         return 1
     } else {
         return 0
