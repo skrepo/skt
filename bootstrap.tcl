@@ -57,6 +57,7 @@ proc platforminfo {} {
     parray ::tcl_platform
 }
 
+# also in sklib
 proc unzip {zipfile {destdir .}} {
   set mntfile [vfs::zip::Mount $zipfile $zipfile]
   foreach f [glob [file join $zipfile *]] {
@@ -105,18 +106,17 @@ proc get-fetchnames {os arch pkgname ver} {
 
 
 #TODO support url redirect (Location header)
+# also in skutil
 proc wget {url filepath} {
   set fo [open $filepath w]
   set tok [http::geturl $url -channel $fo]
   close $fo
-  if {[http::ncode $tok] != 200} {
-    file delete $filepath
-    set retcode [http::code $tok]
-    http::cleanup $tok
-    return $retcode
+  set retcode [http::ncode $tok]
+  if {$retcode != 200} {
+      file delete $filepath
   }
   http::cleanup $tok
-  return
+  return $retcode
 }
 
 
@@ -199,7 +199,7 @@ proc fetch-pkg {os arch pkgname ver} {
     flush stdout
     set url $repourl/$cand
     # return on first successful download
-    if {[wget $url [file join downloads $cand]] eq ""} {
+    if {[wget $url [file join downloads $cand]] == 200} {
       puts "DONE"
       return
     } else {

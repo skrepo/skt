@@ -39,7 +39,7 @@ namespace eval tolog {
     proc initialize {args} {
         variable fh
         # if for some reason cannot log to file, log to stderr
-        if {[catch {set fh [open $::LOGFILE w]}]} {
+        if {[catch {mk-head-dir $::$LOGFILE}] || [catch {set fh [open $::LOGFILE w]}]} {
             set fh stderr
         }
         info procs
@@ -221,13 +221,36 @@ proc check-tk-deps {} {
 }
 
 proc main-generate-keys {} {
-    log Generating keys with pid [pid]
-    #TODO
+    log Generating RSA keys
+    set privkey [file normalize ~/.sku/keys/client_private.pem]
+    if {[file exists $privkey]} {
+        log RSA key $privkey already exists
+    } else {
+        if {![generate-rsa $privkey]} {
+            return 0
+        }
+    }
+    set csr [file normalize ~/.sku/keys/client.csr]
+    if {[file exists $csr]} {
+        log CSR $csr already exists
+    } else {
+        set cn [generate-cn]
+        if {![generate-csr $privkey $csr $cn]} {
+            return 0
+        }
+    }
+    return 1
 }
+
+proc generate-cn {} {
+    return [join [lmap i [seq 8] {rand-byte-hex}] ""]
+}
+
 proc main-version {} {
     log SKU Version:
     #TODO
 }
+
 proc main-cli {} {
     log Running CLI
     #TODO
@@ -450,6 +473,20 @@ proc ClickConnect {} {
 
 proc ClickDisconnect {} {
     skd-write stop
+}
+
+proc check-for-upgrades {} {
+    # TODO check and save latest version with signature
+}
+
+
+# SKD only to verify signature and run executable
+# the rest in SKU
+proc upgrade {} {
+    # check latest version and checksum
+    # compare to current version
+    # check if downloaded
+    # download if necessary / wget
 }
 
 

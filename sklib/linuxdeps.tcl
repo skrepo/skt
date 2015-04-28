@@ -231,4 +231,13 @@ proc ::linuxdeps::openvpn-install {} {
     }
 }
 
+proc ::linuxdeps::ext2installer {ext} {
+    if {$ext eq "deb"} {
+        return dpkg
+    } else if {$ext eq "rpm"} {
+        return rpm
+    } else {
+        error "Unrecognized extension in ext2installer: $ext"
+    }
+}
 

@@ -91,6 +91,7 @@ proc is-tk-loaded {} {
 proc create-pidfile {path} {
     # propagate error if it occurs
     set path [file normalize $path]
+    mk-head-dir $path
     log create-pidfile $path
     set fd [open $path w]
     puts $fd [pid]
@@ -117,4 +118,122 @@ proc dbg {args} {
     }
 }
 
+# returns 1 on success, 0 otherwise
+proc create-signature {privkey filepath} {
+    set cmd [list openssl dgst -sha1 -sign $privkey $filepath > $filepath.sig]
+    log create-signature: $cmd
+    if {[catch {exec {*}$cmd} out err]} {
+        # possible errors: No such file or directory, wrong passphrase
+        log $cmd returned: $out
+        log $err
+        return 0
+    } else {
+        log created signature: $filepath.sig
+        return 1
+    }
+}
+
+# returns 1 if verification succeeded, 0 otherwise
+#TODO provide Windows version
+proc verify-signature {pubkey filepath} {
+    # public key must be in /etc/skd/keys/skt_public.pem
+    set cmd [list openssl dgst -sha1 -verify $pubkey -signature $filepath.sig $filepath]
+    log verify-signature: $cmd
+    if {[catch {exec {*}$cmd} out err]} {
+        # openssl returns error exit code both on Verification Failure and on No such file or directory
+        log $cmd returned: $out
+        log $err
+        return 0
+    }
+    log $cmd returned: $out
+    return [expr {$out eq "Verified OK"}]
+}
+
+
+# Generate RSA private key
+proc generate-rsa {filepath} {
+    set cmd [list openssl genrsa -out $filepath 2048]
+    log generate-rsa $filepath
+    if {![mk-head-dir $filepath]} {
+        return 0
+    }
+    if {[catch {exec {*}$cmd} out err]} {
+        log $cmd returned: $out
+        log $err
+        return 0
+    }
+    log $cmd returned: $out
+    return 1
+}
+
+proc generate-csr {privkey csr cn} {
+    set crt_subj "/C=AA/ST=Universe/L=Internet/O=SecurityKISS User/CN=$cn"
+    set cmd [list openssl req -new -subj $crt_subj -key $privkey -out $csr]
+    log generate-csr $csr
+    if {![mk-head-dir $csr]} {
+        return 0
+    }
+    if {[catch {exec {*}$cmd} out err]} {
+        log $cmd returned: $out
+        log $err
+        return 0
+    }
+    log $cmd returned: $out
+    return 1
+}
+
+proc unzip {zipfile {destdir .}} {
+  set mntfile [vfs::zip::Mount $zipfile $zipfile]
+  foreach f [glob [file join $zipfile *]] {
+    file copy $f $destdir
+  }
+  vfs::zip::Unmount $mntfile $zipfile
+}
+
+
+#TODO support url redirect (Location header)
+proc wget {url filepath} {
+  set fo [open $filepath w]
+  set tok [http::geturl $url -channel $fo]
+  close $fo
+  set retcode [http::ncode $tok]
+  if {$retcode != 200} {
+      file delete $filepath
+  }
+  http::cleanup $tok
+  return $retcode
+}
+
+# Create directories containing the file specified by filepath
+# Return 1 if directories create or exist
+# Return 0 if created directory would overwrite an existing file
+proc mk-head-dir {filepath} {
+    set filepath [file normalize $filepath]
+    set elems [file split $filepath]
+    if {[catch {file mkdir [file join {*}[lrange $elems 0 end-1]]} out err]} {
+        log $out
+        log $err
+        log Could not create directories for $filepath
+        return 0
+    } else {
+        return 1
+    }
+}
+
+
+proc rand-byte {} {
+    return [expr {round(rand()*256)}]
+}
+
+proc rand-byte-hex {} {
+    return [format %02x [rand-byte]]
+}
+
+proc seq {n} {
+    set res {}
+    for {set i 1} {$i <= $n} {incr i} {
+        lappend res $i
+    }
+    return $res
+}
 

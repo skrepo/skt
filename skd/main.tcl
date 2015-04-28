@@ -44,11 +44,6 @@ interp bgerror "" background-error
 # SKU: check for SKD upgrades, SKU download the upgrade and call SKD to install (because SKD already has sudo)
 # Do we need to secure the SKD-SKU channel? only for upgrades (installing arbitrary code) - the signature must be verified - public key distributed with skt. Check signatures with openssl
 #
-#       Sign some data using a private key:
-#       openssl pkeyutl -sign -in file -inkey key.pem -out sig
-#       Verify the signature (e.g. a DSA key):
-#       openssl pkeyutl -verify -in file -sigfile sig -inkey key.pem
-
  
  
 proc main {} {
@@ -70,10 +65,8 @@ proc main {} {
         # OpenVPN config as double-dashed one-line string
         ovpnconfig ""
     }
-    
     reset-ovpn-state
     socket -server SkdNewConnection 7777
-
 }
 
 
@@ -236,17 +229,27 @@ proc SkdRead {} {
             return
         }
         {^pkg-install (.+)$} {
-            log pkg-install: $line
+            log $line
             #TODO list of allowed packages - for security
             set pkgname [lindex $tokens 1]
             pkg-install $pkgname
         }
         {^lib-install (.+)$} {
-            log lib-install $line
+            log $line
             set lib [lindex $tokens 1]
             set pkgname [linuxdeps::lib-to-pkg $lib]
             if {[llength $pkgname] > 0} {
                 pkg-install $pkgname
+            } else {
+                log Could not locate package for lib $lib
+            }
+        }
+        {^upgrade (.+)$} {
+            log $line
+            set pkg [lindex $tokens 1]
+            if {[upgrade $pkg]} {
+            } else {
+                log Could not upgrade $pkg
             }
         }
 
@@ -332,6 +335,36 @@ proc restore-dns {} {
         log "INFO: /etc/resolv-skd.conf does not exist"
     }
 }
+
+# again reduce SKD functionality to minimum
+# SKD only to verify signature and install package
+# install only deb/rpm - it simplifies packaging (eliminate zipping), signature verification and autorun 
+proc upgrade {filepath} {
+    if {[verify-signature /etc/skd/keys/skt_public.pem $filepath]} {
+        switch -regexp -matchvar tokens $filepath {
+            {.+\.(deb|rpm)$} {
+                set inst [linuxdeps ext2installer [lindex $tokens 1]]
+                if {[catch {exec $inst -i $filepath} out err]} {
+                    log $out
+                    log $err
+                    return 0
+                } else {
+                    log $out
+                    log $filepath installed with $inst
+                    return 1
+                }
+            }
+            default {
+                log Wrong upgrading file $filepath. It should be deb or rpm package
+                return 0
+            }
+        }
+    } else {
+        log Upgrade failed because signature verification failed
+        return 0
+    }
+}
+
 
 proc OvpnRead {line} {
     set ignoreline 0

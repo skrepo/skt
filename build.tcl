@@ -67,24 +67,24 @@ proc build-skd-sku {} {
     #ex ./build/sku/linux-ix86/sku.bin
 }
 
-prepare-lib sklib 0.0.0
+proc build-no-pkg {} {
+    build linux x86_64 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5}
+    build linux x86_64 skd base-tcl-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
+    ex sudo service skd stop
+    ex sudo cp build/skd/linux-x86_64/skd.bin /usr/local/sbin/skd
+    ex sudo cp build/sku/linux-x86_64/sku.bin /usr/local/bin/sku.bin
+    ex sudo cp skd/exclude/etc/init.d/skd /etc/init.d/skd
+    ex sudo service skd restart
+}
 
+prepare-lib sklib 0.0.0
 
 #build linux x86_64 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 Tclx-8.4 cmdline-1.5 tls-1.6.4}
 #ex ./build/sku/linux-x86_64/sku.bin
 #exit
 
-
-#build-skd-sku
-
-build linux x86_64 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5}
-build linux x86_64 skd base-tcl-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
-ex sudo service skd stop
-ex sudo cp build/skd/linux-x86_64/skd.bin /usr/local/sbin/skd
-ex sudo cp build/sku/linux-x86_64/sku.bin /usr/local/bin/sku.bin
-ex sudo cp skd/exclude/etc/init.d/skd /etc/init.d/skd
-ex sudo service skd restart
-
+build-skd-sku
+#build-no-pkg
 
 exit
 #build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
