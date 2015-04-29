@@ -10,11 +10,11 @@ if {![catch {package require starkit}]} {
 
 package require ovconf
 package require tls
-package require http
+#package require http
 package require cmdline
 package require unix
 package require linuxdeps
-http::register https 443 [list tls::socket]
+#http::register https 443 [list tls::socket]
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
 

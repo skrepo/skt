@@ -130,6 +130,7 @@ proc SkdConnectionClosed {} {
     if {$sock eq ""} {
         return
     }
+    log SkdConnectionClosed 
     catch {close $sock}
     state skd {sock ""}
 }
@@ -137,10 +138,15 @@ proc SkdConnectionClosed {} {
 proc SkdWrite {prefix msg} {
     set sock [state skd sock]
     if {$sock eq ""} {
+        log Because of empty sock could not SkdWrite: $prefix: $msg
         return
     }
-    if {[catch {puts $sock "$prefix: $msg"}]} {
+    if {[catch {puts $sock "$prefix: $msg"} out err]} {
+        log $err
+        log Because of error could not SkdWrite: $prefix: $msg
         SkdConnectionClosed
+    } else {
+        log SkdWrite: $prefix: $msg
     }
 }
 
@@ -248,8 +254,9 @@ proc SkdRead {} {
             log $line
             set pkg [lindex $tokens 1]
             if {[upgrade $pkg]} {
+                SkdWrite ctrl "Upgraded $pkg"
             } else {
-                log Could not upgrade $pkg
+                SkdWrite ctrl "Could not upgrade $pkg"
             }
         }
 

@@ -1,5 +1,7 @@
 package provide skutil 0.0.0
 
+package require vfs::zip
+
 #TODO test it on Windows with \r\n
 proc strip-blank-lines {s} {
     set s [string trim $s]
@@ -183,25 +185,11 @@ proc generate-csr {privkey csr cn} {
 }
 
 proc unzip {zipfile {destdir .}} {
-  set mntfile [vfs::zip::Mount $zipfile $zipfile]
-  foreach f [glob [file join $zipfile *]] {
-    file copy $f $destdir
-  }
-  vfs::zip::Unmount $mntfile $zipfile
-}
-
-
-#TODO support url redirect (Location header)
-proc wget {url filepath} {
-  set fo [open $filepath w]
-  set tok [http::geturl $url -channel $fo]
-  close $fo
-  set retcode [http::ncode $tok]
-  if {$retcode != 200} {
-      file delete $filepath
-  }
-  http::cleanup $tok
-  return $retcode
+    set mntfile [vfs::zip::Mount $zipfile $zipfile]
+    foreach f [glob [file join $zipfile *]] {
+      file copy $f $destdir
+    }
+    vfs::zip::Unmount $mntfile $zipfile
 }
 
 # Create directories containing the file specified by filepath

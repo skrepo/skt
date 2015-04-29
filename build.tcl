@@ -83,8 +83,13 @@ prepare-lib sklib 0.0.0
 #ex ./build/sku/linux-x86_64/sku.bin
 #exit
 
-build-skd-sku
+#build-skd-sku
 #build-no-pkg
+
+
+build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 sklib-0.0.0}
+ex ./build/sample/linux-ix86/sample.bin
+
 
 exit
 #build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
