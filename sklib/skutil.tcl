@@ -225,3 +225,28 @@ proc seq {n} {
     return $res
 }
 
+
+# Simple options (-flag value) parser. Every flag must have value
+# Removes options from varName. Returns options array
+# If non-empty the allowed list is to validate flag names against
+proc parseopts {varName {allowed {}}} {
+    upvar $varName var
+    array set options {}
+    foreach {flag value} $var {
+        if {[string match -* $flag]} {
+            if {[llength $allowed] > 0 && [lsearch -exact $allowed $flag] == -1} {
+                error "Unrecognized flag: $flag. Allowed: $allowed"
+            }
+            if {$value eq ""} {
+                error "Missing value for flag $flag"
+            }
+            set options($flag) $value
+            set var [lreplace $var 0 1]
+        } else {
+            break
+        }
+    }
+    return [array get options]
+}
+
+

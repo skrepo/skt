@@ -3,8 +3,8 @@ package provide https 0.0.0
 package require http
 package require tls
 # TODO use your own cadir with sk CA
-#http::register https 443 [list tls::socket -require 1 -command ::https::tls-callback -servername slakjdfls.com -cadir /etc/ssl/certs]
-http::register https 443 [list https::socket -require 1 -command ::https::tls-callback -servername slakjdfls.com -cadir /etc/ssl/certs]
+#http::register https 443 [list tls::socket -require 1 -command ::https::tls-callback -cadir /etc/ssl/certs]
+http::register https 443 [list https::socket -require 1 -command ::https::tls-callback -cadir /etc/ssl/certs]
 
 #TODO support url redirect (Location header)
 

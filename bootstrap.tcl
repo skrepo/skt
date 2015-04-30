@@ -97,7 +97,7 @@ proc get-fetchnames {os arch pkgname ver} {
       return $res
     }
     default {
-      return [list "package-$pkgname-$ver-tcl.tm" "package-$pkgname-$ver-[oscompiler $os]-$arch.zip"]
+      return [list "package-$pkgname-$ver-tcl.tm" "package-$pkgname-$ver-[oscompiler $os]-$arch.zip" "package-$pkgname-$ver-tcl.zip"]
     }
   }
 }
@@ -162,6 +162,11 @@ proc prepare-pkg {os arch pkgname ver} {
         application-* {
           file copy -force $cand_path $target_path_depend
           return 
+        }
+        package-*-tcl.zip {
+          file mkdir $target_path_indep
+          unzip $cand_path $target_path_indep
+          return
         }
         package-*.zip {
           file mkdir $target_path_depend
