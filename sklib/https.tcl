@@ -2,32 +2,30 @@ package provide https 0.0.0
 
 package require http
 package require tls
+# Collection of http/tls utilities like wget or curl
+# They work also for plain http
 # TODO use your own cadir with sk CA
-#http::register https 443 [list tls::socket -require 1 -command ::https::tls-callback -cadir /etc/ssl/certs]
-http::register https 443 [list https::socket -require 1 -command ::https::tls-callback -cadir /etc/ssl/certs]
+# TODO support url redirect (Location header)
 
-#TODO support url redirect (Location header)
+# We cannot use the original tls::socket because it does not validate Host against Common Name
+http::register https 443 [list https::socket -require 1 -command ::https::tls-callback -cadir /etc/ssl/certs]
 
 # Believe or not but the original Tcl tls package does not validate certificate subject's Common Name CN against URL's domain name
 # TLS is pointless without this validation because it enables trivial MITM attack
 
 
-
-
-# Collection of http/tls utilities like wget or curl
-# They work also for plain http
 namespace eval ::https {
     variable default_timeout 5000
     variable sock2host
+    variable sock2error
+    variable host2expected
     namespace export curl curl-async wget wget-async socket
     namespace ensemble create
 }
 
-
 # log with timestamp to stdout
 proc ::https::log {args} {
-    # swallow exception
-    catch {puts [join [list [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"] {*}$args]]}
+    #catch {puts [join [list [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"] {*}$args]]}
 }
 
 proc ::https::debug-http {tok} {
@@ -38,21 +36,29 @@ proc ::https::debug-http {tok} {
 
 proc ::https::socket {args} {
     variable sock2host
-    puts "https::socket args: $args"
+    log https::socket args: $args
     #Note that http::register appends options, host and port. E.g.: <given https::socket options> -async tv.eurosport.com 443
     set chan [tls::socket {*}$args]
-    puts "https::socket created chan: $chan"
+    log https::socket created chan: $chan
     dict set sock2host $chan [lindex $args end-1]
-    puts "sock2host: $sock2host"
+    log sock2host: $sock2host
     return $chan
 }
 
+proc ::https::tls-cleanup {chan} {
+    variable sock2host
+    variable host2expected
+    dict unset sock2host $chan
+    dict unset host2expected $chan
+}
 
 
 #
 # this is a modified version of the default [info body tls::callback] with cert Common Name validation
 proc ::https::tls-callback {option args} {
     variable sock2host
+    variable sock2error
+    variable host2expected
     log tls-callback: $option $args
     switch -- $option {
         "error" {
@@ -68,14 +74,18 @@ proc ::https::tls-callback {option args} {
             set props [lmap p $props {string trim $p}]
             set prop [lsearch -inline $props CN=*]
             if {![regexp {^CN=(.+)$} $prop _ cn]} {
-                log ERROR: Wrong subject format in the certificate: $subject
-                catch {dict unset sock2host $chan}
+                set msg "TLSERROR: Wrong subject format in the certificate: $subject"
+                log $msg
+                dict set sock2error $chan $msg
+                tls-cleanup $chan
                 return 0
             }
             # Return error early on bad/missing certs detected by OpenSSL
             if {$rc != 1} {
-                log "ERROR: TLS/$chan: verify/$depth: Bad Cert: $err (rc = $rc)"
-                catch {dict unset sock2host $chan}
+                set msg "TLSERROR: TLS/$chan: verify/$depth: Bad Cert: $err (rc = $rc)"
+                log $msg
+                dict set sock2error $chan $msg
+                tls-cleanup $chan
                 return $rc
             }
             log "             " "TLS/$chan: verify/$depth: $c(subject)"
@@ -85,17 +95,19 @@ proc ::https::tls-callback {option args} {
             }
             # Return error if chan name not saved before
             if {![dict exists $sock2host $chan]} {
-                log ERROR: Missing hostname for channel $chan
+                log TLSERROR: Missing hostname for channel $chan. It may be caused by previous errors
                 return 0
             }
             set host [dict get $sock2host $chan]
-            if {$host eq $cn && $host ne ""} {
+            if {$host ne "" && ($host eq $cn || ([dict exists $host2expected $host] && [dict get $host2expected $host] eq $cn))} {
                 log Hostname matched the Common Name: $host
-                dict unset sock2host $chan
+                tls-cleanup $chan
                 return 1
             } else {
-                log ERROR: Hostname: $host did not match the name in the certificate: $cn
-                dict unset sock2host $chan
+                set msg "TLSERROR: Hostname: $host does not match the name in the certificate: $cn"
+                log $msg
+                dict set sock2error $chan $msg
+                tls-cleanup $chan
                 return 0
             }
         }
@@ -115,19 +127,88 @@ proc ::https::tls-callback {option args} {
     }
 }
 
+# like http::geturl but args may contain addtional options:
+# -expected-hostname <expected_hostname>
+# It also appends default -timeout if not given
+proc ::https::geturl {url args} {
+    if {[lsearch -exact $args -timeout] == -1} {
+        lappend args -timeout $::https::default_timeout
+    }
+    set ehi [lsearch -exact $args -expected-hostname]
+    if {$ehi != -1} {
+        set expected [lindex $args [expr {$ehi+1}]]
+        if {$expected eq ""} {
+            error "Missing -expected-hostname value in: $args"
+        }
+        set args [lreplace $args $ehi [expr {$ehi+1}]]
+        #TODO ZONK - we don't have tls channel here - it's only in https::socket so we cannot overwrite sock2host :(
+        # quick and dirty way to link expected-hostname with url host. It's not completely correct because it's global mapping. Should be in tls sock/chan context
+        variable host2expected
+        array set parsed [::https::parseurl $url]
+        log host: $parsed(host)
+        dict set host2expected $parsed(host) $expected
+    }
+
+    if {[catch {set tok [http::geturl $url {*}$args]} out err]} {
+        variable sock2error
+        log $out
+        # This is to make error more informative because normally any TLS error is causing geturl to fail miserably at random socket operation with misleading error
+        if {[regexp {error flushing "(.+)": software caused connection abort} $out _ chan]} {
+            if {[dict exists $sock2error $chan]} {
+                set tlserror [dict get $sock2error $chan]
+                dict unset $sock2error $chan
+                error $tlserror
+            }
+        }
+        error $err
+    }
+    return $tok
+}
+
+
+proc ::https::parseurl {url} {
+    # This is copied from ::http::geturl
+    set URLmatcher {(?x)        # this is _expanded_ syntax
+    ^
+    (?: (\w+) : ) ?         # <protocol scheme>
+    (?: //
+        (?:
+        (
+            [^@/\#?]+       # <userinfo part of authority>
+        ) @
+        )?
+        (               # <host part of authority>
+        [^/:\#?]+ |     # host name or IPv4 address
+        \[ [^/\#?]+ \]      # IPv6 address in square brackets
+        )
+        (?: : (\d+) )?      # <port part of authority>
+    )?
+    ( [/\?] [^\#]*)?        # <path> (including query)
+    (?: \# (.*) )?          # <fragment>
+    $
+    }
+    if {[regexp -- $URLmatcher $url -> a(proto) a(user) a(host) a(port) a(srvurl)]} {
+        return [array get a]
+    } else {
+        error "Wrong url format: $url"
+    }
+
+}
 
 
 
 
 #http:: If the -command option is specified, then the HTTP operation is done in the background. ::http::geturl returns immediately after generating the HTTP request and the callback is invoked when the transaction completes. For this to work, the Tcl event loop must be active. In Tk applications this is always true. For pure-Tcl applications, the caller can use ::http::wait after calling ::http::geturl to start the event loop.
 
-# Synchronous curl. Return url content
+# If called as synchronous (without -command option) it returns url content or throws error on anything different than HTTP 200 OK
+# See https::geturl for detailed options
 # All errors propagated upstream
-proc ::https::curl {url {timeout ""}} {
-    if {$timeout eq ""} {
-        set timeout $::https::default_timeout
+proc ::https::curl {url args} {
+    set async [expr {[lsearch -exact $args -command] != -1}]
+    set tok [https::geturl $url {*}$args]
+    if {$async} {
+        return $tok
     }
-    set tok [http::geturl $url -timeout $timeout]
     set retcode [http::ncode $tok]
     set status [http::status $tok]
     set data [http::data $tok]
@@ -137,21 +218,12 @@ proc ::https::curl {url {timeout ""}} {
     } else {
         debug-http $tok
         http::cleanup $tok
-        error "ERROR in curl $url"
+        error "ERROR in curl $url $args (status $status, retcode $retcode)"
     }
 }
 
-# Networking errors propagated upstream
-# Note that error from tls is not informative so normally need to check previous tls logs
-# HTTP errors handled in callback
-proc ::https::curl-async {url {timeout ""} {callback ::https::curl-callback}} {
-    if {$timeout eq ""} {
-        set timeout $::https::default_timeout
-    }
-    return [http::geturl $url -timeout $timeout -command $callback]
-}
-
-# this is a template for curl callback - use tok as request ID to match request-response
+# This is a template for curl callback if https::curl is called with async -command option
+# Use tok as request ID to match request-response
 proc ::https::curl-callback {tok} {
     puts "curl-callback called with tok: $tok"
     set retcode [http::ncode $tok]
@@ -164,15 +236,19 @@ proc ::https::curl-callback {tok} {
 }
 
 
-# Synchronous wget. Return HTTP response code. 
-# Errors propagated upstream
-proc ::https::wget {url filepath {timeout ""}} {
-    if {$timeout eq ""} {
-        set timeout $::https::default_timeout
+proc ::https::wget {url filepath args} {
+    set async [expr {[lsearch -exact $args -command] != -1}]
+    set fd [open $filepath w]
+    if {[catch {set tok [http::geturl $url -channel $fd {*}$args]} out err]} {
+        close $fd
+        error $err
     }
-    set fo [open $filepath w]
-    set tok [http::geturl $url -channel $fo -timeout $timeout]
-    close $fo
+    upvar #0 $tok state
+    set state(filepath) $filepath
+    if {$async} {
+        return $tok
+    }
+    close $fd
     set status [http::status $tok]
     set retcode [http::ncode $tok]
     if {$status ne "ok"} {
@@ -188,33 +264,16 @@ proc ::https::wget {url filepath {timeout ""}} {
     return $retcode
 }
 
-# Networking and file errors propagated upstream
-# Note that error from tls is not informative so normally need to check previous tls logs
-# HTTP errors handled in callback
-proc ::https::wget-async {url filepath {timeout ""} {callback ::https::wget-callback}} {
-    if {$timeout eq ""} {
-        set timeout $::https::default_timeout
-    }
-    log "wget-async 1111"
-    set fo [open $filepath w]
-    if {[catch {set tok [http::geturl $url -channel $fo -timeout $timeout -command $callback]} out err]} {
-        # before propagating error need to close file
-        catch {close $fo}
-        error $err
-    }
-    upvar #0 $tok state
-    set state(filepath) $filepath
-    return $tok
-}
 
-
+# This is a template for wget callback if https::wget is called with async -command option
+# Use tok as request ID to match request-response
 proc ::https::wget-callback {tok} {
     puts "wget-callback called with tok: $tok"
     upvar #0 $tok state
-    set filechan $state(-channel)
+    set fd $state(-channel)
     set filepath $state(filepath)
     set url $state(url)
-    catch {close $filechan}
+    catch {close $fd}
     set retcode [http::ncode $tok]
     set status [http::status $tok]
     puts "status: $status, retcode: $retcode"

@@ -10,7 +10,10 @@ package require cmd
 # Otherwise system DNS resolution may freeze the program
 
 namespace eval ::asyncdns {
-    variable uid 0
+    variable uid
+    if {![info exists uid]} {
+        set uid 0
+    }
     variable default_timeout 5000
     namespace export resolve cleanup
     namespace ensemble create
@@ -43,8 +46,6 @@ proc ::asyncdns::parseopts {varName {allowed {}}} {
 # resolve -timeout 3000 -command callback hostname
 proc ::asyncdns::resolve {args} {
     variable uid
-    variable token2host
-    variable token2timer
     variable default_timeout
 
     array set opts [parseopts args {-command -timeout}]

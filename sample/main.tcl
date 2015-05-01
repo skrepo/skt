@@ -21,7 +21,6 @@ after 300 beat
 
 
 
-#package require https
 
 proc background-error {msg err} {
     puts "$msg [dict get $err -errorinfo]"
@@ -30,39 +29,26 @@ proc background-error {msg err} {
 interp bgerror "" background-error
 
 
-#https wget https://www.securitykiss.com/favicon.ico favicon.ico
+package require https
+https wget https://www.securitykiss.com/favicon.ico favicon.ico
 
-#puts [https curl https://www.securitykiss.com/geo-ip.php]
+puts [https curl https://www.securitykiss.com/geo-ip.php]
 
-#set tok [https curl-async https://www.securitykiss.com/geo-ip.php]
+set tok [https curl https://www.securitykiss.com/geo-ip.php -command ::https::curl-callback]
 
 
-#set tok [https wget-async https://www.securitykiss.com/favicon.ico favicon.ico]
-#set tok [https wget-async https://91.227.221.115/favicon.ico favicon.ico]
-#set tok [https wget-async https://sk/favicon.ico favicon.ico]
+set tok [https wget https://www.securitykiss.com/favicon.ico favicon.ico -command ::https::wget-callback]
+puts [https curl https://91.227.221.115/geo-ip.php -expected-hostname www.securitykiss.com]
+#https curl https://sk/geo-ip.php
 
 # wrong cert website 
-#set tok [https curl-async https://tv.eurosport.com]
+puts [https curl https://tv.eurosport.pl -expected-hostname a248.e.akamai.net]
 
-#package require Tclx
-#puts [host_info addresses google.com]
-#exit
 
-#package require dns
+puts "Entering event loop"
+vwait forever
+exit
 
-#proc dns-callback {tok} {
-#    puts "dns::status: [dns::status $tok]"
-#    puts "dns::address: [dns::address $tok]"
-#    puts "dns::name: [dns::name $tok]"
-#    dns::cleanup $tok
-#}
-
-#set tok [dns::resolve -protocol udp -command dns-callback -nameserver 8.8.8.8 www.tcl.tk ]
-#set tok [dns::resolve -protocol udp -nameserver 8.8.8.8 securitykiss.com ]
-#puts "wait: [dns::wait $tok]"
-#puts "error: [dns::error $tok]"
-#puts "dns::status: [dns::status $tok]"
-#after 2000 dnsread
 
 package require asyncdns
 
