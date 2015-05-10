@@ -120,6 +120,7 @@ proc dbg {args} {
     }
 }
 
+# this is utility for the server side
 # returns 1 on success, 0 otherwise
 proc create-signature {privkey filepath} {
     set cmd [list openssl dgst -sha1 -sign $privkey $filepath > $filepath.sig]
@@ -153,6 +154,7 @@ proc verify-signature {pubkey filepath} {
 
 
 # Generate RSA private key
+# ruturn 1 on success, 0 otherwise
 proc generate-rsa {filepath} {
     set cmd [list openssl genrsa -out $filepath 2048]
     log generate-rsa $filepath
@@ -168,6 +170,8 @@ proc generate-rsa {filepath} {
     return 1
 }
 
+# Generate CSR file
+# ruturn 1 on success, 0 otherwise
 proc generate-csr {privkey csr cn} {
     set crt_subj "/C=AA/ST=Universe/L=Internet/O=SecurityKISS User/CN=$cn"
     set cmd [list openssl req -new -subj $crt_subj -key $privkey -out $csr]

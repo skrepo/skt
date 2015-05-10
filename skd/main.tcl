@@ -66,7 +66,7 @@ proc main {} {
         ovpnconfig ""
     }
     reset-ovpn-state
-    socket -server SkdNewConnection 7777
+    socket -server SkdNewConnection -myaddr 127.0.0.1 7777
 }
 
 

@@ -17,6 +17,7 @@ package require linuxdeps
 #http::register https 443 [list tls::socket]
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
+package require https
 
 set ::LOGFILE ~/.sku/sku.log
 
@@ -88,6 +89,12 @@ proc main {} {
         ui ""
         # Start retries
         start_retries 0
+        # Embedded bootstrap vigo list
+        vigos ""
+        # Last attempted vigo
+        vigo_last_tried ""
+        # Last successfully connected vigo
+        vigo_last_success ""
     }
 
 
@@ -106,6 +113,17 @@ proc main {} {
     }
     log Params:
     parray params
+
+    # embedded bootstrap vigo list
+    set vigos [slurp [file join $starkit::topdir bootstrap_ips.lst]]
+    state sku {vigos $vigos}
+    foreach v $vigos {
+        puts "vigo: $v"
+    }
+    #TODO use vigos to get current time - why do we need it before welcome?.
+    #TODO isn't certificate signing start date a problem in case of vigos in different timezones? Consider signing with golang crypto libraries
+    
+    
 
     if {$params(generate-keys)} {
         main-generate-keys
@@ -220,6 +238,8 @@ proc check-tk-deps {} {
     }
 }
 
+# This is blocking procedure to be run from command line
+# ruturn 1 on success, 0 otherwise
 proc main-generate-keys {} {
     log Generating RSA keys
     set privkey [file normalize ~/.sku/keys/client_private.pem]
@@ -239,9 +259,25 @@ proc main-generate-keys {} {
             return 0
         }
     }
+    #TODO first do some testing of https::curl on easier case: GET welcome
+    #https::init -cadir 
+    set welcome [https curl https://127.0.0.1:10443/welcome?cn=2345]
+    #set welcome [https curl https://127.0.0.1:10443/welcome?cn=2345 -expected-hostname www.securitykiss.com]
+    #set welcome [https curl "https://www.securitykiss.com/sk/app/display.php?c=client00000001&v=0.3.0"]
+    puts "welcome: $welcome"
+
+    
+
+    #TODO submit csr to vigo iteratively until success, save cert. It can be done in blocking way
+    #TODO vigo last success should be saved in config, config format, serialize state? Do not load config in generate-keys
+    #foreach vigo [state sku vigos] {
+    #    [https::curl $url -expected-hostname ""]
+    #}
     return 1
 }
 
+
+#TODO generate from HD UUID/dbus machine-id and add sha256 for checksum/proof of work
 proc generate-cn {} {
     return [join [lmap i [seq 8] {rand-byte-hex}] ""]
 }
@@ -452,14 +488,14 @@ proc get-client-no {crtpath} {
 
 
 
-proc curl {url data_var} {
-    upvar $data_var data
-    set tok [http::geturl $url]
-    set ncode [http::ncode $tok]
-    set data [http::data $tok]
-    http::cleanup $tok
-    return $ncode
-}
+#proc curl {url data_var} {
+#    upvar $data_var data
+#    set tok [http::geturl $url]
+#    set ncode [http::ncode $tok]
+#    set data [http::data $tok]
+#    http::cleanup $tok
+#    return $ncode
+#}
  
 
 proc ClickConnect {} {

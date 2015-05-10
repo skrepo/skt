@@ -6,9 +6,8 @@ package require tls
 # They work also for plain http
 # TODO use your own cadir with sk CA
 # TODO support url redirect (Location header)
+# TODO Currently the necessity of calling ::cleanup after ::geturl is the usage scheme taken from http package. If we assume only asynchronoous use we could do cleanup in this package after returning from user callback. It could release the user from responsibility of calling cleanup so prevent possible memory leaks.
 
-# We cannot use the original tls::socket because it does not validate Host against Common Name
-http::register https 443 [list https::socket -require 1 -command ::https::tls-callback -cadir /etc/ssl/certs]
 
 # Believe or not but the original Tcl tls package does not validate certificate subject's Common Name CN against URL's domain name
 # TLS is pointless without this validation because it enables trivial MITM attack
@@ -25,7 +24,7 @@ namespace eval ::https {
 
 # log with timestamp to stdout
 proc ::https::log {args} {
-    #catch {puts [join [list [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"] {*}$args]]}
+    catch {puts [join [list [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"] {*}$args]]}
 }
 
 proc ::https::debug-http {tok} {
@@ -34,12 +33,24 @@ proc ::https::debug-http {tok} {
     parray state
 }
 
+# This may be called by clients in order to overwrite default TLS socket settings
+# Provide args for tls::socket command. In particular you can:
+# -cadir dir            # Provide the directory containing the CA certificates.
+# -cafile filename      # Provide the CA file.
+# -certfile filename    # Provide the certificate to use. 
+proc ::https::init {args} {
+    # We cannot use the original tls::socket because it does not validate Host against Common Name
+    http::register https 443 [list https::socket -require 1 -command ::https::tls-callback -ssl2 0 -ssl3 0 -tls1 1 {*}$args]
+}
+
+
 proc ::https::socket {args} {
     variable sock2host
     log https::socket args: $args
     #Note that http::register appends options, host and port. E.g.: <given https::socket options> -async tv.eurosport.com 443
     set chan [tls::socket {*}$args]
     log https::socket created chan: $chan
+    # Save tls socket to host mapping which is further required for TLS validation
     dict set sock2host $chan [lindex $args end-1]
     log sock2host: $sock2host
     return $chan
@@ -99,8 +110,8 @@ proc ::https::tls-callback {option args} {
                 return 0
             }
             set host [dict get $sock2host $chan]
-            if {$host ne "" && ($host eq $cn || ([dict exists $host2expected $host] && [dict get $host2expected $host] eq $cn))} {
-                log Hostname matched the Common Name: $host
+            if {$host ne "" && ($host eq $cn || ([info exists host2expected] && [dict exists $host2expected $host] && [dict get $host2expected $host] eq $cn))} {
+                log Hostname matched the Common Name: $cn
                 tls-cleanup $chan
                 return 1
             } else {
@@ -154,7 +165,7 @@ proc ::https::geturl {url args} {
         log $out
         # This is to make error more informative because normally any TLS error is causing geturl to fail miserably at random socket operation with misleading error
         if {[regexp {error flushing "(.+)": software caused connection abort} $out _ chan]} {
-            if {[dict exists $sock2error $chan]} {
+            if {[info exists sock2error] && [dict exists $sock2error $chan]} {
                 set tlserror [dict get $sock2error $chan]
                 dict unset $sock2error $chan
                 error $tlserror
@@ -203,6 +214,10 @@ proc ::https::parseurl {url} {
 # If called as synchronous (without -command option) it returns url content or throws error on anything different than HTTP 200 OK
 # See https::geturl for detailed options
 # All errors propagated upstream
+# Examples:
+# puts [https curl https://www.securitykiss.com/geo-ip.php]
+# set tok [https curl https://www.securitykiss.com/geo-ip.php -command ::https::curl-callback]
+# puts [https curl https://91.227.221.115/geo-ip.php -expected-hostname www.securitykiss.com]
 proc ::https::curl {url args} {
     set async [expr {[lsearch -exact $args -command] != -1}]
     set tok [https::geturl $url {*}$args]
@@ -288,5 +303,6 @@ proc ::https::wget-callback {tok} {
 }
 
 
-
+# Do default initialization with Linux cert store location
+::https::init -cadir /etc/ssl/certs
 

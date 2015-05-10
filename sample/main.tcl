@@ -11,6 +11,17 @@ if {![catch {package require starkit}]} {
 #wget https://raw.githubusercontent.com/skrepo/activestate/master/teacup/tls/package-tls-0.0.0.2010.08.18.09.08.25-source.zip tls-source.zip
 #wget https://sk/favicon.ico favicon.ico
 
+package require skutil
+
+puts "topdir: $starkit::topdir"
+set fname [file join $starkit::topdir main.tcl]
+
+set data [slurp $fname]
+puts "data: $data"
+
+exit
+
+
 proc beat {} {
     puts -nonewline .
     flush stdout
@@ -18,6 +29,7 @@ proc beat {} {
 }
 
 after 300 beat
+
 
 
 
@@ -33,9 +45,8 @@ package require https
 https wget https://www.securitykiss.com/favicon.ico favicon.ico
 
 puts [https curl https://www.securitykiss.com/geo-ip.php]
-
 set tok [https curl https://www.securitykiss.com/geo-ip.php -command ::https::curl-callback]
-
+puts [https curl https://91.227.221.115/geo-ip.php -expected-hostname www.securitykiss.com]
 
 set tok [https wget https://www.securitykiss.com/favicon.ico favicon.ico -command ::https::wget-callback]
 puts [https curl https://91.227.221.115/geo-ip.php -expected-hostname www.securitykiss.com]
@@ -48,6 +59,12 @@ puts [https curl https://tv.eurosport.pl -expected-hostname a248.e.akamai.net]
 puts "Entering event loop"
 vwait forever
 exit
+
+
+#
+#         Consider using wrap template to curry function calls for subtask/sequence in EDP
+#
+
 
 
 package require asyncdns
