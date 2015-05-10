@@ -259,14 +259,24 @@ proc main-generate-keys {} {
             return 0
         }
     }
+    set cadir [file normalize ~/.sku/certs]
     #TODO first do some testing of https::curl on easier case: GET welcome
-    #https::init -cadir 
-    set welcome [https curl https://127.0.0.1:10443/welcome?cn=2345]
-    #set welcome [https curl https://127.0.0.1:10443/welcome?cn=2345 -expected-hostname www.securitykiss.com]
+
+    # The ca dir must be accessible from outside of starkit
+    # Overwrite certs on every run of -generate-keys
+    copy-merge [file join $::starkit::topdir certs] $cadir
+    https::init -cadir $cadir
+    #set welcome [https curl https://127.0.0.1:10443/welcome?cn=2345]
+    set welcome [https curl https://127.0.0.1:10443/welcome?cn=2345 -expected-hostname www.securitykiss.com]
     #set welcome [https curl "https://www.securitykiss.com/sk/app/display.php?c=client00000001&v=0.3.0"]
     puts "welcome: $welcome"
 
-    
+    #Now try to POST CSR    
+    set csrdata [slurp $csr]
+    set crtdata [https curl https://127.0.0.1:10443/sign-cert -method POST -type text/plain -query $csrdata]
+    puts "crtdata: $crtdata"
+    spit [file normalize ~/.sku/keys/client.crt] $crtdata
+
 
     #TODO submit csr to vigo iteratively until success, save cert. It can be done in blocking way
     #TODO vigo last success should be saved in config, config format, serialize state? Do not load config in generate-keys

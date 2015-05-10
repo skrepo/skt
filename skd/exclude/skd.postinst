@@ -29,6 +29,7 @@ fi
 
 
 if [ -x /usr/local/bin/sku ]; then
+
     # Create primary identity. sku should drop root privileges for that
     # Generate private key and certificate signing request (CSR) and save in ~/.sku
     /usr/local/bin/sku.bin --generate-keys

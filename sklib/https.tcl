@@ -24,7 +24,7 @@ namespace eval ::https {
 
 # log with timestamp to stdout
 proc ::https::log {args} {
-    catch {puts [join [list [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"] {*}$args]]}
+    #catch {puts [join [list [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"] {*}$args]]}
 }
 
 proc ::https::debug-http {tok} {

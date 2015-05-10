@@ -79,7 +79,7 @@ proc slurp {path} {
 
 proc spit {path content} {
     set fd [open $path w]
-    puts $fd $content
+    puts -nonewline $fd $content
     close $fd
 }
 
@@ -253,4 +253,25 @@ proc parseopts {varName {allowed {}}} {
     return [array get options]
 }
 
+
+
+# recursively copy contents of the $from dir to the $to dir 
+# while overwriting items in $to if necessary
+# ignore files matching glob pattern $ignore
+proc copy-merge {from to {ignore ""}} {
+    file mkdir $to
+    foreach f [glob [file join $from *]] {
+        set tail [file tail $f]
+        if {![string match $ignore $tail]} {
+            if {[file isdirectory $f]} {
+                set new_to [file join $to $tail]
+                file mkdir $new_to
+                copy-merge $f $new_to
+            } else {
+                #puts "Copying $f"
+                file copy -force $f $to
+            }
+        }
+    }
+}
 

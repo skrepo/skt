@@ -227,6 +227,7 @@ proc suffix_exec {os} {
 # while overwriting items in $to if necessary
 # ignore files matching glob pattern $ignore
 proc copy-merge {from to {ignore ""}} {
+    file mkdir $to
     foreach f [glob [file join $from *]] {
         set tail [file tail $f]
         if {![string match $ignore $tail]} {
@@ -235,7 +236,6 @@ proc copy-merge {from to {ignore ""}} {
                 file mkdir $new_to
                 copy-merge $f $new_to
             } else {
-                #puts "Copying $f"
                 file copy -force $f $to
             }
         }
