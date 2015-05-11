@@ -53,7 +53,10 @@ namespace eval tolog {
     proc clear {args} {}
     proc flush {handle} {
         variable fh
-        flush $fh
+        if {[catch {::flush $fh} out err]} {
+            set fh stderr
+            puts stderr $err
+        }
     }
     proc write {handle data} {
         variable fh
@@ -62,7 +65,7 @@ namespace eval tolog {
             set fh stderr
             puts stderr $err
         }
-        puts -nonewline $fh $data
+        flush $fh
     }
     namespace export *
     namespace ensemble create
@@ -93,8 +96,10 @@ proc main {} {
         start_retries 0
         # Embedded bootstrap vigo list
         vigos ""
-        # Index of last attempted vigo from the list
-        vigo_last_tried 0
+        # Index of last attempted/next vigo from the list
+        vigo_next 0
+        # Attempt counter for welcome message requests
+        welcome_retry 1
     }
 
 
@@ -272,9 +277,6 @@ proc main-generate-keys {} {
         }
     }
 
-    #set welcome [https curl https://127.0.0.1:10443/welcome?cn=2345 -expected-hostname www.securitykiss.com]
-    #set welcome [https curl "https://www.securitykiss.com/sk/app/display.php?c=client00000001&v=0.3.0"]
-    #puts "welcome: $welcome"
 
     # Now try to POST csr and save cert
     #set csrdata [slurp $csr]
@@ -283,9 +285,9 @@ proc main-generate-keys {} {
             log "Failed to open $csr for reading"
             log $err
         }
-        set last [expr {[state sku vigo_last_tried] + $i}]
-        set vigo [lindex [state sku vigos] $last]
-        puts -nonewline stderr "Trying vigo $last...\t"
+        set next [expr {[state sku vigo_next] + $i}]
+        set vigo [lindex [state sku vigos] $next]
+        puts -nonewline stderr "Trying vigo $next...\t"
         #TODO expected-hostname should not be needed - ensure that vigo provides proper certificate with IP common name
         if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err]} {
             puts stderr FAILED
@@ -296,7 +298,7 @@ proc main-generate-keys {} {
             puts stderr "Received the signed certificate"
             log crtdata: $crtdata
             spit [file normalize ~/.sku/keys/client.crt] $crtdata
-            state sku {vigo_last_tried $last}
+            state sku {vigo_next $next}
             close $fd
             break
         }
@@ -387,8 +389,53 @@ proc main-gui {} {
     
     set ::conf [::ovconf::parse config.ovpn]
     
-
+    after idle ReceiveWelcome
 }
+
+
+proc ReceiveWelcome {{tok ""}} {
+    # Unfortunately http is catching callback errors and they don't propagate to our background-error, so we need to catch them all here and log
+    if {[catch {
+        set vigo_next [state sku vigo_next]
+    
+        if {$tok ne ""} {
+            set ncode [http::ncode $tok]
+            set status [http::status $tok]
+            set data [http::data $tok]
+            if {$status eq "ok" && $ncode == 200} {
+                tk_messageBox -message "Welcome received: $data" -type ok
+                puts "welcome: $data"
+                return
+            } else {
+                # if request failed increment and save next candidate vigo index
+                upvar #0 $tok state
+                log Request $state(url) failed
+                set vigo_next [expr {($vigo_next + 1) % [llength [state sku vigos]]}]
+                state sku {vigo_next $vigo_next}
+            }
+            http::cleanup $tok
+        } else {
+            # reset retry counter when called initially
+            state sku {welcome_retry 1}
+        }
+     
+        # We are here only if welcome request did not succeed yet
+        # Try again if max retries not exceeded
+        if {[state sku welcome_retry] < [llength [state sku vigos]]} {
+            set vigo [lindex [state sku vigos] [state sku vigo_next]]
+            https curl https://$vigo:10443/welcome?cn=2345 -timeout 8000 -expected-hostname www.securitykiss.com -command ReceiveWelcome
+            state sku {welcome_retry [incr welcome_retry]}
+        } else {
+            # ReceiveWelcome failed for all vigos   
+            tk_messageBox -message "Could not receive Welcome message" -type ok
+        }
+    } out err]} {
+        error $err
+    }
+}
+
+
+
 
 proc skd-connect {port} {
     #TODO handle error
