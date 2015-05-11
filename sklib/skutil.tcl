@@ -188,6 +188,35 @@ proc generate-csr {privkey csr cn} {
     return 1
 }
 
+# Extract common name from certificate
+# Return cn on success, empty string otherwise
+proc cn-from-cert {crtpath} {
+    memoize
+    log ca-from-cert $crtpath
+    set cmd [list openssl x509 -noout -subject -in $crtpath]
+    if {[catch {exec {*}$cmd} subject err]} {
+        log $cmd returned: $out
+        log $err
+        return ""
+    }
+    if {[regexp {CN=([0-9a-f]{4,16})} $subject -> cn]} {
+        log Extracted cn $cn from subject $subject
+        return $cn
+    } else {
+        log Could not extract cn from subject $subject
+        return ""
+    }
+    
+}
+
+
+proc memoize {} {
+    set cmd [info level -1]
+    if {[info level] > 2 && [lindex [info level -2] 0] eq "memoize"} return
+    if {![info exists ::Memo($cmd)]} {set ::Memo($cmd) [eval $cmd]}
+    return -code return $::Memo($cmd)
+}
+
 proc unzip {zipfile {destdir .}} {
     set mntfile [vfs::zip::Mount $zipfile $zipfile]
     foreach f [glob [file join $zipfile *]] {
