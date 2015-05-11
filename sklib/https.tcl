@@ -18,7 +18,7 @@ namespace eval ::https {
     variable sock2host
     variable sock2error
     variable host2expected
-    namespace export curl curl-async wget wget-async socket
+    namespace export curl curl-async wget wget-async socket init
     namespace ensemble create
 }
 
@@ -164,7 +164,7 @@ proc ::https::geturl {url args} {
         variable sock2error
         log $out
         # This is to make error more informative because normally any TLS error is causing geturl to fail miserably at random socket operation with misleading error
-        if {[regexp {error flushing "(.+)": software caused connection abort} $out _ chan]} {
+        if {[regexp {error .*"(.+)": software caused connection abort} $out _ chan]} {
             if {[info exists sock2error] && [dict exists $sock2error $chan]} {
                 set tlserror [dict get $sock2error $chan]
                 dict unset $sock2error $chan

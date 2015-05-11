@@ -40,8 +40,9 @@ namespace eval tolog {
     proc initialize {args} {
         variable fh
         # if for some reason cannot log to file, log to stderr
-        if {[catch {mk-head-dir $::$LOGFILE}] || [catch {set fh [open $::LOGFILE w]}]} {
+        if {[catch {mk-head-dir $::LOGFILE} out err] || [catch {set fh [open $::LOGFILE w]} out err]} {
             set fh stderr
+            puts stderr $err
         }
         info procs
     }
@@ -57,10 +58,11 @@ namespace eval tolog {
     proc write {handle data} {
         variable fh
         # again, downgrade to logging to stderr if problems with writing to file
-        if {[catch {puts -nonewline $fh $data}]} {
+        if {[catch {puts -nonewline $fh $data} out err]} {
             set fh stderr
-            puts -nonewline $fh $data
+            puts stderr $err
         }
+        puts -nonewline $fh $data
     }
     namespace export *
     namespace ensemble create
@@ -91,10 +93,8 @@ proc main {} {
         start_retries 0
         # Embedded bootstrap vigo list
         vigos ""
-        # Last attempted vigo
-        vigo_last_tried ""
-        # Last successfully connected vigo
-        vigo_last_success ""
+        # Index of last attempted vigo from the list
+        vigo_last_tried 0
     }
 
 
@@ -115,15 +115,25 @@ proc main {} {
     parray params
 
     # embedded bootstrap vigo list
-    set vigos [slurp [file join $starkit::topdir bootstrap_ips.lst]]
-    state sku {vigos $vigos}
-    foreach v $vigos {
-        puts "vigo: $v"
+    set lst [slurp [file join $starkit::topdir bootstrap_ips.lst]]
+    set vigos ""
+    foreach v $lst {
+        set v [string trim $v]
+        if {[is-valid-ip $v]} {
+            lappend vigos $v
+        }
     }
+    state sku {vigos $vigos}
+    puts "vigos: $vigos"
     #TODO use vigos to get current time - why do we need it before welcome?.
     #TODO isn't certificate signing start date a problem in case of vigos in different timezones? Consider signing with golang crypto libraries
     
-    
+    # Copy cadir because it  must be accessible from outside of starkit
+    # Overwrites certs on every run
+    set cadir [file normalize ~/.sku/certs]
+    copy-merge [file join $::starkit::topdir certs] $cadir
+    https init -cadir $cadir
+ 
 
     if {$params(generate-keys)} {
         main-generate-keys
@@ -238,8 +248,10 @@ proc check-tk-deps {} {
     }
 }
 
+
 # This is blocking procedure to be run from command line
 # ruturn 1 on success, 0 otherwise
+# Print to stderr for user-visible messages. Use log for detailed info written to log file
 proc main-generate-keys {} {
     log Generating RSA keys
     set privkey [file normalize ~/.sku/keys/client_private.pem]
@@ -259,30 +271,36 @@ proc main-generate-keys {} {
             return 0
         }
     }
-    set cadir [file normalize ~/.sku/certs]
-    #TODO first do some testing of https::curl on easier case: GET welcome
 
-    # The ca dir must be accessible from outside of starkit
-    # Overwrite certs on every run of -generate-keys
-    copy-merge [file join $::starkit::topdir certs] $cadir
-    https::init -cadir $cadir
-    #set welcome [https curl https://127.0.0.1:10443/welcome?cn=2345]
-    set welcome [https curl https://127.0.0.1:10443/welcome?cn=2345 -expected-hostname www.securitykiss.com]
+    #set welcome [https curl https://127.0.0.1:10443/welcome?cn=2345 -expected-hostname www.securitykiss.com]
     #set welcome [https curl "https://www.securitykiss.com/sk/app/display.php?c=client00000001&v=0.3.0"]
-    puts "welcome: $welcome"
+    #puts "welcome: $welcome"
 
-    #Now try to POST CSR    
-    set csrdata [slurp $csr]
-    set crtdata [https curl https://127.0.0.1:10443/sign-cert -method POST -type text/plain -query $csrdata]
-    puts "crtdata: $crtdata"
-    spit [file normalize ~/.sku/keys/client.crt] $crtdata
-
-
-    #TODO submit csr to vigo iteratively until success, save cert. It can be done in blocking way
-    #TODO vigo last success should be saved in config, config format, serialize state? Do not load config in generate-keys
-    #foreach vigo [state sku vigos] {
-    #    [https::curl $url -expected-hostname ""]
-    #}
+    # Now try to POST csr and save cert
+    #set csrdata [slurp $csr]
+    for {set i 0} {$i<[llength [state sku vigos]]} {incr i} {
+        if {[catch {open $csr r} fd err]} {
+            log "Failed to open $csr for reading"
+            log $err
+        }
+        set last [expr {[state sku vigo_last_tried] + $i}]
+        set vigo [lindex [state sku vigos] $last]
+        puts -nonewline stderr "Trying vigo $last...\t"
+        #TODO expected-hostname should not be needed - ensure that vigo provides proper certificate with IP common name
+        if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err]} {
+            puts stderr FAILED
+            log $err
+            close $fd
+        } else {
+            puts stderr OK
+            puts stderr "Received the signed certificate"
+            log crtdata: $crtdata
+            spit [file normalize ~/.sku/keys/client.crt] $crtdata
+            state sku {vigo_last_tried $last}
+            close $fd
+            break
+        }
+    }
     return 1
 }
 
