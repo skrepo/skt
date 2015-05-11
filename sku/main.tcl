@@ -107,6 +107,7 @@ proc main {} {
     set options {
             {cli            "Run command line interface (CLI) instead of GUI"}
             {generate-keys  "Generate private key and certificate signing request"}
+            {id             "Show client id from the certificate"}
             {version        "Print version"}
             {p              "Print anything"}
             {ra             "Print anything"}
@@ -140,6 +141,11 @@ proc main {} {
     https init -cadir $cadir
  
 
+    if {$params(id)} {
+        main-id
+        main-exit
+    }
+
     if {$params(generate-keys)} {
         main-generate-keys
         main-exit
@@ -162,6 +168,15 @@ proc main {} {
     after idle main-start
 }
 
+proc main-id {} {
+    if {[catch {cn-from-cert [file normalize ~/.sku/keys/client.crt]} cn err]} {
+        puts stderr "Could not retrieve client id"
+        log $err
+    } else {
+        #TODO after logging redesign it should go to stdout
+        puts stderr $cn
+    }
+}
 
 proc main-exit {} {
     if {[catch {delete-pidfile ~/.sku/sku.pid} out err]} {
@@ -278,8 +293,7 @@ proc main-generate-keys {} {
     }
 
 
-    # Now try to POST csr and save cert
-    #set csrdata [slurp $csr]
+    # POST csr and save cert
     for {set i 0} {$i<[llength [state sku vigos]]} {incr i} {
         if {[catch {open $csr r} fd err]} {
             log "Failed to open $csr for reading"
@@ -407,8 +421,8 @@ proc ReceiveWelcome {{tok ""}} {
                 return
             } else {
                 # if request failed increment and save next candidate vigo index
-                upvar #0 $tok state
-                log Request $state(url) failed
+                upvar #0 $tok st
+                log Request $st(url) failed
                 set vigo_next [expr {($vigo_next + 1) % [llength [state sku vigos]]}]
                 state sku {vigo_next $vigo_next}
             }
@@ -420,7 +434,8 @@ proc ReceiveWelcome {{tok ""}} {
      
         # We are here only if welcome request did not succeed yet
         # Try again if max retries not exceeded
-        if {[state sku welcome_retry] < [llength [state sku vigos]]} {
+        set welcome_retry [state sku welcome_retry]
+        if {$welcome_retry < [llength [state sku vigos]]} {
             set vigo [lindex [state sku vigos] [state sku vigo_next]]
             set cn [cn-from-cert [file normalize ~/.sku/keys/client.crt]]
             https curl https://$vigo:10443/welcome?cn=$cn -timeout 8000 -expected-hostname www.securitykiss.com -command ReceiveWelcome
