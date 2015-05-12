@@ -96,8 +96,6 @@ proc main {} {
         start_retries 0
         # Embedded bootstrap vigo list
         vigos ""
-        # Index of last attempted/next vigo from the list
-        vigo_lastok 0
     }
 
 
@@ -297,7 +295,7 @@ proc main-generate-keys {} {
             log "Failed to open $csr for reading"
             log $err
         }
-        set vigo [get-next-vigo $i]
+        set vigo [get-next-vigo "" $i]
         puts -nonewline stderr "Trying vigo $vigo...\t"
         #TODO expected-hostname should not be needed - ensure that vigo provides proper certificate with IP common name
         if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err]} {
@@ -309,7 +307,6 @@ proc main-generate-keys {} {
             puts stderr "Received the signed certificate"
             log crtdata: $crtdata
             spit [file normalize ~/.sku/keys/client.crt] $crtdata
-            report-vigo-succeeded $vigo
             close $fd
             break
         }
@@ -406,6 +403,7 @@ proc main-gui {} {
 
 proc ReceiveWelcome {{tok ""}} {
     static attempts 0
+    static vigo_lastok
     # Unfortunately http is catching callback errors and they don't propagate to our background-error, so we need to catch them all here and log
     if {[catch {
         if {$tok ne ""} {
@@ -419,7 +417,7 @@ proc ReceiveWelcome {{tok ""}} {
                 puts "welcome: $data"
                 set parsed [https parseurl $url]
                 set vigo $parsed(host)
-                report-vigo-succeeded $vigo
+                set vigo_lastok $parsed(host)
                 http::cleanup $tok
                 return
             } else {
@@ -435,7 +433,7 @@ proc ReceiveWelcome {{tok ""}} {
         # We are here only if welcome request did not succeed yet
         # Try again if max retries not exceeded
         if {$attempts < [llength [state sku vigos]]} {
-            set vigo [get-next-vigo $attempts]
+            set vigo [get-next-vigo $vigo_lastok $attempts]
             set cn [cn-from-cert [file normalize ~/.sku/keys/client.crt]]
             https curl https://$vigo:10443/welcome?cn=$cn -timeout 8000 -expected-hostname www.securitykiss.com -command ReceiveWelcome
         } else {
@@ -449,24 +447,17 @@ proc ReceiveWelcome {{tok ""}} {
 }
 
 # get next vigo to try based on the attempt number relative the last succeeded vigo
-proc get-next-vigo {attempt} {
+proc get-next-vigo {vigo_lastok attempt} {
     #if connected use vigo internal IP regardless of attempt
     #else use vigo list
-    set next [expr {([state sku vigo_lastok] + $attempt) % [llength [state sku vigos]]}]
+    set i [lsearch -exact [state sku vigos] $vigo_lastok]
+    if {$i == -1} {
+        set i 0
+    }
+    set next [expr {($i + $attempt) % [llength [state sku vigos]]}]
     set vigo [lindex [state sku vigos] $next]
     return $vigo
 }
-
-# save vigo index for which we succeeded
-proc report-vigo-succeeded {vigo} {
-    log report-vigo-succeeded: $vigo
-    #if vigo from the vigo list, update the vigo_lastok
-    set i [lsearch -exact [state sku vigos] $vigo]
-    if {$i != -1} {
-        state sku {vigo_lastok $i}
-    }
-}
-
 
 
 proc skd-connect {port} {
