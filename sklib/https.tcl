@@ -18,7 +18,7 @@ namespace eval ::https {
     variable sock2host
     variable sock2error
     variable host2expected
-    namespace export curl curl-async wget wget-async socket init
+    namespace export curl curl-async wget wget-async socket init parseurl
     namespace ensemble create
 }
 

@@ -97,7 +97,7 @@ proc main {} {
         # Embedded bootstrap vigo list
         vigos ""
         # Index of last attempted/next vigo from the list
-        vigo_next 0
+        vigo_lastok 0
     }
 
 
@@ -297,9 +297,8 @@ proc main-generate-keys {} {
             log "Failed to open $csr for reading"
             log $err
         }
-        set next [expr {[state sku vigo_next] + $i}]
-        set vigo [lindex [state sku vigos] $next]
-        puts -nonewline stderr "Trying vigo $next...\t"
+        set vigo [get-next-vigo $i]
+        puts -nonewline stderr "Trying vigo $vigo...\t"
         #TODO expected-hostname should not be needed - ensure that vigo provides proper certificate with IP common name
         if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err]} {
             puts stderr FAILED
@@ -310,7 +309,7 @@ proc main-generate-keys {} {
             puts stderr "Received the signed certificate"
             log crtdata: $crtdata
             spit [file normalize ~/.sku/keys/client.crt] $crtdata
-            state sku {vigo_next $next}
+            report-vigo-succeeded $vigo
             close $fd
             break
         }
@@ -413,18 +412,18 @@ proc ReceiveWelcome {{tok ""}} {
             set ncode [http::ncode $tok]
             set status [http::status $tok]
             set data [http::data $tok]
+            upvar #0 $tok state
+            set url $state(url)
             if {$status eq "ok" && $ncode == 200} {
                 tk_messageBox -message "Welcome received: $data" -type ok
                 puts "welcome: $data"
-                # save the vigo index for which we succeeded
-                set next [expr {([state sku vigo_next] + $attempts) % [llength [state sku vigos]]}]
-                state sku {vigo_next $next}
+                set parsed [https parseurl $url]
+                set vigo $parsed(host)
+                report-vigo-succeeded $vigo
                 http::cleanup $tok
                 return
             } else {
-                # if request failed increment and save next candidate vigo index
-                upvar #0 $tok state
-                log Request $state(url) failed
+                log Request $url failed
                 incr attempts
                 http::cleanup $tok
             }
@@ -436,12 +435,11 @@ proc ReceiveWelcome {{tok ""}} {
         # We are here only if welcome request did not succeed yet
         # Try again if max retries not exceeded
         if {$attempts < [llength [state sku vigos]]} {
-            set next [expr {([state sku vigo_next] + $attempts) % [llength [state sku vigos]]}]
-            set vigo [lindex [state sku vigos] $next]
+            set vigo [get-next-vigo $attempts]
             set cn [cn-from-cert [file normalize ~/.sku/keys/client.crt]]
             https curl https://$vigo:10443/welcome?cn=$cn -timeout 8000 -expected-hostname www.securitykiss.com -command ReceiveWelcome
         } else {
-            # ReceiveWelcome failed for all vigos   
+            # ReceiveWelcome failed for all vigos
             tk_messageBox -message "Could not receive Welcome message" -type ok
             return
         }
@@ -450,6 +448,24 @@ proc ReceiveWelcome {{tok ""}} {
     }
 }
 
+# get next vigo to try based on the attempt number relative the last succeeded vigo
+proc get-next-vigo {attempt} {
+    #if connected use vigo internal IP regardless of attempt
+    #else use vigo list
+    set next [expr {([state sku vigo_lastok] + $attempt) % [llength [state sku vigos]]}]
+    set vigo [lindex [state sku vigos] $next]
+    return $vigo
+}
+
+# save vigo index for which we succeeded
+proc report-vigo-succeeded {vigo} {
+    log report-vigo-succeeded: $vigo
+    #if vigo from the vigo list, update the vigo_lastok
+    set i [lsearch -exact [state sku vigos] $vigo]
+    if {$i != -1} {
+        state sku {vigo_lastok $i}
+    }
+}
 
 
 
