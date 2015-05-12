@@ -12,10 +12,10 @@ proc strip-blank-lines {s} {
 }
 
 
-# Keep application state in global nested dictionary called ::state
+# Keep application state in global nested dictionary called ::State
 # If the last argument is a list, the list should be key value pairs 
-# to set in ::state under the path described by previous arguments
-# If the last argument is a word, return value in ::state under the path
+# to set in ::State under the path described by previous arguments
+# If the last argument is a word, return value in ::State under the path
 # described by all arguments
 proc state {args} {
     # all-but-last args describe the path in nested dictionary
@@ -32,7 +32,7 @@ proc state {args} {
     if {[llength $kv] == 1} {
         # now we know that kv is a single key
         set kv [uplevel [list subst $kv]]
-        return [dict get $::state {*}$path $kv]
+        return [dict get $::State {*}$path $kv]
     }
 
     # key-value list
@@ -48,9 +48,9 @@ proc state {args} {
         error "Missing value for key '[lindex $kvl end]' in state definition"
     }
     foreach {k v} $kvl {
-        dict set ::state {*}$path $k $v
+        dict set ::State {*}$path $k $v
     }
-    return $::state
+    return $::State
 }
 
 proc parse-ip {s} {
@@ -216,6 +216,18 @@ proc memoize {} {
     if {![info exists ::Memo($cmd)]} {set ::Memo($cmd) [eval $cmd]}
     return -code return $::Memo($cmd)
 }
+
+proc static {varName {initialValue ""}} {
+    if {[info level] < 2} {
+        error "Must be called from inside proc"
+    }
+    set callerProc [lindex [info level -1] 0]
+    if {![info exists ::Static($callerProc,$varName)]} {
+        set ::Static($callerProc,$varName) $initialValue
+    }
+    uplevel [list upvar #0 ::Static($callerProc,$varName) $varName]
+}
+
 
 proc unzip {zipfile {destdir .}} {
     set mntfile [vfs::zip::Mount $zipfile $zipfile]

@@ -428,7 +428,7 @@ proc ReceiveWelcome {{tok ""}} {
             }
             http::cleanup $tok
         } else {
-            # reset retry counter when called initially
+            # reset retry counter when called initially (without the token that comes from http callback)
             state sku {welcome_retry 1}
         }
      
@@ -443,6 +443,7 @@ proc ReceiveWelcome {{tok ""}} {
         } else {
             # ReceiveWelcome failed for all vigos   
             tk_messageBox -message "Could not receive Welcome message" -type ok
+            return
         }
     } out err]} {
         error $err
