@@ -217,6 +217,9 @@ proc memoize {} {
     return -code return $::Memo($cmd)
 }
 
+
+# Preserve the value of local variable between calls of the proc
+# by mapping local varName to global array value
 proc static {varName {initialValue ""}} {
     if {[info level] < 2} {
         error "Must be called from inside proc"

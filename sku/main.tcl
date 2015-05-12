@@ -98,8 +98,6 @@ proc main {} {
         vigos ""
         # Index of last attempted/next vigo from the list
         vigo_next 0
-        # Attempt counter for welcome message requests
-        welcome_retry 1
     }
 
 
@@ -408,9 +406,9 @@ proc main-gui {} {
 
 
 proc ReceiveWelcome {{tok ""}} {
+    static attempts 0
     # Unfortunately http is catching callback errors and they don't propagate to our background-error, so we need to catch them all here and log
     if {[catch {
-        set vigo_next [state sku vigo_next]
         if {$tok ne ""} {
             set ncode [http::ncode $tok]
             set status [http::status $tok]
@@ -418,28 +416,30 @@ proc ReceiveWelcome {{tok ""}} {
             if {$status eq "ok" && $ncode == 200} {
                 tk_messageBox -message "Welcome received: $data" -type ok
                 puts "welcome: $data"
+                # save the vigo index for which we succeeded
+                set next [expr {([state sku vigo_next] + $attempts) % [llength [state sku vigos]]}]
+                state sku {vigo_next $next}
+                http::cleanup $tok
                 return
             } else {
                 # if request failed increment and save next candidate vigo index
-                upvar #0 $tok st
-                log Request $st(url) failed
-                set vigo_next [expr {($vigo_next + 1) % [llength [state sku vigos]]}]
-                state sku {vigo_next $vigo_next}
+                upvar #0 $tok state
+                log Request $state(url) failed
+                incr attempts
+                http::cleanup $tok
             }
-            http::cleanup $tok
         } else {
             # reset retry counter when called initially (without the token that comes from http callback)
-            state sku {welcome_retry 1}
+            set attempts 0
         }
      
         # We are here only if welcome request did not succeed yet
         # Try again if max retries not exceeded
-        set welcome_retry [state sku welcome_retry]
-        if {$welcome_retry < [llength [state sku vigos]]} {
-            set vigo [lindex [state sku vigos] [state sku vigo_next]]
+        if {$attempts < [llength [state sku vigos]]} {
+            set next [expr {([state sku vigo_next] + $attempts) % [llength [state sku vigos]]}]
+            set vigo [lindex [state sku vigos] $next]
             set cn [cn-from-cert [file normalize ~/.sku/keys/client.crt]]
             https curl https://$vigo:10443/welcome?cn=$cn -timeout 8000 -expected-hostname www.securitykiss.com -command ReceiveWelcome
-            state sku {welcome_retry [incr welcome_retry]}
         } else {
             # ReceiveWelcome failed for all vigos   
             tk_messageBox -message "Could not receive Welcome message" -type ok
