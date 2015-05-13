@@ -330,6 +330,16 @@ proc main-cli {} {
     #TODO
 }
 
+# height should be odd value
+proc hsep {height} {
+    set height [expr {($height-1)/2}]
+    static counter 0
+    incr counter
+    frame .sep$counter ;#-background yellow
+    grid .sep$counter -padx 10 -pady $height -sticky news
+}
+
+
 proc main-gui {} {
     log Running GUI
 
@@ -339,6 +349,7 @@ proc main-gui {} {
     wm deiconify .
     wm protocol . WM_DELETE_WINDOW {
         #TODO improve the message
+        main-exit
         if {[tk_messageBox -message "Quit?" -type yesno] eq "yes"} {
             main-exit
         }
@@ -369,21 +380,20 @@ proc main-gui {} {
     } else {
         set usage [slurp usage.htm]
     }
- 
-    
     set serverlist [get-server-list $welcome]
     set ::serverdesc [lindex $serverlist 0]
     set ::status "Not connected"
     
     set config [get-ovpn-config $welcome]
     spit config.ovpn $config
-    
+ 
+if 0 {    
     ttk::label .p1 -text $clientNo
     grid .p1 -pady 5
     html .p2 -shrink 1
     .p2 parse -final $usage
     grid .p2
-    ttk::frame .p3
+    frame .p3
     ttk::button .p3.connect -text Connect -command ClickConnect
     ttk::button .p3.disconnect -text Disconnect -command ClickDisconnect
     ttk::combobox .p3.combo -width 35 -textvariable ::serverdesc
@@ -393,11 +403,84 @@ proc main-gui {} {
     grid .p3
     ttk::label .p4 -textvariable ::status
     grid .p4 -sticky w -padx 5 -pady 5
+} else {
+
+    set bg1 white
+    set bg2 grey95
+    set bg3 "light grey"
+
+
+
+    hsep 15
+
+    frame .p1 -background $bg1
     
+    ttk::label .p1.plan -text "Plan JADEITE valid until 2015 Sep 14" -background $bg1
+    ttk::label .p1.usedlabel -text "This month used" -background $bg1
+    frame .p1.usedbar -background $bg3 -width 300 -height 8
+    frame .p1.usedbar.fill -background red -width 120 -height 8
+    place .p1.usedbar.fill -x 0 -y 0
+    grid columnconfigure .p1.usedbar 0 -weight 1
+    ttk::label .p1.usedsummary -text "12.4 GB / 50 GB" -background $bg1
+    ttk::label .p1.elapsedlabel -text "This month elapsed" -background $bg1
+    frame .p1.elapsedbar -background $bg3 -width 300 -height 8
+    frame .p1.elapsedbar.fill -background blue -width 180 -height 8
+    place .p1.elapsedbar.fill -x 0 -y 0
+    ttk::label .p1.elapsedsummary -text "3 days 14 hours / 31 days" -background $bg1
+    grid .p1.plan -column 0 -row 0 -columnspan 3 -padx 5 -pady 5 -sticky w
+    grid .p1.usedlabel .p1.usedbar .p1.usedsummary -row 1 -padx 5 -pady 5 -sticky w
+    grid .p1.elapsedlabel .p1.elapsedbar .p1.elapsedsummary -row 2 -padx 5 -pady 5 -sticky w
+    grid .p1 -padx 10 -sticky news
+
+
+    hsep 5
+
+    frame .p7 -background $bg2
+    ttk::label .p7.externalip -text "External IP: 123.123.123.123" -background $bg2
+    ttk::label .p7.geocheck -text "Geo check" -background $bg2
+    grid .p7.externalip -column 0 -row 2 -padx 10 -pady 5 -sticky w
+    grid .p7.geocheck -column 1 -row 2 -padx 10 -pady 5 -sticky w
+    grid .p7 -padx 10 -sticky news
     
+
+    #hsep 5
+
+    frame .p5 -background $bg2
+    #image create photo status_connected -file [file join $::starkit::topdir images status_connected.png]
+    load-image status/connected.png
+    ttk::label .p5.imagestatus -image status_connected -background $bg2
+    ttk::label .p5.status -text "Connected to ..." -background $bg2
+    load-image flag/64/PL.png
+    ttk::label .p5.flag -image flag_64_PL -background $bg2
+    grid .p5.imagestatus -row 5 -column 0 -padx 10 -pady 5
+    grid .p5.status -row 5 -column 1 -padx 10 -pady 5 -sticky w
+    grid .p5.flag -row 5 -column 2 -padx 10 -pady 5 -sticky e
+    grid columnconfigure .p5 .p5.status -weight 1
+    grid .p5 -padx 10 -sticky news
+
+    hsep 15
+
+
+    frame .p3 ;#-background yellow
+    ttk::button .p3.connect -text Connect -command ClickConnect
+    ttk::button .p3.disconnect -text Disconnect -command ClickDisconnect
+    ttk::button .p3.slist -text Servers -command ServerListClicked
+    grid .p3.connect .p3.disconnect .p3.slist -padx 10
+    grid columnconfigure .p3 .p3.slist -weight 1
+    grid .p3 -sticky news
+    
+    hsep 15
+ 
+}
     set ::conf [::ovconf::parse config.ovpn]
-    
     after idle ReceiveWelcome
+}
+
+# e.g. load-image flag/pl.png - it should load image under the name flag_pl
+proc load-image {path} {
+    set imgobj [string map {/ _} [file rootname $path]]
+    #TODO check if replacing / with \ is necessary on windows
+    uplevel [list image create photo $imgobj -file [file join $::starkit::topdir images $path]]
 }
 
 
@@ -413,7 +496,8 @@ proc ReceiveWelcome {{tok ""}} {
             upvar #0 $tok state
             set url $state(url)
             if {$status eq "ok" && $ncode == 200} {
-                tk_messageBox -message "Welcome received: $data" -type ok
+                #TODO save welcome in config
+                #tk_messageBox -message "Welcome received: $data" -type ok
                 puts "welcome: $data"
                 set parsed [https parseurl $url]
                 set vigo $parsed(host)
@@ -438,7 +522,8 @@ proc ReceiveWelcome {{tok ""}} {
             https curl https://$vigo:10443/welcome?cn=$cn -timeout 8000 -expected-hostname www.securitykiss.com -command ReceiveWelcome
         } else {
             # ReceiveWelcome failed for all vigos
-            tk_messageBox -message "Could not receive Welcome message" -type ok
+            #TODO use cached config
+            #tk_messageBox -message "Could not receive Welcome message" -type ok
             return
         }
     } out err]} {
