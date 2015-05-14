@@ -153,7 +153,7 @@ proc ::https::geturl {url args} {
         }
         set args [lreplace $args $ehi [expr {$ehi+1}]]
         #TODO ZONK - we don't have tls channel here - it's only in https::socket so we cannot overwrite sock2host :(
-        # quick and dirty way to link expected-hostname with url host. It's not completely correct because it's global mapping. Should be in tls sock/chan context
+        # quick and dirty way to link expected-hostname with url host. It's not completely correct because it's a global mapping. Should be in the tls sock/chan context
         variable host2expected
         array set parsed [::https::parseurl $url]
         log host: $parsed(host)
@@ -163,7 +163,7 @@ proc ::https::geturl {url args} {
     if {[catch {set tok [http::geturl $url {*}$args]} out err]} {
         variable sock2error
         log $out
-        # This is to make error more informative because normally any TLS error is causing geturl to fail miserably at random socket operation with misleading error
+        # This is to make error more informative because normally any TLS error is causing geturl to fail miserably at random socket operation with a misleading error message
         if {[regexp {error .*"(.+)": software caused connection abort} $out _ chan]} {
             if {[info exists sock2error] && [dict exists $sock2error $chan]} {
                 set tlserror [dict get $sock2error $chan]

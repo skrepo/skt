@@ -18,6 +18,8 @@ package require linuxdeps
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
 package require https
+package require anigif
+package require json
 
 set ::LOGFILE ~/.sku/sku.log
 
@@ -40,7 +42,7 @@ namespace eval tolog {
     proc initialize {args} {
         variable fh
         # if for some reason cannot log to file, log to stderr
-        if {[catch {mk-head-dir $::LOGFILE} out err] || [catch {set fh [open $::LOGFILE w]} out err]} {
+        if {[catch {mk-head-dir $::LOGFILE} out err] == 1 || [catch {set fh [open $::LOGFILE w]} out err] == 1} {
             set fh stderr
             puts stderr $err
         }
@@ -53,7 +55,7 @@ namespace eval tolog {
     proc clear {args} {}
     proc flush {handle} {
         variable fh
-        if {[catch {::flush $fh} out err]} {
+        if {[catch {::flush $fh} out err] == 1} {
             set fh stderr
             puts stderr $err
         }
@@ -61,7 +63,7 @@ namespace eval tolog {
     proc write {handle data} {
         variable fh
         # again, downgrade to logging to stderr if problems with writing to file
-        if {[catch {puts -nonewline $fh $data} out err]} {
+        if {[catch {puts -nonewline $fh $data} out err] == 1} {
             set fh stderr
             puts stderr $err
         }
@@ -96,6 +98,8 @@ proc main {} {
         start_retries 0
         # Embedded bootstrap vigo list
         vigos ""
+        # temporary
+        slist ""
     }
 
 
@@ -109,7 +113,7 @@ proc main {} {
             {ra             "Print anything"}
         }
     set usage ": sku \[options]\noptions:"
-    if {[catch {array set params [::cmdline::getoptions ::argv $options $usage]}]} {
+    if {[catch {array set params [::cmdline::getoptions ::argv $options $usage]}] == 1} {
         log [cmdline::usage $options $usage]
         exit 1
     }
@@ -157,7 +161,7 @@ proc main {} {
         state sku {ui gui}
     }
 
-    if {[catch {create-pidfile ~/.sku/sku.pid} out err]} {
+    if {[catch {create-pidfile ~/.sku/sku.pid} out err] == 1} {
         fatal "Could not create ~/.sku/sku.pid file" $err
     }
     skd-connect 7777
@@ -165,7 +169,7 @@ proc main {} {
 }
 
 proc main-id {} {
-    if {[catch {cn-from-cert [file normalize ~/.sku/keys/client.crt]} cn err]} {
+    if {[catch {cn-from-cert [file normalize ~/.sku/keys/client.crt]} cn err] == 1} {
         puts stderr "Could not retrieve client id"
         log $err
     } else {
@@ -175,7 +179,7 @@ proc main-id {} {
 }
 
 proc main-exit {} {
-    if {[catch {delete-pidfile ~/.sku/sku.pid} out err]} {
+    if {[catch {delete-pidfile ~/.sku/sku.pid} out err] == 1} {
         # don't use fatal here to avoid endless loop
         puts stderr "Could not delete ~/.sku/sku.pid file"
         puts stderr $err
@@ -291,14 +295,14 @@ proc main-generate-keys {} {
 
     # POST csr and save cert
     for {set i 0} {$i<[llength [state sku vigos]]} {incr i} {
-        if {[catch {open $csr r} fd err]} {
+        if {[catch {open $csr r} fd err] == 1} {
             log "Failed to open $csr for reading"
             log $err
         }
         set vigo [get-next-vigo "" $i]
         puts -nonewline stderr "Trying vigo $vigo...\t"
         #TODO expected-hostname should not be needed - ensure that vigo provides proper certificate with IP common name
-        if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err]} {
+        if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err] == 1} {
             puts stderr FAILED
             log $err
             close $fd
@@ -331,12 +335,12 @@ proc main-cli {} {
 }
 
 # height should be odd value
-proc hsep {height} {
+proc hsep {parent height} {
     set height [expr {($height-1)/2}]
     static counter 0
     incr counter
-    frame .sep$counter ;#-background yellow
-    grid .sep$counter -padx 10 -pady $height -sticky news
+    frame $parent.sep$counter ;#-background yellow
+    grid $parent.sep$counter -padx 10 -pady $height -sticky news
 }
 
 
@@ -409,109 +413,253 @@ if 0 {
     set bg2 grey95
     set bg3 "light grey"
 
+    frame .c
+    grid .c -sticky news
+    grid columnconfigure . .c -weight 1
+    grid rowconfigure . .c -weight 1
 
+    hsep .c 15
 
-    hsep 15
-
-    frame .p1 -background $bg1
+    frame .c.p1 -background $bg1
     
-    ttk::label .p1.plan -text "Plan JADEITE valid until 2015 Sep 14" -background $bg1
-    ttk::label .p1.usedlabel -text "This month used" -background $bg1
-    frame .p1.usedbar -background $bg3 -width 300 -height 8
-    frame .p1.usedbar.fill -background red -width 120 -height 8
-    place .p1.usedbar.fill -x 0 -y 0
-    grid columnconfigure .p1.usedbar 0 -weight 1
-    ttk::label .p1.usedsummary -text "12.4 GB / 50 GB" -background $bg1
-    ttk::label .p1.elapsedlabel -text "This month elapsed" -background $bg1
-    frame .p1.elapsedbar -background $bg3 -width 300 -height 8
-    frame .p1.elapsedbar.fill -background blue -width 180 -height 8
-    place .p1.elapsedbar.fill -x 0 -y 0
-    ttk::label .p1.elapsedsummary -text "3 days 14 hours / 31 days" -background $bg1
-    grid .p1.plan -column 0 -row 0 -columnspan 3 -padx 5 -pady 5 -sticky w
-    grid .p1.usedlabel .p1.usedbar .p1.usedsummary -row 1 -padx 5 -pady 5 -sticky w
-    grid .p1.elapsedlabel .p1.elapsedbar .p1.elapsedsummary -row 2 -padx 5 -pady 5 -sticky w
-    grid .p1 -padx 10 -sticky news
+    ttk::label .c.p1.plan -text "Plan JADEITE valid until 2015 Sep 14" -background $bg1
+    ttk::label .c.p1.usedlabel -text "This month used" -background $bg1
+    frame .c.p1.usedbar -background $bg3 -width 300 -height 8
+    frame .c.p1.usedbar.fill -background red -width 120 -height 8
+    place .c.p1.usedbar.fill -x 0 -y 0
+    grid columnconfigure .c.p1.usedbar 0 -weight 1
+    ttk::label .c.p1.usedsummary -text "12.4 GB / 50 GB" -background $bg1
+    ttk::label .c.p1.elapsedlabel -text "This month elapsed" -background $bg1
+    frame .c.p1.elapsedbar -background $bg3 -width 300 -height 8
+    frame .c.p1.elapsedbar.fill -background blue -width 180 -height 8
+    place .c.p1.elapsedbar.fill -x 0 -y 0
+    ttk::label .c.p1.elapsedsummary -text "3 days 14 hours / 31 days" -background $bg1
+    grid .c.p1.plan -column 0 -row 0 -columnspan 3 -padx 5 -pady 5 -sticky w
+    grid .c.p1.usedlabel .c.p1.usedbar .c.p1.usedsummary -row 1 -padx 5 -pady 5 -sticky w
+    grid .c.p1.elapsedlabel .c.p1.elapsedbar .c.p1.elapsedsummary -row 2 -padx 5 -pady 5 -sticky w
+    grid .c.p1 -padx 10 -sticky news
 
 
-    hsep 5
+    hsep .c 5
 
-    frame .p7 -background $bg2
-    ttk::label .p7.externalip -text "External IP: 123.123.123.123" -background $bg2
-    ttk::label .p7.geocheck -text "Geo check" -background $bg2
-    grid .p7.externalip -column 0 -row 2 -padx 10 -pady 5 -sticky w
-    grid .p7.geocheck -column 1 -row 2 -padx 10 -pady 5 -sticky w
-    grid .p7 -padx 10 -sticky news
+    frame .c.p7 -background $bg2
+    ttk::label .c.p7.externalip -text "External IP: 123.123.123.123" -background $bg2
+    ttk::label .c.p7.geocheck -text "Geo check" -background $bg2
+    grid .c.p7.externalip -column 0 -row 2 -padx 10 -pady 5 -sticky w
+    grid .c.p7.geocheck -column 1 -row 2 -padx 10 -pady 5 -sticky w
+    grid .c.p7 -padx 10 -sticky news
     
 
-    #hsep 5
+    #hsep .c 5
 
-    frame .p5 -background $bg2
-    #image create photo status_connected -file [file join $::starkit::topdir images status_connected.png]
-    load-image status/connected.png
-    ttk::label .p5.imagestatus -image status_connected -background $bg2
-    ttk::label .p5.status -text "Connected to ..." -background $bg2
+
+
+
+    frame .c.p5 -background $bg2
+    label .c.p5.imagestatus -background $bg2
+    place-image status/disconnected.png .c.p5.imagestatus
+    after 2000 [list place-image status/connecting.gif .c.p5.imagestatus]
+    after 4000 [list place-image status/connected.png .c.p5.imagestatus]
+    ttk::label .c.p5.status -text "Connected to ..." -background $bg2
     load-image flag/64/PL.png
-    ttk::label .p5.flag -image flag_64_PL -background $bg2
-    grid .p5.imagestatus -row 5 -column 0 -padx 10 -pady 5
-    grid .p5.status -row 5 -column 1 -padx 10 -pady 5 -sticky w
-    grid .p5.flag -row 5 -column 2 -padx 10 -pady 5 -sticky e
-    grid columnconfigure .p5 .p5.status -weight 1
-    grid .p5 -padx 10 -sticky news
+    ttk::label .c.p5.flag -image flag_64_PL -background $bg2
+    grid .c.p5.imagestatus -row 5 -column 0 -padx 10 -pady 5
+    grid .c.p5.status -row 5 -column 1 -padx 10 -pady 5 -sticky w
+    grid .c.p5.flag -row 5 -column 2 -padx 10 -pady 5 -sticky e
+    grid columnconfigure .c.p5 .c.p5.status -weight 1
+    grid .c.p5 -padx 10 -sticky news
 
-    hsep 15
+    hsep .c 15
 
 
-    frame .p3 ;#-background yellow
-    ttk::button .p3.connect -text Connect -command ClickConnect
-    ttk::button .p3.disconnect -text Disconnect -command ClickDisconnect
-    ttk::button .p3.slist -text Servers -command ServerListClicked
-    grid .p3.connect .p3.disconnect .p3.slist -padx 10
-    grid columnconfigure .p3 .p3.slist -weight 1
-    grid .p3 -sticky news
+    frame .c.p3 ;#-background yellow
+    ttk::button .c.p3.connect -text Connect -command ClickConnect
+    ttk::button .c.p3.disconnect -text Disconnect -command ClickDisconnect
+    ttk::button .c.p3.slist -text Servers -command ServerListClicked
+    grid .c.p3.connect .c.p3.disconnect .c.p3.slist -padx 10
+    grid columnconfigure .c.p3 .c.p3.slist -weight 1
+    grid .c.p3 -sticky news
+    focus .c.p3.slist    
+
+    bind . <Return> [list [focus -displayof .] invoke]
+
+    hsep .c 15
+
+
+    grid columnconfigure .c 0 -weight 1
+    # this will allocate spare space to the first row in container .c
+    grid rowconfigure .c 0 -weight 1
+    #instead of [wm minsize . 200 200]
+    setDialogMinsize .
+    # sizegrip - bottom-right corner for resize
+    grid [ttk::sizegrip .grip] -sticky se
     
-    hsep 15
- 
+    #source [file join $::starkit::topdir dialog.tcl]    
+
 }
     set ::conf [::ovconf::parse config.ovpn]
     after idle ReceiveWelcome
 }
 
-# e.g. load-image flag/pl.png - it should load image under the name flag_pl
+
+
+proc setDialogMinsize {window} {
+   # this update will ensure that winfo will return the correct sizes
+   update
+   # get the current width and height
+   set winWidth [winfo width $window]
+   set winHeight [expr {[winfo height $window] + 10}]
+   # set it as the minimum size
+   wm minsize $window $winWidth $winHeight
+}
+
+proc ServerListClicked {} {
+    set slist [state sku slist]
+    set ssel 2
+    set newsel [slistDialog $slist $ssel]
+    puts stderr "New selected server: $newsel"
+}
+
+proc slistDialog {slist ssel} {
+    set w .slist_dialog
+    catch { destroy $w }
+    toplevel $w
+
+    set wt $w.tree
+
+    ttk::treeview $wt -columns "country city ip"
+    
+    $wt heading #0 -text F
+    $wt heading 0 -text Country
+    $wt heading 1 -text City
+    $wt heading 2 -text IP
+    $wt column #0 -width 50 -anchor nw -stretch 0
+    $wt column 0 -width 150 -anchor w
+    $wt column 1 -width 90 -anchor w
+    $wt column 2 -width 90 -anchor w
+    
+    foreach i {1 2 3 4} {
+        image create photo imgobj -file /home/sk/seckiss/skt/sku/images/flag/24/GB.png
+        $w insert {} end -image imgobj -values [list "United Kingdom" London 12.12.12.12]
+    }
+    
+    grid columnconfigure $w 0 -weight 1
+    grid rowconfigure $w 0 -weight 1
+    #wm geometry $w 500x200
+    
+    grid $wt -sticky news
+
+
+    ShowModal $w -destroy 1
+}
+
+
+
+#-----------------------------------------------------------------------------
+# ShowModal win ?-onclose script? ?-destroy bool?
+#
+# Displays $win as a modal dialog. 
+#
+# If -destroy is true then $win is destroyed when the dialog is closed. 
+# Otherwise the caller must do it. 
+#
+# If an -onclose script is provided, it is executed if the user terminates the 
+# dialog through the window manager (such as clicking on the [X] button on the 
+# window decoration), and the result of that script is returned. The default 
+# script does nothing and returns an empty string. 
+#
+# Otherwise, the dialog terminates when the global ::Modal.Result is set to a 
+# value. 
+#
+# This proc doesn't play nice if you try to have more than one modal dialog 
+# active at a time. (Don't do that anyway!)
+#
+# Examples:
+#   -onclose {return cancel}    -->    ShowModal returns the word 'cancel'
+#   -onclose {list 1 2 3}       -->    ShowModal returns the list {1 2 3}
+#   -onclose {set ::x zap!}     -->    (variations on a theme)
+#
+proc ShowModal {win args} {
+    #TODO save focus in the parent
+    set ::Modal.Result {}
+    array set options [list -onclose {} -destroy 0 {*}$args]
+    wm transient $win .
+    wm protocol $win WM_DELETE_WINDOW [list catch $options(-onclose) ::Modal.Result]
+    set x [expr {([winfo width  .] - [winfo reqwidth  $win]) / 2 + [winfo rootx .]}]
+    set y [expr {([winfo height .] - [winfo reqheight $win]) / 2 + [winfo rooty .]}]
+    wm geometry $win +$x+$y
+    raise $win
+    focus $win
+    grab $win
+    tkwait variable ::Modal.Result
+    grab release $win
+    if {$options(-destroy)} {destroy $win}
+    return ${::Modal.Result}
+}
+
+
+
+
+
+# tablelist vs TkTable vs treectrl vs treeview vs BWidget::Tree
+
+
+# e.g. load-image flag/pl.png - it should load image under the name flag_pl and return that name
 proc load-image {path} {
     set imgobj [string map {/ _} [file rootname $path]]
     #TODO check if replacing / with \ is necessary on windows
     uplevel [list image create photo $imgobj -file [file join $::starkit::topdir images $path]]
+    return $imgobj
 }
 
+proc place-image {path lbl} {
+    if {[file extension $path] eq ".gif"} {
+        anigif::stop $lbl
+        anigif::anigif [file join $::starkit::topdir images $path] $lbl
+    } else {
+        anigif::stop $lbl
+        set imgobj [load-image $path]
+        $lbl configure -image $imgobj
+    }
+}
+    
 
 proc ReceiveWelcome {{tok ""}} {
     static attempts 0
     static vigo_lastok
     # Unfortunately http is catching callback errors and they don't propagate to our background-error, so we need to catch them all here and log
     if {[catch {
-        if {$tok ne ""} {
-            set ncode [http::ncode $tok]
-            set status [http::status $tok]
-            set data [http::data $tok]
-            upvar #0 $tok state
-            set url $state(url)
-            if {$status eq "ok" && $ncode == 200} {
-                #TODO save welcome in config
-                #tk_messageBox -message "Welcome received: $data" -type ok
-                puts "welcome: $data"
-                set parsed [https parseurl $url]
-                set vigo $parsed(host)
-                set vigo_lastok $parsed(host)
-                http::cleanup $tok
-                return
-            } else {
-                log Request $url failed
-                incr attempts
-                http::cleanup $tok
-            }
-        } else {
+        if {$tok eq ""} {
             # reset retry counter when called initially (without the token that comes from http callback)
             set attempts 0
+        } else {
+            if {$tok ne "error"} {
+                set ncode [http::ncode $tok]
+                set status [http::status $tok]
+                set data [http::data $tok]
+                upvar #0 $tok state
+                set url $state(url)
+                if {$status eq "ok" && $ncode == 200} {
+                    #TODO save welcome in config
+                    #tk_messageBox -message "Welcome received: $data" -type ok
+                    log Welcome message received:\n$data
+                    puts stderr "welcome: $data"
+    
+                    set d [json::json2dict $data]
+                    puts stderr "dict: $d"
+                    puts stderr ""
+                    set slist [dict get $d server-lists JADEITE]
+                    state sku {slist $slist}
+    
+                    array set parsed [https parseurl $url]
+                    set vigo_lastok $parsed(host)
+                    http::cleanup $tok
+                    return
+                }
+            }
+            log Request for token $tok failed
+            incr attempts
+            http::cleanup $tok
         }
      
         # We are here only if welcome request did not succeed yet
@@ -519,14 +667,19 @@ proc ReceiveWelcome {{tok ""}} {
         if {$attempts < [llength [state sku vigos]]} {
             set vigo [get-next-vigo $vigo_lastok $attempts]
             set cn [cn-from-cert [file normalize ~/.sku/keys/client.crt]]
-            https curl https://$vigo:10443/welcome?cn=$cn -timeout 8000 -expected-hostname www.securitykiss.com -command ReceiveWelcome
+            # although scheduled for non-blocking async it may still throw error here when network is unreachable
+            if {[catch {https curl https://$vigo:10443/welcome?cn=$cn -timeout 8000 -expected-hostname www.securitykiss.com -command ReceiveWelcome} out err] == 1} {
+                log $err
+                after idle {ReceiveWelcome error}
+            }
         } else {
             # ReceiveWelcome failed for all vigos
             #TODO use cached config
-            #tk_messageBox -message "Could not receive Welcome message" -type ok
+            tk_messageBox -message "Could not receive Welcome message" -type ok
             return
         }
-    } out err]} {
+    } out err] == 1} {
+        # catch was returning 2 in spite of no error (-code 0) - that's why the check == 1 above. Probably bug in Tcl
         error $err
     }
 }
@@ -547,7 +700,7 @@ proc get-next-vigo {vigo_lastok attempt} {
 
 proc skd-connect {port} {
     #TODO handle error
-    if {[catch {set sock [socket 127.0.0.1 $port]} out err]} {
+    if {[catch {set sock [socket 127.0.0.1 $port]} out err] == 1} {
         skd-close $err
     }
     state sku {skd_sock $sock}
@@ -557,7 +710,7 @@ proc skd-connect {port} {
 
 
 proc skd-write {msg} {
-    if {[catch {puts [state sku skd_sock] $msg} out err]} {
+    if {[catch {puts [state sku skd_sock] $msg} out err] == 1} {
         skd-close $err
     }
 }
