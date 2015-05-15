@@ -364,10 +364,7 @@ proc main-gui {} {
     #TODO remove caching
     if 0 {
     set url "https://www.securitykiss.com/sk/app/display.php?c=$clientNo&v=0.3.0"
-    set ncode [curl $url welcome]
-    if {$ncode != 200} {
-        error "Could not retrieve ($url). HTTP code: $ncode"
-    }
+    set welcome [https curl $url -expected-hostname www.securitykiss.com]
     spit display.htm $welcome
     } else {
         set welcome [slurp display.htm]
@@ -376,10 +373,7 @@ proc main-gui {} {
     #TODO remove caching
     if 0 {
     set url "https://www.securitykiss.com/sk/app/usage.php?c=$clientNo"
-    set ncode [curl $url usage]
-    if {$ncode != 200} {
-        error "Could not retrieve ($url). HTTP code: $ncode"
-    }
+    set usage [https curl $url -expected-hostname www.securitykiss.com]
     spit usage.htm $usage
     } else {
         set usage [slurp usage.htm]

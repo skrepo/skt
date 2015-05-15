@@ -61,7 +61,7 @@ proc install-fpm {} {
     if {[catch {exec fpm --version}] == 1} {
         puts "Installing fpm"
         ex sudo apt-get update --fix-missing
-        ex sudo apt-get -fy install git ruby-dev gcc rpm
+        ex sudo apt-get -fy install git ruby-dev gcc rpm rubygems
         ex sudo gem install fpm
     } else {
         puts "fpm already present"
