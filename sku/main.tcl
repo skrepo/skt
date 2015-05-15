@@ -479,9 +479,11 @@ if 0 {
     grid .c.p3.connect .c.p3.disconnect .c.p3.slist -padx 10
     grid columnconfigure .c.p3 .c.p3.slist -weight 1
     grid .c.p3 -sticky news
-    focus .c.p3.slist    
+    focus .c.p3.slist
 
-    bind . <Return> [list [focus -displayof .] invoke]
+    #bind . <Return> {[focus -displayof .] invoke}
+    #bind . <Return> {puts stderr [winfo class .c.p3.slist]}
+    bind . <Return> InvokeFocusedWithEnter
 
     hsep .c 15
 
@@ -501,6 +503,18 @@ if 0 {
     after idle ReceiveWelcome
 }
 
+proc InvokeFocusedWithEnter {} {
+    set focused [focus] ;# or [focus -displayof .]
+    if {$focused eq ""} {
+        return
+    }
+    set type [winfo class $focused]
+    switch -glob $type {
+        *Button {
+            $focused invoke
+        }
+    }
+}
 
 
 proc setDialogMinsize {window} {
@@ -525,32 +539,38 @@ proc slistDialog {slist ssel} {
     catch { destroy $w }
     toplevel $w
 
+    puts stderr $slist
+
     set wt $w.tree
 
-    ttk::treeview $wt -columns "country city ip"
+    ttk::treeview $wt -columns "country city ip" -selectmode browse
     
     $wt heading #0 -text F
     $wt heading 0 -text Country
     $wt heading 1 -text City
     $wt heading 2 -text IP
     $wt column #0 -width 50 -anchor nw -stretch 0
-    $wt column 0 -width 150 -anchor w
-    $wt column 1 -width 90 -anchor w
-    $wt column 2 -width 90 -anchor w
+    $wt column 0 -width 140 -anchor w
+    $wt column 1 -width 140 -anchor w
+    $wt column 2 -width 140 -anchor w
     
-    foreach i {1 2 3 4} {
-        image create photo imgobj -file /home/sk/seckiss/skt/sku/images/flag/24/GB.png
-        $w insert {} end -image imgobj -values [list "United Kingdom" London 12.12.12.12]
+    foreach sitem $slist {
+        set id [dict get $sitem id]
+        set ccode [dict get $sitem ccode]
+        set country [dict get $sitem country]
+        set city [dict get $sitem city]
+        set ip [dict get $sitem ip]
+        load-image flag/24/$ccode.png
+        $wt insert {} end -id $id -image flag_24_$ccode -values [list $country $city $ip]
     }
-    
+    $wt selection set $ssel
     grid columnconfigure $w 0 -weight 1
     grid rowconfigure $w 0 -weight 1
-    #wm geometry $w 500x200
-    
     grid $wt -sticky news
-
-
-    ShowModal $w -destroy 1
+    ShowModal $w
+    set newsel [$wt selection]
+    destroy $w
+    return $newsel
 }
 
 
