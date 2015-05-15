@@ -28,15 +28,11 @@
 #run sample
 
 
-proc install-fpm {} {
-    ex sudo apt-get update --fix-missing
-    ex sudo apt-get -fy install git ruby-dev gcc rpm
-    ex sudo gem install fpm
-}
 
 proc build-deb-rpm {arch_exact} {
     set arch [generalize-arch $arch_exact]
     puts "Building deb/rpm dist package"
+    install-fpm
     if {$::tcl_platform(platform) eq "unix"} { 
         set distdir dist/linux-$arch
         file delete -force $distdir
@@ -58,7 +54,7 @@ proc build-deb-rpm {arch_exact} {
 proc build-skd-sku {} {
     foreach arch_exact {x86_64} {
         #build win32 $arch_exact sku base-tk-8.6.3.1 {tls-1.6.4}
-        build linux $arch_exact sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3}
+        build linux $arch_exact sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3}
         build linux $arch_exact skd base-tcl-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
         build-deb-rpm $arch_exact
     }
@@ -83,7 +79,7 @@ prepare-lib sklib 0.0.0
 #ex ./build/sku/linux-x86_64/sku.bin
 #exit
 
-#build-skd-sku
+build-skd-sku
 #build-no-pkg
 
 build linux x86_64 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3}
