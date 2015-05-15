@@ -19,7 +19,7 @@ proc generalize-arch {arch} {
 }
 
 proc this-arch {} {
-    return generalize-arch $::tcl_platform(machine)
+    return [generalize-arch $::tcl_platform(machine)]
 }
 
 proc this-os {} {
@@ -30,9 +30,8 @@ proc this-os {} {
     }
 }
 
-# this is only to provide tls support for the build script
-# path to platform dependent libs in the lib dir - this is for the need of the build script - ix86 only!!! The reason is that we use base-tcl-ix86 anyway. Should work on 64-bit as well
-lappend auto_path [file join lib [this-os]-ix86]
+# these libraries are only to provide tls support for the build script
+lappend auto_path [file join lib [this-os]-[this-arch]]
 lappend auto_path [file join lib generic]
 
 package require http

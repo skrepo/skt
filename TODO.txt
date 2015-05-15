@@ -1,0 +1,284 @@
+
+me: Writing a single cross platform SKT program is a stupid idea. Why to conflate things? We need 3 separate codebases for Windows, Mac and Linux to handle differences in:
+- design - depends on the OS architecture
+- requirements / feature set
+- build process
+- distribution methods
+- licensing - we may want GPL for Linux, while keeping closed source for Mac and Win
+- binary size limits (cross-platform increases the size)
+The major drawback is the development/maintenance effort and feature/bug divergence
+
+Icons in Linux Desktop:
+https://developer.gnome.org/integration-guide/stable/icons.html.en
+Use scalable folder for svg
+
+TODO: 
++ convert cert paths in ovconf to absolute
++ SKD to call ovconf to check if cert files exist
++ SKD delete win-sys and other windows specific options on Linux
++ SKD test on windows
+- focus on SKD first: cert gen, linux service, upgrades, installer, CAcert for vbox IPs? Shouldn't certs be signed centrally?
+- SKD check if it is possible to include OpenVPN in vfs and run it from there. How about upgrades then? If not in vfs, where to store OpenVPN? In the same place where SKD.
+--- OpenVPN and SKD are stationary and stateless pieces
+- SKD Linux: replace resolv.conf, handle DNS
+- SKD as a Linux service
+- SKD as a Windows service
+- SKD/SKU handle "requires a TAP-Windows driver that is at least version 9.9" problem
+- SKD/SKU make the OpenVPN module pluggable so that tun/tap driver can be upgraded easily
+- deployment and upgrade code so that we can release early and upgrade often without worrying about supporting legacy stuff
+- it's OK to use existing welcome msg and other API, we need to support it for long time anyway
++ SKU generating key and CSR, API on vboxes
++ SKU store preloaded vbox list
+- SKU HTTPS get existing welcome message - requires preloaded certificate in SKU
+- do canary deployment, new app only for new users from English speaking regions - facilitate feedback
+
+
+TODO: sku run from script: allows change logging easily and running in background
+In sku script redirect only stdout to log file. stderr to console so that we can report errors if GUI cannot be started - that rules out nohup - it will redirect stderr to stdout then
+TODO: sku i18n - after both linux and win version is ready
+TODO: handle sku-skd reconnect
+TODO: handle sku close/quit - give option to close without disconnect?
+TODO: sku handle minimizing to tray. Is it OS/desktop dependent?
+TODO: check Linux AirVPN client for inspiration
+
+TODO sku: cmdline --install-deps --generate-keys
+Problem: we cannot do apt-get/yum/zypper install directly from postinst script because dpkg/rpm is still running and locking package management. Need to:
++ schedule to install later
+- it must be done after dpkg/rpm completed but we need root => it must be done by SKD
+- if initiated from postinst, SKU to send install command to SKD but not wait for response. SKD retry a few times
+- however no need to call this procedure from postinst. It would make sense because installing deps could be part of dpkg/rpm install, but then it must be done asynchronously from SKD anyway
+- so it's better to install deps on first run of SKU, then SKU may wait for response from SKD and report to the user.
+- progress bar to inform user
+- consider security, not allow SKD perform arbitrary command
++ pkg-install and lib-install commands
+
+
+Service solution for SKT app:
+- daemonize process - is it necessary?
+- https://groups.google.com/forum/#!topic/comp.lang.tcl/wOL3cLZ9yhk
+- http://wiki.tcl.tk/2224
+- create (sysv) init script with BEGIN INIT header
+- Check both locations: /etc/rc5.d and /etc/init.d/rc5.d
+- create S symlinks in 2 3 4 5 runlevels and K symlinks in 0 1 6 runlevels
+
+
+
+TODO: skd/sku: script zip upgrade files and sign. In SKD unzip, verify and deploy. Generate and store RSA key
+==============================
+SKT generated ids/cns require new soft on vbox/skc side. Write it from scratch, get rid of the old cruft. Requirements:
+- simple and minimal
+- to be run on existing Vboxes and not conflict with existing soft and OpenVPN instances
+--- use UDP and TCP ports as a transport channel for OpenVPN instances
+--- hide UDP/TCP and port choice from user. Various reconnection attempts handled by SKU
+- distributed, split to Vbox and SKC still needed but move most of work to Vbox
+- SKT has no direct communication with SKC, only SKT <-> Vbox, Vbox forwards to SKC via tunnel
+Vbox reqs:
+- CSRS - CSR signer, save cn in redis, forward to SKC
+- run new OpenVPN instances on UDP and TCP on new 10.x.x.x subnets. Adjust firewall
+- Vbox to join the vbox group dynamically, adjust vbox list sent to SKT. Mesh arch too difficult. Make it star with SKC. For scalability minimum info exchanged
+- miniumum functionality: 
+-- sign CSR, save ip and cn
+-- assign plan to cn - compress plan definition and correspond to paid period (payment)
+-- traffic accounting per cn
+-- access control based on traffic accounting and blacklist
+-- all above must be in coordination with SKC, how to make it lightweight?
+---- Vbox creates usage chunks (uchunk) and push to redis queue
+---- Vbox to submit uchunks to SKC transactionally (with confirmation). Delete after confirmation
+---- Uchunks to have UUID, SKC store uchunks from last hour to be able resend confirmation
+---- SKC sends asynchronously total usage updates
+
+TODO:
++ check if Tcl tls verifies certificates and how it determines the default CA store
+- provide CA.crt for tls that signs skw and IP based certs
++ when installing from deb/rpm, sku to generate keys only once - check if files exist
+- admin side scripts: generate CA.key, create cert from CSR and CA.key, sign the upgrade deb/rpm
+- sku to check for upgrades and download upgrade
+- sku command line option to restart SKD service (only when run with root). Why?
+
+# generate key pairs and cn should be only once on -generate-keys
+# signCert may be retried on every sku run
+
+
+
+We need smarter solution for sku logging - the current one with stdout redirect is not going to work on windows
+Also we need to daemonize from inside sku
+Never again redirect stdout or stderr in OS-portable apps
+
+TODO:
+- Linux OpenVPN client - try to use the functionality of DHCP scripts on Ubuntu so that the DNS server pulled in DHCP setup from OpenVPN server is used to overwrite resolvconf
+
+TODO: add check preventing running 32-bit skapp on 64-bit OS -why? it may work - detect and give warning in preinst
+TODO: what is so different about OpenSUSE - compare skype rpms to see why they did separate rpm
++TODO: detect package manager in postinst, detect if X11 is on, install deps
++TODO: the next thing: read easyRSA scripts and translate relevant logic to Tcl in order to generate keys and csr
++TODO: replace Expect with TclX for SIGINT SIGTERM handling. Test if TclX id command works for setuid
+
+
+- skapp: single installer, obfuscated uuid collector and signature to register client id, generate key pair in the app, register public key on the website
+
+Me: New SKapp: first replicate existing app functinality.
+
+
+For the first option the app may contain obfuscated algorithm for calculating system fingerprint (plain text concatenation of parameters encrypted with obfuscated secret). This fingerprint may be used to prevent sybil attacks. 
+Another possibility: generic installer with obfuscated secret S. After installation, the program generates random G, send G and HMAC(S, G) to vbox(es) in order to obtain certificate. VBoxes to keep the small pool of certificates. 
+
+
+This is also a potential method to distribute SK client IDs! Scenario:
+- USER: downloads generic installer with the field to enter code and link to website to get free code
+- USER: user clicks the https link, fires the browser, copies the client id and code (passphrase) to the program
+- NOTE: We can eliminate copy paste step by generating the link with random number and ask user to click the link to confirm/accept
+- SERVER: tries to identify the user by checking cookie/other_tracking and browser+IP fingerprinting and serves the same code on duplicate requests or denies if request per IP limit exceeded. This is to prevent Sybil attacks.
+- SERVER: applies key derivation algorithm hash(client_id_counter++ + master_key) and presents it to the USER as the code along with client id
+- PROGRAM: generate random key pair and send encrypted public key to the SERVER
+Problems:
+- user scared by the program that opens a website
+- users where sk website is blocked
+
+
+Another method to distribute SK client IDs:
+- USER: downloads generic installer with a few vbox IP list for bootstrapping if skw is blocked
+- PROGRAM: collect system info to create fingerprint. It should not contain data that can be easily changed. 
+- PROGRAM: connect with HTTPS to any bootstraping vbox IP using embedded CA certificate. Send generated public key and fingerprint. Receive signed certificate and common name to introduce itself. To prevent MITM on SSL connection, reject when vbox IP server certificate cannot be verified. 
+- The program can request for downloading new version: 
+"This program needs to be regularly updated to prevent blocking it by censors. This copy is out of date. Please download the new version. Here are the possible methods: other websites, bittorrent etc."
+This message is really to solve a different problem: 
+- old version of the installer distributed by other websites
+For the actual case of website blocking the solution is transparent to the user: use embedded IPs to bootstrap and update. 
+What should be secret is the algorithm for collecting  system info with UUIDs used for fingerprinting. It should be signed with obfuscated secret key. Compromising that key may be a motivation to autoupgrade/request for upgrade.
+
+
+* 19:43 *   Me: new SK app: the full list of vboxes for bootstraping must be obfuscated but updateable (updated list stored in a file). Encrypt with private key on server. SK app can only decrypt the individual IPs just before use for HTTP request.
+
+
+* 10:37 *   Me: SK app/website: add option to upgrade the existing plan.
+
+
+How to simplify SK periods, traffic accounting, usageData records, blacklists, permissions etc.
+General idea: don't store derived data. Always start from minimal seed, essence info. Especially usageData records - to calculate daily records we only need startDate. The usageData record ID = f(startDate, n) where n is n-th day.
+
+
+For config and 'distributed but locally available data' store like in SK vboxes we have a few options:
+- Redis master + many slaves (or SSDB for non-RAM redis)
+- etcd - not sure if it scales to hundreds of nodes - it doesn't
+"etcd's Raft consensus algorithm is most efficient in small clusters between 3 and 9 peers. For clusters larger than 9, etcd will select a subset of instances to participate in the algorithm in order to keep it efficient"
+https://coreos.com/docs/cluster-management/scaling/etcd-optimal-cluster-size/
+For the SK use case of 'caching nodes' we may consider using Standbys:
+"Adding peers in an etcd cluster adds network, CPU, and disk overhead to the leader since each one requires replication. Peers primarily provide resiliency in the event of a leader failure but the benefit of more failover nodes decreases as the cluster size increases. A lightweight alternative is the standby.
+Standbys are a way for an etcd node to forward requests along to the cluster but the standbys are not part of the Raft cluster themselves. This provides an easier API for local applications while reducing the overhead required by a regular peer node. Standbys also act as standby nodes in the event that a peer node in the cluster has not recovered after a long duration."
+etcd: We can watch for a change on a key and receive a notification by using long polling (curl).
+
+SK target deployment:
+- primary SKC + 2 hot swap backups - all 3 being etcd nodes, and all having master redis/ssdb (either synced with MySQL or having its own data that is supposed to be replicated on vboxes and available offline/locally/instantly)
+- nnn vboxes that read/listen for changes in etcd to get only 1 piece of info: current SKC master
+- in case of change of SKC master vbox redirect SKC calls to new master, and restarts redis slave with pointing to the new master (requires importing entire DB)
+- all this assumes that etcd config is written manually, so the operator makes a decision about switching the master and issues the write command to etcd. It has nothing to do with master health monitoring and switching automatically. For autoswitch vboxes would have to vote in etcd - write their own opinion to etcd and have clear criterion when to switch (majority of vboxes can't connect to current master). The switch would be only one way. Also MySQL is not prepared to switching back to the original master. Find out how difficult it is with MySQL master-slave to switch to and fro (back and forth). Is master-master replication an option (with only one active by convention).
+
+Doubts: if etcd is used to store only 1 piece of info, does it make sense to introduce this complexity? If we switch master manually, it's simpler to do 'ssh vbox_all replace /etc/hosts IP' for master name. 
+etcd only makes sense if vboxes vote for consensus master election.
+
+
+
+BDR (Bi-Directional Replication) in PostgreSQL may be the right solution for HA SK multi master.
+"BDR is not “clustering” as some vendors use the term, in that it doesn't have a distributed lock manager, global transaction co-ordinator, etc. Each member server is separate yet connected, with design choices that allow separation between nodes that would not be possible with global transaction coordination. Each node has a local copy of the data on all the other nodes and queries run locally on individual nodes. Each node is internally consistent at all times; the group of servers as a whole is eventually-consistent."
+Currently for PostgreSQL multi master replication third party Bucardo can be used. 
+
+
+
+There is a small hiccup however in that I use SUMo 
+(http://www.kcsoftwares.com/?sumo) to keep my software versions 
+up-to-date. This works well for the vast majority of my software but not 
+for SecurityKISS due to the fact that the executable 
+SecurityKISSTunnel.exe doesn't report the version number (SUMo uses the 
+executable-embedded Product Name, Company Name (if present) and Product 
+Version in order to do its magic).
+
+sudo apt-get install -fy install git openvpn
+git clone ...
+cd sk2
+./install
+./uninstall
+install (all with sudo):
+- detect i386 vs x86_64
+- /usr/local/bin/securitykiss
+- ~/.securitykiss/: client id, config files, certs, keys
+- DNS resolv.conf, restore in bash trap
+- another solution for DNS on linux is to intercept DNS queries
+- generate keys and csr, send csr to SKC, SKC to return cert
+- scrypt proof of work: https://github.com/dchest/scrypt/blob/master/scrypt.go
+- use scrypt implementation from the golang standard library: http://code.google.com/p/go/source/browse/scrypt/scrypt.go?repo=crypto
+- linux scrypt tool is not suitable, we should use hashcash command
+- ideally we need hashcash tool using scrypt memory hard function
+
+Securitykiss vs private internet access
+"I just asked on PIA support chat. They say to use ports 80, 110 or 443 for TCP, and 53, 1194, 8080 or 9201 for UDP."
+
+skiss app: grow the app instead of design
+
+Idea: acronym driven programming, Tk "news", SK GOMJE, etc
+
+Ping 8.8.8.8 pointer in the new skiss app.
+
+The success of SK was in finding the right market
+
+http://stackoverflow.com/a/688448
+There are many fiddly things to take care of when becoming a well-behaved daemon process:
+prevent core dumps (many daemons run as root, and core dumps can contain sensitive information)
+behave correctly inside a chroot gaol
+set UID, GID, working directory, umask, and other process parameters appropriately for the use case
+relinquish elevated suid, sgid privileges
+close all open file descriptors, with exclusions depending on the use case
+behave correctly if started inside an already-detached context, such as init, inetd, etc.
+set up signal handlers for sensible daemon behaviour, but also with specific handlers determined by the use case
+redirect the standard streams stdin, stdout, stderr since a daemon process no longer has a controlling terminal
+handle a PID file as a cooperative advisory lock, which is a whole can of worms in itself with many contradictory but valid ways to behave
+allow proper cleanup when the process is terminated
+actually become a daemon process without leading to zombies
+
+Problem: libXft.so.2 missing dependency for Tcl 32-bit base-Tk, package require Tk on 64-bit OS
+We MUST use proper CPU arch 32-bit or 64-bit binary version of base-Tk on Linux because base-Tk is dynamically linked against libXft.so.2 libary and for base-Tk-ix86 it must be provided in 32-bit version. 64-bit OSes may not have it.
+Solution: Build separately for i386 and amd64/x86_64
+
+Problem: libXss.so.1 missing dependency for Tcl base-Tk, package require Tk on 32-bit Fedora
+Actions:
+- check X version, 
+- check where is library: 
+--- yum whatprovides libXss.so.1 
+--- apt-file search libXss.so.1
+--- zypper search --provides libXss.so
+--- libXScrnSaver-1.2.0-1.fc12.i686 : X.Org X11 libXss runtime library 
+--- yum install libXScrnSaver  - this fixes the dependency
+--- on Ubuntu it's called libxss1 library
+--- on OpenSUSE it's called libXss1 or libXScrnSaver-devel
+- test other base-Tk versions. 8.5 and Tk-thread also miss dependency
+- test base-Tcl with Tk as library, 
+- provide libXss.so.1 from other systems
+- tool for checking dynamic dependencies
+- Session on Fedora for handling error
+[sk@localhost Pobrane]$ ./application-base-tk-8.6.3.1-linux-glibc2.3-ix86 
+% catch {package require Tk} out err
+1
+% puts $out
+couldn't load file "/tmp/tcl_paGF7H": libXss.so.1: cannot open shared object file: No such file or directory
+% puts $err
+-code 1 -level 0 -errorstack {INNER {load /home/sk/Pobrane/application-base-tk-8.6.3.1-linux-glibc2.3-ix86/lib/libtk8.6.so Tk}} -errorcode NONE -errorinfo {couldn't load file "/tmp/tcl_paGF7H": libXss.so.1: cannot open shared object file: No such file or directory
+    while executing
+"load /home/sk/Pobrane/application-base-tk-8.6.3.1-linux-glibc2.3-ix86/lib/libtk8.6.so Tk"
+    ("package ifneeded Tk 8.6.3" script)
+    invoked from within
+"package require Tk"} -errorline 1
+
+
+
+Tested: Tk - after package require Tk - the window appears only at the end of the script (or after vwait forever) - it means after entering event loop
+
+EDA and state machine. The state machine in the real-world EDA single-threaded event loop environment is not a mesh graph as suggested by articles but it's a star graph. It means that there is a HOME (event accepting) state to which the system always returns. 
+
+Skiss proof of work - should it be interactive or not?
+Create identity (CSR signing for certificate) quite cheaply, but require continuous puzzle solving during service use. How about sporadic users? POW amount proportional to use. If not used delete identity. It means ephemeral identities and basically allowing Sybil attacks to some extent.
+The central server would be loaded with massive puzzle verification. We need to offload the server by delegating POW verification to other clients. How to do it in a trustless way?
+
+- instead of retired dedicated IP offer, use multiple IP addresses to cyclically replace IP of the vbox
+
+
+Support IPv6
+

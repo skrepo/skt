@@ -538,9 +538,7 @@ proc slistDialog {slist ssel} {
     set w .slist_dialog
     catch { destroy $w }
     toplevel $w
-
     puts stderr $slist
-
     set wt $w.tree
 
     ttk::treeview $wt -columns "country city ip" -selectmode browse
@@ -600,7 +598,6 @@ proc slistDialog {slist ssel} {
 #   -onclose {set ::x zap!}     -->    (variations on a theme)
 #
 proc ShowModal {win args} {
-    #TODO save focus in the parent
     set ::Modal.Result {}
     array set options [list -onclose {} -destroy 0 {*}$args]
     wm transient $win .
