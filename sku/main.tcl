@@ -475,9 +475,12 @@ if 0 {
     grid .c.p3 -sticky news
     focus .c.p3.slist
 
-    #bind . <Return> {[focus -displayof .] invoke}
-    #bind . <Return> {puts stderr [winfo class .c.p3.slist]}
-    bind . <Return> InvokeFocusedWithEnter
+    # If the tag is the name of a class of widgets, such as Button, the binding applies to all widgets in that class;
+    bind Button <Return> InvokeFocusedWithEnter
+    bind TButton <Return> InvokeFocusedWithEnter
+    #TODO coordinate with shutdown hook and provide warning/confirmation request
+    bind . <Control-w> main-exit
+    bind . <Control-q> main-exit
 
     hsep .c 15
 
@@ -505,7 +508,11 @@ proc InvokeFocusedWithEnter {} {
     set type [winfo class $focused]
     switch -glob $type {
         *Button {
+            # this matches both Button and TButton
             $focused invoke
+        }
+        Treeview {
+            puts stderr "selected: [$focused selection]"
         }
     }
 }
@@ -524,10 +531,14 @@ proc setDialogMinsize {window} {
 proc ServerListClicked {} {
     set slist [state sku slist]
     set ssel 2
+    #TODO validate ssel is in slist, otherwise select first one
+    #TODO sorting by country
     set newsel [slistDialog $slist $ssel]
     puts stderr "New selected server: $newsel"
 }
 
+
+# Return new sitem id if selection made or empty string if canceled
 proc slistDialog {slist ssel} {
     set w .slist_dialog
     catch { destroy $w }
@@ -559,8 +570,33 @@ proc slistDialog {slist ssel} {
     grid columnconfigure $w 0 -weight 1
     grid rowconfigure $w 0 -weight 1
     grid $wt -sticky news
-    ShowModal $w
-    set newsel [$wt selection]
+
+    set wb $w.buttons
+    frame $wb
+    # width may be in pixels or in chars depending on presence of the image
+    button $wb.cancel -text Cancel -width 10 -command [list set ::Modal.Result cancel]
+    button $wb.ok -text OK -width 10 -command [list set ::Modal.Result ok]
+    grid $wb -sticky news
+    grid $wb.cancel -row 5 -column 0 -padx {30 0} -pady 5 -sticky w
+    grid $wb.ok -row 5 -column 1 -padx {0 30} -pady 5 -sticky e
+    grid columnconfigure $wb 0 -weight 1
+    grid columnconfigure $wb 1 -weight 1
+
+    bind Treeview <Return> [list set ::Modal.Result ok]
+    bind Treeview <Double-Button-1> [list set ::Modal.Result ok]
+    bind $w <Escape> [list set ::Modal.Result cancel]
+    bind $w <Control-w> [list set ::Modal.Result cancel]
+    bind $w <Control-q> [list set ::Modal.Result cancel]
+
+
+    focus $wt
+    $wt focus $ssel
+    set modal [ShowModal $w]
+    puts stderr "modal: $modal"
+    set newsel ""
+    if {$modal eq "ok"} {
+        set newsel [$wt selection]
+    }
     destroy $w
     return $newsel
 }
