@@ -20,6 +20,17 @@ puts $d
 puts "pretty printed dict:"
 puts [dict-pretty $d]
 
+
+dict set d add1 dodane
+dict set d PORT add2 ddddoodda
+dict set d PORT FIRST add3 duuuddd
+dict unset d HOST insection
+#dict unset d HOST third
+
+set f [ini::save my.ini $d]
+
+puts "FILE:"
+puts "$f"
 exit
 
 
