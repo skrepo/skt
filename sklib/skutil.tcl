@@ -125,7 +125,8 @@ proc dbg {args} {
 proc create-signature {privkey filepath} {
     set cmd [list openssl dgst -sha1 -sign $privkey $filepath > $filepath.sig]
     log create-signature: $cmd
-    if {[catch {exec {*}$cmd} out err]} {
+    # -ignorestderr - Stops the exec command from treating the output of messages to the pipeline's standard error channel as an error case.
+    if {[catch {exec -ignorestderr {*}$cmd} out err]} {
         # possible errors: No such file or directory, wrong passphrase
         log $cmd returned: $out
         log $err
@@ -139,10 +140,12 @@ proc create-signature {privkey filepath} {
 # returns 1 if verification succeeded, 0 otherwise
 #TODO provide Windows version
 proc verify-signature {pubkey filepath} {
+    #TODO adjust paths like the one below
     # public key must be in /etc/skd/keys/skt_public.pem
     set cmd [list openssl dgst -sha1 -verify $pubkey -signature $filepath.sig $filepath]
     log verify-signature: $cmd
-    if {[catch {exec {*}$cmd} out err]} {
+    # -ignorestderr - Stops the exec command from treating the output of messages to the pipeline's standard error channel as an error case.
+    if {[catch {exec -ignorestderr {*}$cmd} out err]} {
         # openssl returns error exit code both on Verification Failure and on No such file or directory
         log $cmd returned: $out
         log $err
@@ -161,7 +164,8 @@ proc generate-rsa {filepath} {
     if {![mk-head-dir $filepath]} {
         return 0
     }
-    if {[catch {exec {*}$cmd} out err]} {
+    # -ignorestderr - Stops the exec command from treating the output of messages to the pipeline's standard error channel as an error case.
+    if {[catch {exec -ignorestderr {*}$cmd} out err]} {
         log $cmd returned: $out
         log $err
         return 0
@@ -179,7 +183,8 @@ proc generate-csr {privkey csr cn} {
     if {![mk-head-dir $csr]} {
         return 0
     }
-    if {[catch {exec {*}$cmd} out err]} {
+    # -ignorestderr - Stops the exec command from treating the output of messages to the pipeline's standard error channel as an error case.
+    if {[catch {exec -ignorestderr {*}$cmd} out err]} {
         log $cmd returned: $out
         log $err
         return 0
@@ -195,7 +200,6 @@ proc cn-from-cert {crtpath} {
     log ca-from-cert $crtpath
     set cmd [list openssl x509 -noout -subject -in $crtpath]
     if {[catch {exec {*}$cmd} subject err]} {
-        log $cmd returned: $out
         log $err
         return ""
     }

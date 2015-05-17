@@ -21,9 +21,9 @@ package require https
 package require anigif
 package require json
 
-set ::LOGFILE ~/.sku/sku.log
 
-proc fatal {msg err} {
+proc fatal {msg {err ""}} {
+    log $msg
     log $err
     in-ui error $msg
     main-exit
@@ -85,9 +85,9 @@ proc redirect-stdout {} {
 # It may set global variables
 proc main {} {
     set user [unix relinquish-root]
+    set ::LOGFILE [file normalize ~/.sku/sku.log]
+    set ::KEYSDIR [file normalize ~/.sku/securitykiss/ovpnconf/default]
     redirect-stdout
-    dbg user
-    
 
     state sku {
         # SKD connection socket 
@@ -100,6 +100,8 @@ proc main {} {
         vigos ""
         # temporary
         slist ""
+        # new client id
+        cn ""
     }
 
 
@@ -141,9 +143,10 @@ proc main {} {
     https init -cadir $cadir
  
 
-    if {$params(id)} {
-        main-id
-        main-exit
+    if {$params(cli) || ![unix is-x-running]} {
+        state sku {ui cli}
+    } else {
+        state sku {ui gui}
     }
 
     if {$params(generate-keys)} {
@@ -155,11 +158,22 @@ proc main {} {
         main-exit
     }
 
-    if {$params(cli) || ![unix is-x-running]} {
-        state sku {ui cli}
-    } else {
-        state sku {ui gui}
+    set cn [cn-from-cert [file join $::KEYSDIR client.crt]]
+    state sku {cn $cn}
+    if {$params(id)} {
+        if {$cn eq ""} {
+            error-cli "Could not retrieve client id. Try to reinstall the program." 
+        } else {
+            error-cli $cn
+        }
+        main-exit
     }
+
+    if {$cn eq ""} {
+        fatal "Could not retrieve client id. Try to reinstall the program." 
+    }
+
+
 
     if {[catch {create-pidfile ~/.sku/sku.pid} out err] == 1} {
         fatal "Could not create ~/.sku/sku.pid file" $err
@@ -168,15 +182,6 @@ proc main {} {
     after idle main-start
 }
 
-proc main-id {} {
-    if {[catch {cn-from-cert [file normalize ~/.sku/keys/client.crt]} cn err] == 1} {
-        puts stderr "Could not retrieve client id"
-        log $err
-    } else {
-        #TODO after logging redesign it should go to stdout
-        puts stderr $cn
-    }
-}
 
 proc main-exit {} {
     if {[catch {delete-pidfile ~/.sku/sku.pid} out err] == 1} {
@@ -229,7 +234,7 @@ proc error-gui {msg} {
         # hide toplevel window. Use wm deiconify to restore later
         catch {wm withdraw .}
         log $msg
-        tk_messageBox -title "SKU error" -type ok -icon error -message ERROR -detail "$msg\n\nPlease check ~/.sku/sku.log for details"
+        tk_messageBox -title "SKU error" -type ok -icon error -message ERROR -detail "$msg\n\nPlease check $::LOGFILE for details"
     } else {
         error-cli $msg
     }
@@ -274,7 +279,7 @@ proc check-tk-deps {} {
 # Print to stderr for user-visible messages. Use log for detailed info written to log file
 proc main-generate-keys {} {
     log Generating RSA keys
-    set privkey [file normalize ~/.sku/keys/client_private.pem]
+    set privkey [file join $::KEYSDIR client.key]
     if {[file exists $privkey]} {
         log RSA key $privkey already exists
     } else {
@@ -282,7 +287,7 @@ proc main-generate-keys {} {
             return 0
         }
     }
-    set csr [file normalize ~/.sku/keys/client.csr]
+    set csr [file join $::KEYSDIR client.csr]
     if {[file exists $csr]} {
         log CSR $csr already exists
     } else {
@@ -310,7 +315,7 @@ proc main-generate-keys {} {
             puts stderr OK
             puts stderr "Received the signed certificate"
             log crtdata: $crtdata
-            spit [file normalize ~/.sku/keys/client.crt] $crtdata
+            spit [file join $::KEYSDIR client.crt] $crtdata
             close $fd
             break
         }
@@ -481,6 +486,7 @@ if 0 {
     #TODO coordinate with shutdown hook and provide warning/confirmation request
     bind . <Control-w> main-exit
     bind . <Control-q> main-exit
+    wm title . "SecurityKISS Tunnel"
 
     hsep .c 15
 
@@ -587,6 +593,7 @@ proc slistDialog {slist ssel} {
     bind $w <Escape> [list set ::Modal.Result cancel]
     bind $w <Control-w> [list set ::Modal.Result cancel]
     bind $w <Control-q> [list set ::Modal.Result cancel]
+    wm title $w "Select server"
 
 
     focus $wt
@@ -712,8 +719,8 @@ proc ReceiveWelcome {{tok ""}} {
         # We are here only if welcome request did not succeed yet
         # Try again if max retries not exceeded
         if {$attempts < [llength [state sku vigos]]} {
+            set cn [state sku cn]
             set vigo [get-next-vigo $vigo_lastok $attempts]
-            set cn [cn-from-cert [file normalize ~/.sku/keys/client.crt]]
             # although scheduled for non-blocking async it may still throw error here when network is unreachable
             if {[catch {https curl https://$vigo:10443/welcome?cn=$cn -timeout 8000 -expected-hostname www.securitykiss.com -command ReceiveWelcome} out err] == 1} {
                 log $err
