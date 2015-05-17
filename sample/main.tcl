@@ -11,6 +11,19 @@ if {![catch {package require starkit}]} {
 #wget https://raw.githubusercontent.com/skrepo/activestate/master/teacup/tls/package-tls-0.0.0.2010.08.18.09.08.25-source.zip tls-source.zip
 #wget https://sk/favicon.ico favicon.ico
 
+
+package require ini
+
+set d [ini::load my.ini]
+
+puts $d
+puts "pretty printed dict:"
+puts [dict-pretty $d]
+
+exit
+
+
+
 package require skutil
 
 puts "topdir: $starkit::topdir"

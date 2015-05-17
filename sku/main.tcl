@@ -86,7 +86,7 @@ proc redirect-stdout {} {
 proc main {} {
     set user [unix relinquish-root]
     set ::LOGFILE [file normalize ~/.sku/sku.log]
-    set ::KEYSDIR [file normalize ~/.sku/securitykiss/ovpnconf/default]
+    set ::KEYSDIR [file normalize ~/.sku/provider/securitykiss/ovpnconf/default]
     redirect-stdout
 
     state sku {
@@ -102,6 +102,8 @@ proc main {} {
         slist ""
         # new client id
         cn ""
+        # providers
+        providers "securitykiss cyberghost"
     }
 
 
@@ -534,17 +536,26 @@ proc setDialogMinsize {window} {
    wm minsize $window $winWidth $winHeight
 }
 
+
+
+proc get-selected-sitem {provider} {
+    
+}
+
+
 proc ServerListClicked {} {
     set slist [state sku slist]
     set ssel 2
     #TODO validate ssel is in slist, otherwise select first one
     #TODO sorting by country
     set newsel [slistDialog $slist $ssel]
+    #TODO in the meantime slist could have changed (by welcome msg). Build entire configuration info here from the old slist
     puts stderr "New selected server: $newsel"
 }
 
 
 # Return new sitem id if selection made or empty string if canceled
+# This is really selecting entire configuration than the server IP
 proc slistDialog {slist ssel} {
     set w .slist_dialog
     catch { destroy $w }
