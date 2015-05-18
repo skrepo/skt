@@ -12,21 +12,21 @@ if {![catch {package require starkit}]} {
 #wget https://sk/favicon.ico favicon.ico
 
 
-package require ini
+package require inicfg
 
-set d [ini::load my.ini]
+set d [inicfg::load my.ini]
 
 #puts $d
 #puts "pretty printed dict:"
-#puts [ini dict-pretty $d]
+#puts [inicfg dict-pretty $d]
 
 dict set d add1 dodane
 dict set d PORT add2 ddddoodda
 dict set d PORT FIRST add3 duuuddd
 dict unset d HOST insection
 
-set r [ini save other.ini $d]
-set r [ini::save my.ini $d]
+set r [inicfg save other.ini $d]
+set r [inicfg save my.ini $d]
 
 puts "REPORT:"
 puts "$r"

@@ -1,26 +1,26 @@
-package provide ini 0.0.0
+package provide inicfg 0.0.0
 
-# ini config parser. Supports hierarchical sections
-# ini load $path - return dict
-# ini save $path $config - save $config dict
+# *.ini config parser. Supports hierarchical sections
+# inicfg load $path - return dict
+# inicfg save $path $config - save $config dict
 
 
 # for simplicity assume that disk I/O is immediate so provide only blocking command version
 # -nocache option for load
 
-namespace eval ::ini {
+namespace eval ::inicfg {
     namespace export load save dict-pretty
     namespace ensemble create
 }
 
-proc ::ini::slurp {path} {
+proc ::inicfg::slurp {path} {
     set fd [open $path r]
     set data [read $fd]
     close $fd
     return $data
 }
 
-proc ::ini::spit {path content} {
+proc ::inicfg::spit {path content} {
     set fd [open $path w]
     puts -nonewline $fd $content
     close $fd
@@ -30,7 +30,7 @@ proc ::ini::spit {path content} {
 # ini file may have bracketed sections
 # section names may be multi-level with parts separated by dots
 # what creates nested dictionary
-proc ::ini::load {path} {
+proc ::inicfg::load {path} {
     set data [slurp $path]
     set lines [split $data \n]
     set lines [lmap line $lines {string trim $line}]
@@ -59,7 +59,7 @@ proc ::ini::load {path} {
 
 # Save config dict to file on path
 # If file exists, all comments and blank lines are preserved
-proc ::ini::save {path config} {
+proc ::inicfg::save {path config} {
     if {[file exists $path]} {
         set data [slurp $path]
     } else {
@@ -120,7 +120,7 @@ proc ::ini::save {path config} {
 }
 
 # traverse the unprocessed dict d and dump non-empty leaves to resVar
-proc ::ini::dict-dump-nonempty {d section resVar reportVar} {
+proc ::inicfg::dict-dump-nonempty {d section resVar reportVar} {
     upvar $resVar res
     upvar $reportVar report
     set leaves [dict-leaves $d]
@@ -145,7 +145,7 @@ proc ::ini::dict-dump-nonempty {d section resVar reportVar} {
 }
 
 
-proc ::ini::isdict {v} { 
+proc ::inicfg::isdict {v} { 
    string match "value is a dict *" [::tcl::unsupported::representation $v] 
 } 
 
@@ -156,7 +156,7 @@ proc ::ini::isdict {v} {
 # The output is a valid dict and can be read/used 
 # just like the original dict 
 ############################# 
-proc ::ini::dict-pretty {d {indent ""} {indentstring "    "}} {
+proc ::inicfg::dict-pretty {d {indent ""} {indentstring "    "}} {
    # unpack this dimension 
    dict for {key value} $d { 
       if {[isdict $value]} { 
@@ -171,7 +171,7 @@ proc ::ini::dict-pretty {d {indent ""} {indentstring "    "}} {
 }
 
 # Get dict consisting of leaves only key-value pairs in the d's subtree specified by args (as path in nested dict)
-proc ::ini::dict-leaves {d args} {
+proc ::inicfg::dict-leaves {d args} {
     set res [dict create]
     dict for {key value} [dict get $d {*}$args] {
         if {![isdict $value]} {
@@ -181,7 +181,7 @@ proc ::ini::dict-leaves {d args} {
     return $res
 }
 
-proc ::ini::dict-nonleaves {d args} {
+proc ::inicfg::dict-nonleaves {d args} {
     set res [dict create]
     dict for {key value} [dict get $d {*}$args] {
         if {[isdict $value]} {
@@ -192,13 +192,13 @@ proc ::ini::dict-nonleaves {d args} {
 }
 
 # List comparator - order independent (set like but with duplicates)
-proc ::ini::leqi {a b} {expr {[lsort $a] eq [lsort $b]}}
+proc ::inicfg::leqi {a b} {expr {[lsort $a] eq [lsort $b]}}
 
 # List comparator - literally. lrange makes a list canonical
-proc ::ini::leq {a b} {expr {[lrange $a 0 end] eq [lrange $b 0 end]}}
+proc ::inicfg::leq {a b} {expr {[lrange $a 0 end] eq [lrange $b 0 end]}}
 
 # List difference - duplicates matter
-proc ::ini::ldiff {a b} {
+proc ::inicfg::ldiff {a b} {
     set res {}
     foreach ael $a {
         set idx [lsearch -exact $b $ael]
