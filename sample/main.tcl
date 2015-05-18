@@ -16,21 +16,20 @@ package require ini
 
 set d [ini::load my.ini]
 
-puts $d
-puts "pretty printed dict:"
-puts [dict-pretty $d]
-
+#puts $d
+#puts "pretty printed dict:"
+#puts [ini dict-pretty $d]
 
 dict set d add1 dodane
 dict set d PORT add2 ddddoodda
 dict set d PORT FIRST add3 duuuddd
 dict unset d HOST insection
-#dict unset d HOST third
 
-set f [ini::save my.ini $d]
+set r [ini save other.ini $d]
+set r [ini::save my.ini $d]
 
-puts "FILE:"
-puts "$f"
+puts "REPORT:"
+puts "$r"
 exit
 
 

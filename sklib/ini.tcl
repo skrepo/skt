@@ -9,7 +9,7 @@ package provide ini 0.0.0
 # -nocache option for load
 
 namespace eval ::ini {
-    namespace export load save
+    namespace export load save dict-pretty
     namespace ensemble create
 }
 
@@ -26,6 +26,10 @@ proc ::ini::spit {path content} {
     close $fd
 }
 
+# Load ini file and return as dictionary
+# ini file may have bracketed sections
+# section names may be multi-level with parts separated by dots
+# what creates nested dictionary
 proc ::ini::load {path} {
     set data [slurp $path]
     set lines [split $data \n]
@@ -53,8 +57,14 @@ proc ::ini::load {path} {
     return $res
 }
 
+# Save config dict to file on path
+# If file exists, all comments and blank lines are preserved
 proc ::ini::save {path config} {
-    set data [slurp $path]
+    if {[file exists $path]} {
+        set data [slurp $path]
+    } else {
+        set data ""
+    }
     set lines [lmap line [split $data "\n"] {string trim $line}]
     set res ""
     set section ""
@@ -67,7 +77,6 @@ proc ::ini::save {path config} {
             {^$} {append res \n}
             {^[#;].*} {append res "$line\n"}
             {^\[(.*)\]$} {
-                #TODO check additional props
                 set leaves [dict-leaves $config {*}[split $section .]]
                 set keys [dict keys $leaves]
                 set diff [ldiff $keys $section_keys]
@@ -104,20 +113,16 @@ proc ::ini::save {path config} {
             }
         }
     }
-    
+    # append the unprocessed (added to config)
     dict-dump-nonempty $left "" res report
-
-
-    puts "\n************\nREPORT\n[join $report \n]\n***************"
-    #spit $path $data
-    return $res
-
+    spit $path $res
+    return [join $report \n]
 }
 
+# traverse the unprocessed dict d and dump non-empty leaves to resVar
 proc ::ini::dict-dump-nonempty {d section resVar reportVar} {
     upvar $resVar res
     upvar $reportVar report
-    # traverse the unprocessed dict and dump non-empty
     set leaves [dict-leaves $d]
     if {$leaves ne ""} {
         if {$section ne ""} {
@@ -139,23 +144,19 @@ proc ::ini::dict-dump-nonempty {d section resVar reportVar} {
     }
 }
 
+
+proc ::ini::isdict {v} { 
+   string match "value is a dict *" [::tcl::unsupported::representation $v] 
+} 
+
 ######################### 
-## dict format dict 
-# 
 # convert dictionary value dict into string 
 # hereby insert newlines and spaces to make 
 # a nicely formatted ascii output 
 # The output is a valid dict and can be read/used 
 # just like the original dict 
 ############################# 
-
-proc isdict {v} { 
-   string match "value is a dict *" [::tcl::unsupported::representation $v] 
-} 
-
-## helper function - do the real work recursively 
-# use accumulator for indentation 
-proc dict-pretty {d {indent ""} {indentstring "    "}} {
+proc ::ini::dict-pretty {d {indent ""} {indentstring "    "}} {
    # unpack this dimension 
    dict for {key value} $d { 
       if {[isdict $value]} { 
@@ -170,7 +171,7 @@ proc dict-pretty {d {indent ""} {indentstring "    "}} {
 }
 
 # Get dict consisting of leaves only key-value pairs in the d's subtree specified by args (as path in nested dict)
-proc dict-leaves {d args} {
+proc ::ini::dict-leaves {d args} {
     set res [dict create]
     dict for {key value} [dict get $d {*}$args] {
         if {![isdict $value]} {
@@ -180,7 +181,7 @@ proc dict-leaves {d args} {
     return $res
 }
 
-proc dict-nonleaves {d args} {
+proc ::ini::dict-nonleaves {d args} {
     set res [dict create]
     dict for {key value} [dict get $d {*}$args] {
         if {[isdict $value]} {
@@ -191,13 +192,13 @@ proc dict-nonleaves {d args} {
 }
 
 # List comparator - order independent (set like but with duplicates)
-proc leqi {a b} {expr {[lsort $a] eq [lsort $b]}}
+proc ::ini::leqi {a b} {expr {[lsort $a] eq [lsort $b]}}
 
 # List comparator - literally. lrange makes a list canonical
-proc leq {a b} {expr {[lrange $a 0 end] eq [lrange $b 0 end]}}
+proc ::ini::leq {a b} {expr {[lrange $a 0 end] eq [lrange $b 0 end]}}
 
 # List difference - duplicates matter
-proc ldiff {a b} {
+proc ::ini::ldiff {a b} {
     set res {}
     foreach ael $a {
         set idx [lsearch -exact $b $ael]
@@ -209,3 +210,5 @@ proc ldiff {a b} {
     }
     return $res
 }
+
+
