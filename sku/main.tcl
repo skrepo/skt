@@ -140,7 +140,6 @@ proc main {} {
     }
 
 
-    read-config
 
 
     # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one
@@ -159,6 +158,42 @@ proc main {} {
     }
     log Params:
     parray params
+
+
+
+    if {$params(cli) || ![unix is-x-running]} {
+        state sku {ui cli}
+    } else {
+        state sku {ui gui}
+    }
+
+    if {$params(generate-keys)} {
+        main-generate-keys
+        main-exit
+    }
+    if {$params(version)} {
+        main-version
+        main-exit
+    }
+
+    if {$params(id)} {
+        set cn [cn-from-cert [file join $::KEYSDIR client.crt]]
+        if {$cn eq ""} {
+            error-cli "Could not retrieve client id. Try to reinstall the program." 
+        } else {
+            error-cli $cn
+        }
+        main-exit
+    }
+
+
+    set piderr [create-pidfile ~/.sku/sku.pid]
+    if {$piderr ne ""} {
+        fatal $piderr
+    } 
+
+
+    read-config
 
     # embedded bootstrap vigo list
     set lst [slurp [file join $starkit::topdir bootstrap_ips.lst]]
@@ -181,52 +216,22 @@ proc main {} {
     https init -cadir $cadir
  
 
-    if {$params(cli) || ![unix is-x-running]} {
-        state sku {ui cli}
-    } else {
-        state sku {ui gui}
-    }
-
-    if {$params(generate-keys)} {
-        main-generate-keys
-        main-exit
-    }
-    if {$params(version)} {
-        main-version
-        main-exit
-    }
 
     set cn [cn-from-cert [file join $::KEYSDIR client.crt]]
     state sku {cn $cn}
-    if {$params(id)} {
-        if {$cn eq ""} {
-            error-cli "Could not retrieve client id. Try to reinstall the program." 
-        } else {
-            error-cli $cn
-        }
-        main-exit
-    }
-
     if {$cn eq ""} {
         fatal "Could not retrieve client id. Try to reinstall the program." 
     }
 
 
-
-    if {[catch {create-pidfile ~/.sku/sku.pid} out err] == 1} {
-        fatal "Could not create ~/.sku/sku.pid file" $err
-    }
     skd-connect 7777
     after idle main-start
 }
 
 
 proc main-exit {} {
-    if {[catch {delete-pidfile ~/.sku/sku.pid} out err] == 1} {
-        # don't use fatal here to avoid endless loop
-        puts stderr "Could not delete ~/.sku/sku.pid file"
-        puts stderr $err
-    }
+    # ignore if problems occurred in deleting pidfile
+    delete-pidfile ~/.sku/sku.pid
     set ::until_exit 1
     #TODO Disconnect and clean up
     catch {close [state sku skd_sock]}

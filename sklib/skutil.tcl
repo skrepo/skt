@@ -89,20 +89,74 @@ proc is-tk-loaded {} {
     return [regexp {^[0-9.]+$} $out]
 }
 
+proc pidof {name} {
+    if {[catch {exec pidof -s $name} out err]} {
+        return ""
+    } else {
+        return $out
+    }
+}
 
+proc ofpid {pid} {
+    if {[catch {set name [exec ps --no-headers --pid $pid -o comm]} out err]} {
+        return ""
+    } else {
+        return $out
+    }
+}
+
+
+# return error message on error, empty string otherwise
 proc create-pidfile {path} {
-    # propagate error if it occurs
     set path [file normalize $path]
-    mk-head-dir $path
-    log create-pidfile $path
-    set fd [open $path w]
-    puts $fd [pid]
-    close $fd
+    if {[file exists $path]} {
+        if {[file isfile $path]} {
+            # Some heuristics to give meaningful error message
+            set pid [slurp $path]
+            if {$pid ne ""} {
+                set process [ofpid $pid]
+                if {$process eq ""} {
+                    # proceed
+                    log "No process for PID $pid so the creator probably abruptly ended. Proceed to create-pidfile"
+                } else {
+                    set root [file root [file tail $path]]
+                    if {[string match *$root* $process]} {
+                        return "Program is already running with PID $pid"
+                    } else {
+                        return "$path points to existing process $process. Is program already running?"
+                    }
+                }
+            } else {
+                # proceed
+                log "$path exists but is empty. Previous program run did not close correctly. Proceed to create-pidfile"
+            }
+        } else {
+            return "$path exists but is not a file. Please delete it and start again."
+        }
+
+    }
+    if {[catch {
+        mk-head-dir $path
+        set fd [open $path w]
+        puts $fd [pid]
+        close $fd
+    } out err]} {
+        log $out
+        log $err
+        return "Could not create $path. Check logs for details."
+    }
+    log created pidfile $path
+    return ""
 }
 
 proc delete-pidfile {path} {
-    # propagate error if it occurs
-    file delete $path
+    if {[catch {file delete $path} out err]} {
+        log $out
+        log $err
+        return "There was a problem with deleting $path. Check logs for details."
+    } else {
+        return ""
+    }
 }
 
 # log with timestamp to stdout
