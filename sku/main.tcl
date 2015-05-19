@@ -20,6 +20,7 @@ package require skutil
 package require https
 package require anigif
 package require json
+package require inicfg
 
 
 proc fatal {msg {err ""}} {
@@ -80,11 +81,43 @@ proc redirect-stdout {} {
 }
 
 
+# When adding/removing provider, just create/delete folder in ~/.sku/provider
+# and call this proc - it will take care of updating Config and PConfig
+proc update-provider-list {} {
+    # providers by config
+    if {[dict exists $::Config providers]} {
+        set cproviders [dict get $::Config providers]
+    } else {
+        set cproviders {}
+    }
+    # providers by filesystem
+    set fproviders [lmap d [glob -directory [file normalize ~/.sku/provider] -nocomplain -type d *] {file tail $d}]
+
+    # all this shuffling below in order to preserve providers order as per Config
+    set providers [lunique [concat [lintersection $cproviders $fproviders] $fproviders]]
+    
+    dict set ::Config providers $providers
+}
+
+
+
+proc read-config {} {
+    touch $::INIFILE
+    set ::Config [inicfg load $::INIFILE]
+    # provider list from Config but compare against dir
+    # update the provider list in Config
+    update-provider-list
+
+    puts stderr "READ CONFIG:"
+    puts stderr "[inicfg dict-pretty $::Config]"
+
+}
 
 # Parse command line options and launch proper task
 # It may set global variables
 proc main {} {
     set user [unix relinquish-root]
+    set ::INIFILE [file normalize ~/.sku/sku.ini]
     set ::LOGFILE [file normalize ~/.sku/sku.log]
     set ::KEYSDIR [file normalize ~/.sku/provider/securitykiss/ovpnconf/default]
     redirect-stdout
@@ -105,6 +138,9 @@ proc main {} {
         # providers
         providers "securitykiss cyberghost"
     }
+
+
+    read-config
 
 
     # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one

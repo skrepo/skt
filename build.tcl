@@ -75,10 +75,6 @@ proc build-no-pkg {} {
 
 prepare-lib sklib 0.0.0
 
-#build linux x86_64 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 Tclx-8.4 cmdline-1.5 tls-1.6.4}
-#ex ./build/sku/linux-x86_64/sku.bin
-#exit
-
 #build-skd-sku
 #build-no-pkg
 

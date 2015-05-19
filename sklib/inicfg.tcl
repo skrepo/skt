@@ -191,12 +191,6 @@ proc ::inicfg::dict-nonleaves {d args} {
     return $res
 }
 
-# List comparator - order independent (set like but with duplicates)
-proc ::inicfg::leqi {a b} {expr {[lsort $a] eq [lsort $b]}}
-
-# List comparator - literally. lrange makes a list canonical
-proc ::inicfg::leq {a b} {expr {[lrange $a 0 end] eq [lrange $b 0 end]}}
-
 # List difference - duplicates matter
 proc ::inicfg::ldiff {a b} {
     set res {}

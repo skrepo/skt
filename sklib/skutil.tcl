@@ -323,3 +323,58 @@ proc copy-merge {from to {ignore ""}} {
     }
 }
 
+# List comparator - order independent (set like but with duplicates)
+proc leqi {a b} {expr {[lsort $a] eq [lsort $b]}}
+
+# List comparator - literally. lrange makes a list canonical
+proc leq {a b} {expr {[lrange $a 0 end] eq [lrange $b 0 end]}}
+
+# List difference - duplicates matter and are preserved
+proc ldiff {a b} {
+    set res {}
+    foreach ael $a {
+        set idx [lsearch -exact $b $ael]
+        if {$idx < 0} {
+            lappend res $ael
+        } else {
+            set b [lreplace $b $idx $idx]
+        }
+    }
+    return $res
+}
+
+# Return list without duplicates while preserving order
+proc lunique {a} {
+    set res {}
+    foreach ael $a {
+        set idx [lsearch -exact $res $ael]
+        if {$idx < 0} {
+            lappend res $ael
+        }
+    }
+    return $res
+}
+
+
+# Return list intersection while preserving order of a
+# Duplicates matter and are preserved
+proc lintersection {a b} {
+    set res {}
+    foreach ael $a {
+        set idx [lsearch -exact $b $ael]
+        if {$idx >= 0} {
+            lappend res $ael
+            set b [lreplace $b $idx $idx]
+        }
+    }
+}
+
+proc touch {file} {
+    if {[file exists $file]} {
+        file mtime $file [clock seconds]
+    } else {
+        set fh [open $file w]
+        catch {close $fh}
+    }
+}
+
