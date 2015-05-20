@@ -432,3 +432,19 @@ proc touch {file} {
     }
 }
 
+
+# dict-pop dictValue k1 [k2 k3 ...] defaultValue
+proc dict-pop {d args} {
+    if {[llength $args] < 2} {
+        error "Missing arguments to dict-pop. Actual: dict-pop dict $args. Expected: dict-pop dict k1 \[k2 k3 ...\] defaultValue"
+    }
+    set default [lindex $args end]
+    set keys [lrange $args 0 end-1]
+    if {[dict exists $d {*}$keys]} {
+        return [dict get $d {*}$keys]
+    } else {
+        return $default
+    }
+}
+        
+

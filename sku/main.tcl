@@ -238,7 +238,7 @@ proc main {} {
 
 proc main-exit {} {
     if {[info exists ::Config]} {
-        #TODO updating ::Config should be done on resize/move event - here it is the risk of overwriting values with rubbish
+        #TODO updating ::Config should be done on resize/move event - doing it here introduces the risk of overwriting values with rubbish
         dict set ::Config layout [dict create x [winfo x .] y [winfo y .] width [winfo width .] height [winfo height .]]
         if {[catch {log Config save report: \n[inicfg save $::INIFILE $::Config]} out err]} {
             log $out
@@ -554,11 +554,10 @@ if 0 {
     # this will allocate spare space to the first row in container .c
     grid rowconfigure .c 0 -weight 1
     #instead of [wm minsize . 200 200]
-    setDialogMinsize .
+    setDialogSize .
     # sizegrip - bottom-right corner for resize
     grid [ttk::sizegrip .grip] -sticky se
     
-    #source [file join $::starkit::topdir dialog.tcl]    
 
 }
     set ::conf [::ovconf::parse config.ovpn]
@@ -583,14 +582,19 @@ proc InvokeFocusedWithEnter {} {
 }
 
 
-proc setDialogMinsize {window} {
-   # this update will ensure that winfo will return the correct sizes
-   update
-   # get the current width and height
-   set winWidth [winfo width $window]
-   set winHeight [expr {[winfo height $window] + 10}]
-   # set it as the minimum size
-   wm minsize $window $winWidth $winHeight
+proc setDialogSize {window} {
+    # this update will ensure that winfo will return the correct sizes
+    update
+    # get the current width and height as set by grid package manager
+    set w [winfo width $window]
+    set h [expr {[winfo height $window] + 10}]
+    # set it as the minimum size
+    wm minsize $window $w $h
+    set cw [dict-pop $::Config layout width $w]
+    set ch [dict-pop $::Config layout height $h]
+    set cx [dict-pop $::Config layout x 300]
+    set cy [dict-pop $::Config layout y 300]
+    wm geometry $window ${cw}x${ch}+${cx}+${cy}
 }
 
 
