@@ -35,6 +35,7 @@ proc ::inicfg::load {path} {
     set lines [split $data \n]
     set lines [lmap line $lines {string trim $line}]
     set res [dict create]
+    set sections {}
     # start with default section
     set section ""
     foreach line $lines {
@@ -42,7 +43,11 @@ proc ::inicfg::load {path} {
             {^$} {}
             {^[#;].*} {}
             {^\[(.*)\]$} {
+                if {[lindex $v 1] in $sections} {
+                    error "Error parsing $path. Multiple sections $line"
+                }
                 set section [lindex $v 1]
+                lappend sections $section
             }
             {^([^=]*)=(.*)$} {
                 set name [lindex $v 1]
@@ -50,7 +55,7 @@ proc ::inicfg::load {path} {
                 dict set res {*}[split $section .] $name $value
             }
             default {
-                error "Unexpected '$line'"
+                error "Error parsing $path. Unexpected '$line'"
             }
         }
     }
@@ -59,6 +64,7 @@ proc ::inicfg::load {path} {
 
 # Save config dict to file on path
 # If file exists, all comments and blank lines are preserved
+# Return saving report as plain text
 proc ::inicfg::save {path config} {
     if {[file exists $path]} {
         set data [slurp $path]
@@ -66,30 +72,19 @@ proc ::inicfg::save {path config} {
         set data ""
     }
     set lines [lmap line [split $data "\n"] {string trim $line}]
-    set res ""
+    set res {}
     set section ""
-    set section_keys ""
     set report ""
     # this is actually dict copy - for storing unprocessed props
     set left [dict replace $config]
     foreach line $lines {
         switch -regexp -matchvar v $line {
-            {^$} {append res \n}
-            {^[#;].*} {append res "$line\n"}
+            {^$} {lappend res $line}
+            {^[#;].*} {lappend res $line}
             {^\[(.*)\]$} {
-                set leaves [dict-leaves $config {*}[split $section .]]
-                set keys [dict keys $leaves]
-                set diff [ldiff $keys $section_keys]
-                foreach k $diff {
-                    set value [dict get $leaves $k]
-                    append res "$k=$value\n\n"
-                    lappend report "Added property $k with value $value in section \[$section\]"
-                    # mark as processed by removing from the left dict
-                    dict unset left {*}[split $section .] $k
-                }
+                end-of-section $section left res report
                 set section [lindex $v 1]
-                append res "$line\n"
-                set section_keys ""
+                lappend res $line
             }
             {^([^=]*)=(.*)$} {
                 set name [lindex $v 1]
@@ -99,12 +94,11 @@ proc ::inicfg::save {path config} {
                     if {$value ne $cvalue} {
                         lappend report "Changed property $name in section \[$section\] to $cvalue. Previous value: $value"
                     }
-                    append res "$name=$cvalue\n"
+                    lappend res "$name=$cvalue"
                 } else {
                     lappend report "Removed property $name in section \[$section\]. Previous value: $value"
-                    append res \n
+                    lappend res ""
                 }
-                lappend section_keys $name
                 # mark as processed by removing from the left dict
                 dict unset left {*}[split $section .] $name
             }
@@ -113,11 +107,31 @@ proc ::inicfg::save {path config} {
             }
         }
     }
+
+    end-of-section $section left res report
+
     # append the unprocessed (added to config)
     dict-dump-nonempty $left "" res report
-    spit $path $res
+    spit $path [join $res \n]
     return [join $report \n]
 }
+
+
+proc ::inicfg::end-of-section {section leftVar resVar reportVar} {
+    upvar $leftVar left
+    upvar $resVar res
+    upvar $reportVar report
+    set leaves [dict-leaves $left {*}[split $section .]]
+    set keys [dict keys $leaves]
+    foreach k $keys {
+        set value [dict get $leaves $k]
+        lappend res "$k=$value"
+        lappend report "Added property $k with value $value in section \[$section\]"
+        # mark as processed by removing from the left dict
+        dict unset left {*}[split $section .] $k
+    }
+}
+
 
 # traverse the unprocessed dict d and dump non-empty leaves to resVar
 proc ::inicfg::dict-dump-nonempty {d section resVar reportVar} {
@@ -126,11 +140,11 @@ proc ::inicfg::dict-dump-nonempty {d section resVar reportVar} {
     set leaves [dict-leaves $d]
     if {$leaves ne ""} {
         if {$section ne ""} {
-            append res "\[$section]\n"
+            lappend res "\[$section\]"
             lappend report "Added section \[$section\]"
         }
         foreach {key value} $leaves {
-            append res "$key=$value\n"
+            lappend res "$key=$value"
             lappend report "Added property $key with value $value in section \[$section\]"
         }
     }

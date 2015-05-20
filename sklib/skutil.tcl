@@ -340,7 +340,7 @@ proc parseopts {varName {allowed {}}} {
     array set options {}
     foreach {flag value} $var {
         if {[string match -* $flag]} {
-            if {[llength $allowed] > 0 && [lsearch -exact $allowed $flag] == -1} {
+            if {[llength $allowed] > 0 && ($flag ni $allowed)} {
                 error "Unrecognized flag: $flag. Allowed: $allowed"
             }
             if {$value eq ""} {

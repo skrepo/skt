@@ -102,11 +102,18 @@ proc update-provider-list {} {
 
 
 proc read-config {} {
-    touch $::INIFILE
-    set ::Config [inicfg load $::INIFILE]
-    # provider list from Config but compare against dir
-    # update the provider list in Config
-    update-provider-list
+    if {[catch {
+        touch $::INIFILE
+        set ::Config [inicfg load $::INIFILE]
+        # provider list from Config but compare against dir
+        # update the provider list in Config
+        update-provider-list
+    } out err]} {
+        puts stderr $out
+        log $out
+        log $err
+        main-exit
+    }
 
     puts stderr "READ CONFIG:"
     puts stderr "[inicfg dict-pretty $::Config]"
@@ -230,6 +237,15 @@ proc main {} {
 
 
 proc main-exit {} {
+    if {[info exists ::Config]} {
+        #TODO updating ::Config should be done on resize/move event - here it is the risk of overwriting values with rubbish
+        dict set ::Config layout [dict create x [winfo x .] y [winfo y .] width [winfo width .] height [winfo height .]]
+        if {[catch {log Config save report: \n[inicfg save $::INIFILE $::Config]} out err]} {
+            log $out
+            log $err
+            puts stderr $out
+        }
+    }
     # ignore if problems occurred in deleting pidfile
     delete-pidfile ~/.sku/sku.pid
     set ::until_exit 1
