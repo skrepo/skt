@@ -87,15 +87,26 @@ proc update-provider-list {} {
     # providers by config
     set cproviders [dict-pop $::Config providers {}]
     # providers by filesystem
-    set fproviders [lmap d [glob -directory [file normalize ~/.sku/provider] -nocomplain -type d *] {file tail $d}]
+    set fproviders [lmap d [glob -directory $::PROVIDERDIR -nocomplain -type d *] {file tail $d}]
+
+    # sanitize directory names
+    foreach p $fproviders {
+        if {![regexp {^[\w\d_]+$} $p]} {
+            fatal "Provider directory name should be alphanumeric string in $::PROVIDERDIR"
+        }
+    }
 
     # all this shuffling below in order to preserve providers order as per Config
     set providers [lunique [concat [lintersection $cproviders $fproviders] $fproviders]]
     
+    # Provider list must be kept in main Config to preserve order
     dict set ::Config providers $providers
 
     foreach p $providers {
-        dict-put ::Config $p tabname $p
+        set inifile [file join $::PROVIDERDIR $p config.ini]
+        touch $inifile
+        set ::Config_$p [inicfg load $inifile]
+        dict-put ::Config_$p tabname $p
     }
 }
 
@@ -132,7 +143,8 @@ proc main {} {
     set user [unix relinquish-root]
     set ::INIFILE [file normalize ~/.sku/sku.ini]
     set ::LOGFILE [file normalize ~/.sku/sku.log]
-    set ::KEYSDIR [file normalize ~/.sku/provider/securitykiss/ovpnconf/default]
+    set ::PROVIDERDIR [file normalize ~/.sku/provider]
+    set ::KEYSDIR [file join $::PROVIDERDIR securitykiss ovpnconf default]
     redirect-stdout
 
     state sku {
@@ -249,7 +261,17 @@ proc main-exit {} {
             log $err
             puts stderr $out
         }
+        foreach p [dict-pop $::Config providers {}] {
+            set inifile [file join $::PROVIDERDIR $p config.ini]
+            if {[catch {log Config_$p save report: \n[inicfg save $inifile [set ::Config_$p]]} out err]} {
+                log $out
+                log $err
+                puts stderr $out
+            }
+        }
     }
+
+
     # ignore if problems occurred in deleting pidfile
     delete-pidfile ~/.sku/sku.pid
     set ::until_exit 1
@@ -570,8 +592,8 @@ proc frame-status {p} {
 
 proc frame-buttons {p pname} {
     set bs [frame $p.bs]
-    ttk::button $bs.connect -text Connect -command ClickConnect
-    ttk::button $bs.disconnect -text Disconnect -command ClickDisconnect
+    ttk::button $bs.connect -text "Connect" -command ClickConnect
+    ttk::button $bs.disconnect -text "Disconnect" -command ClickDisconnect
     ttk::button $bs.slist -text "Servers $pname" -command ServerListClicked
     grid $bs.connect $bs.disconnect $bs.slist -padx 10
     grid columnconfigure $bs $bs.slist -weight 1
@@ -579,6 +601,7 @@ proc frame-buttons {p pname} {
     focus $bs.slist
     return $bs
 }
+
 
 proc tabset-providers {p} {
     set providers [dict get $::Config providers]
@@ -589,7 +612,7 @@ proc tabset-providers {p} {
         set nb [ttk::notebook $p.nb]
         foreach pname $providers {
             set tab [frame-provider $nb $pname]
-            set tabname [dict get $::Config $pname tabname]
+            set tabname [dict get [set ::Config_$pname] tabname]
             $nb add $tab -text $tabname
         }
         grid $nb -sticky news -padx 10 -pady 10
