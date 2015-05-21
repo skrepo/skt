@@ -85,11 +85,7 @@ proc redirect-stdout {} {
 # and call this proc - it will take care of updating Config and PConfig
 proc update-provider-list {} {
     # providers by config
-    if {[dict exists $::Config providers]} {
-        set cproviders [dict get $::Config providers]
-    } else {
-        set cproviders {}
-    }
+    set cproviders [dict-pop $::Config providers {}]
     # providers by filesystem
     set fproviders [lmap d [glob -directory [file normalize ~/.sku/provider] -nocomplain -type d *] {file tail $d}]
 
@@ -97,8 +93,17 @@ proc update-provider-list {} {
     set providers [lunique [concat [lintersection $cproviders $fproviders] $fproviders]]
     
     dict set ::Config providers $providers
+
+    foreach p $providers {
+        dict-put ::Config $p tabname $p
+    }
 }
 
+proc update-default-properties {} {
+    dict-put ::Config layout bg1 white
+    dict-put ::Config layout bg2 grey95
+    dict-put ::Config layout bg3 "light grey"
+}
 
 
 proc read-config {} {
@@ -108,6 +113,7 @@ proc read-config {} {
         # provider list from Config but compare against dir
         # update the provider list in Config
         update-provider-list
+        update-default-properties
     } out err]} {
         puts stderr $out
         log $out
@@ -238,8 +244,6 @@ proc main {} {
 
 proc main-exit {} {
     if {[info exists ::Config]} {
-        #TODO updating ::Config should be done on resize/move event - doing it here introduces the risk of overwriting values with rubbish
-        dict set ::Config layout [dict create x [winfo x .] y [winfo y .] width [winfo width .] height [winfo height .]]
         if {[catch {log Config save report: \n[inicfg save $::INIFILE $::Config]} out err]} {
             log $out
             log $err
@@ -467,77 +471,16 @@ if 0 {
     grid .p4 -sticky w -padx 5 -pady 5
 } else {
 
-    set bg1 white
-    set bg2 grey95
-    set bg3 "light grey"
-
     frame .c
     grid .c -sticky news
     grid columnconfigure . .c -weight 1
     grid rowconfigure . .c -weight 1
 
-    hsep .c 15
 
-    frame .c.p1 -background $bg1
-    
-    ttk::label .c.p1.plan -text "Plan JADEITE valid until 2015 Sep 14" -background $bg1
-    ttk::label .c.p1.usedlabel -text "This month used" -background $bg1
-    frame .c.p1.usedbar -background $bg3 -width 300 -height 8
-    frame .c.p1.usedbar.fill -background red -width 120 -height 8
-    place .c.p1.usedbar.fill -x 0 -y 0
-    grid columnconfigure .c.p1.usedbar 0 -weight 1
-    ttk::label .c.p1.usedsummary -text "12.4 GB / 50 GB" -background $bg1
-    ttk::label .c.p1.elapsedlabel -text "This month elapsed" -background $bg1
-    frame .c.p1.elapsedbar -background $bg3 -width 300 -height 8
-    frame .c.p1.elapsedbar.fill -background blue -width 180 -height 8
-    place .c.p1.elapsedbar.fill -x 0 -y 0
-    ttk::label .c.p1.elapsedsummary -text "3 days 14 hours / 31 days" -background $bg1
-    grid .c.p1.plan -column 0 -row 0 -columnspan 3 -padx 5 -pady 5 -sticky w
-    grid .c.p1.usedlabel .c.p1.usedbar .c.p1.usedsummary -row 1 -padx 5 -pady 5 -sticky w
-    grid .c.p1.elapsedlabel .c.p1.elapsedbar .c.p1.elapsedsummary -row 2 -padx 5 -pady 5 -sticky w
-    grid .c.p1 -padx 10 -sticky news
-
-
-    hsep .c 5
-
-    frame .c.p7 -background $bg2
-    ttk::label .c.p7.externalip -text "External IP: 123.123.123.123" -background $bg2
-    ttk::label .c.p7.geocheck -text "Geo check" -background $bg2
-    grid .c.p7.externalip -column 0 -row 2 -padx 10 -pady 5 -sticky w
-    grid .c.p7.geocheck -column 1 -row 2 -padx 10 -pady 5 -sticky w
-    grid .c.p7 -padx 10 -sticky news
-    
-
-    #hsep .c 5
+    set tabset [tabset-providers .c]
 
 
 
-
-    frame .c.p5 -background $bg2
-    label .c.p5.imagestatus -background $bg2
-    place-image status/disconnected.png .c.p5.imagestatus
-    after 2000 [list place-image status/connecting.gif .c.p5.imagestatus]
-    after 4000 [list place-image status/connected.png .c.p5.imagestatus]
-    ttk::label .c.p5.status -text "Connected to ..." -background $bg2
-    load-image flag/64/PL.png
-    ttk::label .c.p5.flag -image flag_64_PL -background $bg2
-    grid .c.p5.imagestatus -row 5 -column 0 -padx 10 -pady 5
-    grid .c.p5.status -row 5 -column 1 -padx 10 -pady 5 -sticky w
-    grid .c.p5.flag -row 5 -column 2 -padx 10 -pady 5 -sticky e
-    grid columnconfigure .c.p5 .c.p5.status -weight 1
-    grid .c.p5 -padx 10 -sticky news
-
-    hsep .c 15
-
-
-    frame .c.p3 ;#-background yellow
-    ttk::button .c.p3.connect -text Connect -command ClickConnect
-    ttk::button .c.p3.disconnect -text Disconnect -command ClickDisconnect
-    ttk::button .c.p3.slist -text Servers -command ServerListClicked
-    grid .c.p3.connect .c.p3.disconnect .c.p3.slist -padx 10
-    grid columnconfigure .c.p3 .c.p3.slist -weight 1
-    grid .c.p3 -sticky news
-    focus .c.p3.slist
 
     # If the tag is the name of a class of widgets, such as Button, the binding applies to all widgets in that class;
     bind Button <Return> InvokeFocusedWithEnter
@@ -547,16 +490,13 @@ if 0 {
     bind . <Control-q> main-exit
     wm title . "SecurityKISS Tunnel"
 
-    hsep .c 15
-
-
     grid columnconfigure .c 0 -weight 1
     # this will allocate spare space to the first row in container .c
     grid rowconfigure .c 0 -weight 1
-    #instead of [wm minsize . 200 200]
-    setDialogSize .
-    # sizegrip - bottom-right corner for resize
     grid [ttk::sizegrip .grip] -sticky se
+    setDialogSize .
+    bind . <Configure> [list MovedResized %W %x %y %w %h]
+    # sizegrip - bottom-right corner for resize
     
 
 }
@@ -564,8 +504,126 @@ if 0 {
     after idle ReceiveWelcome
 }
 
+proc MovedResized {window x y w h} {
+    if {$window eq "."} {
+        dict set ::Config layout x $x
+        dict set ::Config layout y $y
+        dict set ::Config layout width $w
+        dict set ::Config layout height $h
+        #puts stderr "$window\tx=$x\ty=$y\tw=$w\th=$h"
+    }
+}
+
+# create usage meter in parent p
+proc frame-usage-meter {p} {
+    set bg1 [dict get $::Config layout bg1]
+    set bg3 [dict get $::Config layout bg3]
+    set um [frame $p.um -background $bg1]
+    ttk::label $um.plan -text "Plan JADEITE valid until 2015 Sep 14" -background $bg1
+    ttk::label $um.usedlabel -text "This month used" -background $bg1
+    frame $um.usedbar -background $bg3 -width 300 -height 8
+    frame $um.usedbar.fill -background red -width 120 -height 8
+    place $um.usedbar.fill -x 0 -y 0
+    grid columnconfigure $um.usedbar 0 -weight 1
+    ttk::label $um.usedsummary -text "12.4 GB / 50 GB" -background $bg1
+    ttk::label $um.elapsedlabel -text "This month elapsed" -background $bg1
+    frame $um.elapsedbar -background $bg3 -width 300 -height 8
+    frame $um.elapsedbar.fill -background blue -width 180 -height 8
+    place $um.elapsedbar.fill -x 0 -y 0
+    ttk::label $um.elapsedsummary -text "3 days 14 hours / 31 days" -background $bg1
+    grid $um.plan -column 0 -row 0 -columnspan 3 -padx 5 -pady 5 -sticky w
+    grid $um.usedlabel $p.um.usedbar $p.um.usedsummary -row 1 -padx 5 -pady 5 -sticky w
+    grid $um.elapsedlabel $p.um.elapsedbar $p.um.elapsedsummary -row 2 -padx 5 -pady 5 -sticky w
+    grid $um -padx 10 -sticky news
+    return $um
+}
+
+# create ip info panel in parent p
+proc frame-ipinfo {p} {
+    set bg2 [dict get $::Config layout bg2]
+    set inf [frame $p.inf -background $bg2]
+    ttk::label $inf.externalip -text "External IP: 123.123.123.123" -background $bg2
+    ttk::label $inf.geocheck -text "Geo check" -background $bg2
+    grid $inf.externalip -column 0 -row 2 -padx 10 -pady 5 -sticky w
+    grid $inf.geocheck -column 1 -row 2 -padx 10 -pady 5 -sticky w
+    grid $inf -padx 10 -sticky news
+    return $inf
+}
+
+proc frame-status {p} {
+    set bg2 [dict get $::Config layout bg2]
+    set stat [frame $p.stat -background $bg2]
+    label $stat.imagestatus -background $bg2
+    place-image status/disconnected.png $p.stat.imagestatus
+    after 2000 [list place-image status/connecting.gif $stat.imagestatus]
+    after 4000 [list place-image status/connected.png $stat.imagestatus]
+    ttk::label $stat.status -text "Connected to ..." -background $bg2
+    load-image flag/64/PL.png
+    ttk::label $stat.flag -image flag_64_PL -background $bg2
+    grid $stat.imagestatus -row 5 -column 0 -padx 10 -pady 5
+    grid $stat.status -row 5 -column 1 -padx 10 -pady 5 -sticky w
+    grid $stat.flag -row 5 -column 2 -padx 10 -pady 5 -sticky e
+    grid columnconfigure $stat $stat.status -weight 1
+    grid $stat -padx 10 -sticky news
+    return $stat
+}
+
+proc frame-buttons {p pname} {
+    set bs [frame $p.bs]
+    ttk::button $bs.connect -text Connect -command ClickConnect
+    ttk::button $bs.disconnect -text Disconnect -command ClickDisconnect
+    ttk::button $bs.slist -text "Servers $pname" -command ServerListClicked
+    grid $bs.connect $bs.disconnect $bs.slist -padx 10
+    grid columnconfigure $bs $bs.slist -weight 1
+    grid $bs -sticky news
+    focus $bs.slist
+    return $bs
+}
+
+proc tabset-providers {p} {
+    set providers [dict get $::Config providers]
+    set nop [llength $providers]
+    #set nop 1
+
+    if {$nop > 1} {
+        set nb [ttk::notebook $p.nb]
+        foreach pname $providers {
+            set tab [frame-provider $nb $pname]
+            set tabname [dict get $::Config $pname tabname]
+            $nb add $tab -text $tabname
+        }
+        grid $nb -sticky news -padx 10 -pady 10
+    } elseif {$nop == 1} {
+        set nb [ttk::frame $p.single]
+        set pname [lindex $providers 0]
+        set tab [frame-provider $nb $pname]
+        grid $tab -sticky news
+        grid $nb -sticky news
+    } else {
+        fatal "No providers found"
+    }
+    return $nb
+}
+
+# return provider frame window
+proc frame-provider {p pname} {
+    set f [ttk::frame $p.$pname]
+    hsep $f 15
+    frame-usage-meter $f
+    hsep $f 5
+    frame-ipinfo $f
+    #hsep $f 5
+    frame-status $f
+    hsep $f 15
+    frame-buttons $f $pname
+    hsep $f 5
+    return $f
+}
+
+
+
 proc InvokeFocusedWithEnter {} {
-    set focused [focus] ;# or [focus -displayof .]
+    set focused [focus]
     if {$focused eq ""} {
         return
     }
@@ -583,6 +641,9 @@ proc InvokeFocusedWithEnter {} {
 
 
 proc setDialogSize {window} {
+    #TODO check if layout in Config and if values make sense
+    #TODO when layout in Config don't do updates from package manager
+    # if layout not in Config we must determine size from package manager
     # this update will ensure that winfo will return the correct sizes
     update
     # get the current width and height as set by grid package manager
@@ -590,13 +651,13 @@ proc setDialogSize {window} {
     set h [expr {[winfo height $window] + 10}]
     # set it as the minimum size
     wm minsize $window $w $h
-    set cw [dict-pop $::Config layout width $w]
-    set ch [dict-pop $::Config layout height $h]
-    set cx [dict-pop $::Config layout x 300]
-    set cy [dict-pop $::Config layout y 300]
+    set cw [dict-put ::Config layout width $w]
+    set ch [dict-put ::Config layout height $h]
+    set cx [dict-put ::Config layout x 300]
+    set cy [dict-put ::Config layout y 300]
+
     wm geometry $window ${cw}x${ch}+${cx}+${cy}
 }
-
 
 
 proc get-selected-sitem {provider} {

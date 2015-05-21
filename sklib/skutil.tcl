@@ -432,7 +432,7 @@ proc touch {file} {
     }
 }
 
-
+# Get value from nested dict or return default value if key does not exist
 # dict-pop dictValue k1 [k2 k3 ...] defaultValue
 proc dict-pop {d args} {
     if {[llength $args] < 2} {
@@ -447,4 +447,26 @@ proc dict-pop {d args} {
     }
 }
         
+# If key exists in nested dict, return its value
+# Otherwise set it to defaultValue and return defaultValue
+# dict-put dictVar k1 [k2 k3 ...] defaultValue
+proc dict-put {dictVar args} {
+    upvar $dictVar d
+    if {[llength $args] < 2} {
+        error "Missing arguments to dict-put. Actual: dict-put $dictVar $args. Expected: dict-put $dictVar k1 \[k2 k3 ...\] defaultValue"
+    }
+    set default [lindex $args end]
+    set keys [lrange $args 0 end-1]
+    if {[dict exists $d {*}$keys]} {
+        return [dict get $d {*}$keys]
+    } else {
+        dict set d {*}$keys $default
+        return $default
+    }
+}
+
+
+
+
+
 
