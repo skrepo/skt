@@ -11,6 +11,25 @@ if {![catch {package require starkit}]} {
 #wget https://raw.githubusercontent.com/skrepo/activestate/master/teacup/tls/package-tls-0.0.0.2010.08.18.09.08.25-source.zip tls-source.zip
 #wget https://sk/favicon.ico favicon.ico
 
+package require i18n
+
+set nrOfFruits 3
+set fruit apple
+
+puts [_ "We need {0} {1} to feed the children" $nrOfFruits $fruit]
+
+ ;# _183f7a8e54b7c123
+
+# give more examples
+puts "First: [_ "This is another example"]  Second: [_ "With {0} message in one line" 1]"
+
+
+i18n code2msg ~/seckiss/skt/sample/main.tcl
+
+exit
+
+
+
 
 package require inicfg
 
