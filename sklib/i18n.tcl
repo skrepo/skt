@@ -9,15 +9,9 @@ proc _ {t args} {
 
     #TODO find localized t replacement
     #TODO Verify number of params against placeholders in t
-    # convert params list into array
-    set i 0
-    array set arr {}
-    foreach a $args {
-        set arr({$i}) $a
-        incr i
-    }
+    set params [i18n params-list2dict $args]
     # replace tokens in t
-    return [string map [array get arr] $t]
+    return [string map [dict get $params] $t]
 }
 
 
@@ -25,7 +19,7 @@ proc _ {t args} {
 
 namespace eval i18n {
     variable LC [dict create]
-    namespace export load code2msg msg2code cleanup orphans
+    namespace export load code2msg msg2code cleanup orphans params-list2dict
     namespace ensemble create
 }
 
@@ -47,7 +41,7 @@ proc ::i18n::load {locale {msgfile messages.txt}} {
 
 # Parse source code files, mark translatable lines with uid, create/update messages file.
 # This assumes that developer added or updated translatable lines in source code and messages need to be updated.
-proc ::i18n::code2msg {filespec {msgfile messages.txt}} {
+proc ::i18n::code2msg {filespec {locales {fr es de pl}} {msgfile messages.txt}} {
     #TODO uncomment and pass to code-uid-update in order to solve ambiguities where possible
     set uid2tm_msg [msg-prescan $msgfile]
     #TODO for now filespec is assumed to be a single file - should be file/dir specification/filter
@@ -120,6 +114,9 @@ proc ::i18n::code2msg {filespec {msgfile messages.txt}} {
             lappend out "#, [join $params " "]"
         }
         lappend out "en=$msg_code"
+        foreach l $locales {
+            lappend out "$l="
+        }
     }
     
     spit $msgfile [join $out \n]
