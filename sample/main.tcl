@@ -16,12 +16,14 @@ package require i18n
 set nrOfFruits 3
 set fruit apple
 
-puts [_ "We need {0} {1} to feed the children" $nrOfFruits $fruit]
+puts [_ "We need {0} {1} to feed the children" $nrOfFruits $fruit] ;# _444cca97f3240434
 
  ;# _183f7a8e54b7c123
 
 # give more examples
-puts "First: [_ "This is another example"]  Second: [_ "With {0} message in one line" 1]"
+puts "First: [_ "This is another example"]  Second: [_ "With {0} message in one line" 1]" ;# _bc3e28b0754207bc ;# _76d86c3531de3e23
+
+puts "Third: [_ aa][_ bb][_ cccc]" ;# _aa3d6657129a20ec ;# _7b75a0dfb2c07a88 ;# _7c90362c64745aa9
 
 
 i18n code2msg ~/seckiss/skt/sample/main.tcl

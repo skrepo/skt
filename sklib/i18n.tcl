@@ -42,9 +42,40 @@ proc ::i18n::load {locale {msgfile messages.txt}} {
 # Parse source code files, mark translatable lines with UID, create/update messages file.
 # This assumes that developer added or updated translatable lines in source code and messages need to be updated.
 proc ::i18n::code2msg {filespec {msgfile messages.txt}} {
-    puts ""
     #TODO for now filespec is assumed to be a single file - should be file/dir specification/filter
-    
+    set out {}
+    set code [slurp $filespec]
+    set lines [split $code \n]
+    set lno 0
+    foreach line $lines {
+        incr lno
+        set index 0
+        # translatable messages
+        set tm {}
+        while {[regexp -start $index {.*?\[_\s+([^\]]+)\]} $line match sub]} {
+            #puts "$filespec:$lno: match: $match, sub: $sub"
+            lappend tm $sub
+            #puts [llength $sub]
+            incr index [string length $match]
+        }
+        # uid tokens
+        set ut {}
+        while {[regexp -start $index {.*?(_[\da-f]{16})} $line match sub]} {
+            lappend ut $sub
+            incr index [string length $match]
+        }
+        set missing [expr {[llength $tm] - [llength $ut]}]
+        if {$missing > 0} {
+            foreach i [seq $missing] {
+                append line " ;# _[generate-uid]"
+            }
+        } elseif {$missing < 0 && [llength $ut] > 1} {
+            error "i18n ambiguity: more UID tokens than messages"
+        }
+        lappend out $line
+    }
+    puts [join $out \n]
+    spit $filespec [join $out \n]
 
 }
 
@@ -66,3 +97,36 @@ proc ::i18n::orphans {} {
 
 }
 
+proc ::i18n::slurp {path} {
+    set fd [open $path r]
+    set data [read $fd]
+    close $fd
+    return $data
+}
+
+proc ::i18n::spit {path content} {
+    set fd [open $path w]
+    puts -nonewline $fd $content
+    close $fd
+}
+
+
+proc ::i18n::rand-byte {} {
+    return [expr {round(rand()*256)}]
+}
+
+proc ::i18n::rand-byte-hex {} {
+    return [format %02x [rand-byte]]
+}
+
+proc ::i18n::seq {n} {
+    set res {}
+    for {set i 1} {$i <= $n} {incr i} {
+        lappend res $i
+    }
+    return $res
+}
+
+proc ::i18n::generate-uid {} {
+    return [join [lmap i [seq 8] {rand-byte-hex}] ""]
+}
