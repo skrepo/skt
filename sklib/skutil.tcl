@@ -325,7 +325,7 @@ proc rand-byte-hex {} {
 
 proc seq {n} {
     set res {}
-    for {set i 1} {$i <= $n} {incr i} {
+    for {set i 0} {$i < $n} {incr i} {
         lappend res $i
     }
     return $res
