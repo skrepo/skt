@@ -13,6 +13,8 @@ if {![catch {package require starkit}]} {
 
 package require i18n
 
+i18n load pl
+
 set nrOfFruits 3
 set fruit apple
 
@@ -27,6 +29,9 @@ puts "Third: [_ aa][_ bb][_ cccc]" ;# _aa3d6657129a20ec ;# _7b75a0dfb2c07a88 ;# 
 
 
 i18n code2msg ~/seckiss/skt/sample/main.tcl
+
+
+i18n msg2code 
 
 exit
 

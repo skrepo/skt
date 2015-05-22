@@ -5,13 +5,17 @@ package provide i18n 0.0.0
 # uid - randomly generated identifier in format _1234567890abcdef, uniquely identifies tm
 
 
-proc _ {t args} {
-
-    #TODO find localized t replacement
+proc _ {msg args} {
+    if {[dict exists $::i18n::LC $msg]} {
+        set other [dict get $::i18n::LC $msg]
+        if {$other ne ""} {
+            set msg $other
+        }
+    }
     #TODO Verify number of params against placeholders in t
     set params [i18n params-list2dict $args]
-    # replace tokens in t
-    return [string map [dict get $params] $t]
+    # replace tokens in msg
+    return [string map [dict get $params] $msg]
 }
 
 
@@ -23,19 +27,24 @@ namespace eval i18n {
     namespace ensemble create
 }
 
-# Load messages file and store as dictionary
+# Load messages file and store as dict mapping from en messages to selected locale messages
 proc ::i18n::load {locale {msgfile messages.txt}} {
     variable LC
-    #TODO create dictionary mapping 'en' string to translated message
-    #TODO ignore localization generated id tokens - they are only for static parsing and message identification
-    
-    #process line by line
-    #find #L16hex token as a section start
-    #save en="xxx" xxx as a key
-    #ignore yy= where yy!=locale
-    #save it="zzz" zzz as value
-    #export the key=>value array in $LC
-
+    set LC [dict create]
+    set en ""
+    set other ""
+    set msgs [slurp $msgfile]
+    set lines [split $msgs \n]
+    foreach line $lines {
+        switch -regexp -matchvar token $line \
+        {^\s*en=(.*)$} {
+            set en [lindex $token 1]
+        } \
+        "^\\s*$locale=(.*)\$" {
+            set other [lindex $token 1]
+            dict set LC $en $other
+        }
+    }
 }
 
 
@@ -174,14 +183,41 @@ proc ::i18n::code-uid-update {filename} {
 
 
 proc ::i18n::msg-prescan {msgfile} {
-
+    set uid2tm [dict create]
+    set msgs [slurp $msgfile]
+    set lines [split $msgs \n]
+    set index 0
+    set uids {}
+    foreach line $lines {
+        switch -regexp -matchvar token $line {
+            {^\s*#\s*(_[\da-f]{16})} {
+                # automatic comment - uids which means new section
+                set index 0
+                set uids {}
+                while {[regexp -start $index {.*?(_[\da-f]{16})} $line match sub]} {
+                    lappend uids $sub
+                    incr index [string length $match]
+                }
+            }
+            {^\s*en=(.*)$} {
+                # tm
+                set msg [lindex $token 1]
+                #TODO handle multiple uids in the future - it may be tricky to handle changes. For now take the first uid
+                foreach uid $uids {
+                    dict set uid2tm $uid $msg
+                }
+            }
+        }
+    }
+    return $uid2tm
 }
 
 
 # Parse messages file, compare its 'en' entries with translatable lines in source code. Update source code.
 # This assumes that translator changed the original 'en' messages and source code needs to be updated.
-proc ::i18n::msg2code {} {
-
+proc ::i18n::msg2code {filespec {msgfile messages.txt}} {
+    set uid2tm_msg [msg-prescan $msgfile]
+    puts "u2m: $uid2tm_msg"
 }
 
 # Delete previous '#|' messages from messages file
