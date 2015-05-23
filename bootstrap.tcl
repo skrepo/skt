@@ -37,6 +37,7 @@ lappend auto_path [file join lib generic]
 package require http
 package require vfs::zip
 package require tls
+package require i18n
 http::register https 443 [list tls::socket]
 
 

@@ -78,8 +78,11 @@ prepare-lib sklib 0.0.0
 #build-skd-sku
 #build-no-pkg
 
+
+i18n code2msg ./sku/main.tcl {es pl} ./sku/messages.txt 
 build linux x86_64 sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3}
 ex sudo cp build/sku/linux-x86_64/sku.bin /usr/local/bin/sku.bin
+
 
 #build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 sklib-0.0.0 Tclx-8.4}
 #ex ./build/sample/linux-ix86/sample.bin

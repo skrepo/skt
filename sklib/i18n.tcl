@@ -425,6 +425,7 @@ proc ::i18n::orphans {} {
 
 proc ::i18n::slurp {path} {
     set fd [open $path r]
+    fconfigure $fd -encoding utf-8
     set data [read $fd]
     close $fd
     return $data

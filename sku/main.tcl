@@ -21,6 +21,7 @@ package require https
 package require anigif
 package require json
 package require inicfg
+package require i18n
 
 
 proc fatal {msg {err ""}} {
@@ -173,6 +174,7 @@ proc main {} {
             {generate-keys  "Generate private key and certificate signing request"}
             {id             "Show client id from the certificate"}
             {version        "Print version"}
+            {locale    en   "Run particular language version"}
             {p              "Print anything"}
             {ra             "Print anything"}
         }
@@ -185,6 +187,10 @@ proc main {} {
     parray params
 
 
+    if {[catch {i18n load pl [file join $starkit::topdir messages.txt]} out err]} {
+        log $out
+        log $err
+    }
 
     if {$params(cli) || ![unix is-x-running]} {
         state sku {ui cli}
@@ -592,9 +598,9 @@ proc frame-status {p} {
 
 proc frame-buttons {p pname} {
     set bs [frame $p.bs]
-    ttk::button $bs.connect -text "Connect" -command ClickConnect
-    ttk::button $bs.disconnect -text "Disconnect" -command ClickDisconnect
-    ttk::button $bs.slist -text "Servers $pname" -command ServerListClicked
+    ttk::button $bs.connect -text [_ "Connect"] -command ClickConnect ;# _2eaf8d491417924c
+    ttk::button $bs.disconnect -text [_ "Disconnect"] -command ClickDisconnect ;# _87fff3af45753920
+    ttk::button $bs.slist -text [_ "Servers {0}" $pname] -command ServerListClicked ;# _bf9c42ec59d68714
     grid $bs.connect $bs.disconnect $bs.slist -padx 10
     grid columnconfigure $bs $bs.slist -weight 1
     grid $bs -sticky news

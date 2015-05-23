@@ -70,8 +70,10 @@ proc is-valid-ip {s} {
 }
 
 
+# only for text files, assumes utf-8 encoding
 proc slurp {path} {
     set fd [open $path r]
+    fconfigure $fd -encoding utf-8
     set data [read $fd]
     close $fd
     return $data
