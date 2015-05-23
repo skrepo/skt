@@ -13,25 +13,27 @@ if {![catch {package require starkit}]} {
 
 package require i18n
 
-i18n load pl
+if {[catch {i18n load pl} out err]} {
+    puts "ERROR caught: $out"
+}
 
 set nrOfFruits 3
 set fruit apple
 
-puts [_ "We need {0} {1} to feed the children" $nrOfFruits $fruit] ;# _444cca97f3240434
+puts [_ "We need {0} {1} to feed the children" $nrOfFruits $fruit] ;# _d789097c30b6a705
 
- ;# _183f7a8e54b7c123
 
 # give more examples
-puts "First: [_ "This is yur    example"]  Second: [_ "With {0} message in one line" 1]" ;# _bc3e28b0754207bc  ;# _277fa14dce3ed4c8
+puts "First: [_ "This is my example"]  Second: [_ "With {0} message in one line" 1]"  ;# _70283d3ca0c84336 _d1b3fa269a15451b
 
-puts "Third: [_ aa][_ bb][_ cccc]" ;# _aa3d6657129a20ec ;# _7b75a0dfb2c07a88 ;# _7c90362c64745aa9
-
-
-i18n code2msg ~/seckiss/skt/sample/main.tcl
+puts "Third: [_ "uu uu" arg1 arg2][_ "bi bi bi" param1 param2][_ "cccc"]"  ;# _c4efb5e4c9039472 _ac77f330033b1d60 _fb22642043756563
 
 
-i18n msg2code 
+#i18n code2msg ~/seckiss/skt/sample/main.tcl
+
+
+i18n msg2code  ~/seckiss/skt/sample/main.tcl
+
 
 exit
 

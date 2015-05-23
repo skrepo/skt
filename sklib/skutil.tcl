@@ -423,6 +423,20 @@ proc lintersection {a b} {
     }
 }
 
+# Count non-empty elements of the list
+proc lcount {a} {
+    set c 0
+    foreach e $a {
+        if {$e ne ""} {
+            incr c
+        }
+    }
+    return $c
+}
+
+
+
+
 proc touch {file} {
     if {[file exists $file]} {
         file mtime $file [clock seconds]
