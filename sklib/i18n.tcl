@@ -105,6 +105,9 @@ proc ::i18n::code2msg {filespec {locales {fr es de pl}} {msgfile messages.txt}} 
                         }
                         lappend out "en=$msg_code"
                     }
+                } else {
+                    # uid not found in source code
+                    lappend out $line
                 }
             }
             default {
