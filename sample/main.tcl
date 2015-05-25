@@ -24,9 +24,9 @@ puts [_ "We need {0} {1} to feed the children" $nrOfFruits $fruit] ;# _d789097c3
 
 
 # give more examples
-puts "First: [_ "This is my example"]  Second: [_ "With {0} message in one line" 1]"  ;# _70283d3ca0c84336 _d1b3fa269a15451b
+puts "First: [_ "This is my example"]  Second: [_ "With {0} message in one line" 1]"  ;# _afff6937b45e6bea _36fbc2379cb3b1e4
 
-puts "Third: [_ "uu uu" arg1 arg2][_ "bi bi bi" param1 param2][_ "cccc"]"  ;# _c4efb5e4c9039472 _ac77f330033b1d60 _fb22642043756563
+puts "Third: [_ "uu uu" arg1 arg2][_ "bi bi bi" param1 param2][_ "cicicici cicici"]"  ;# _17788f47d34b7db8 _4e3a1066125da9e2 _245044b4b04cba100
 
 
 #i18n code2msg ~/seckiss/skt/sample/main.tcl

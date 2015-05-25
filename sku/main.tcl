@@ -83,7 +83,7 @@ proc redirect-stdout {} {
 
 
 # When adding/removing provider, just create/delete folder in ~/.sku/provider
-# and call this proc - it will take care of updating Config and PConfig
+# and call this proc - it will take care of updating Config and Config_$provider
 proc update-provider-list {} {
     # providers by config
     set cproviders [dict-pop $::Config providers {}]

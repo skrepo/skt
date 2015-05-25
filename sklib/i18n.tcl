@@ -414,13 +414,13 @@ proc ::i18n::replace-nth-tm {line n tm newtm} {
 # Delete previous '#|' messages from messages file
 # Delete messages marked to remove from messages file
 proc ::i18n::cleanup {} {
-
+    #TODO
 }
 
 # Find messages from messages file that have no corresponding translatable line (by uid) in source code.
 # Mark them to remove
 proc ::i18n::orphans {} {
-
+    #TODO
 }
 
 proc ::i18n::slurp {path} {
