@@ -117,6 +117,22 @@ proc update-default-properties {} {
     dict-put ::Config layout bg3 "light grey"
 }
 
+proc read-vigos {} {
+    # embedded bootstrap vigo list
+    set lst [slurp [file join $starkit::topdir bootstrap_ips.lst]]
+    set vigos ""
+    foreach v $lst {
+        set v [string trim $v]
+        if {[is-valid-ip $v]} {
+            lappend vigos $v
+        }
+    }
+    state sku {vigos $vigos}
+    puts "vigos: $vigos"
+    #TODO use vigos to get current time - why do we need it before welcome?.
+    #TODO isn't certificate signing start date a problem in case of vigos in different timezones? Consider signing with golang crypto libraries
+}
+
 
 proc read-config {} {
     if {[catch {
@@ -198,10 +214,7 @@ proc main {} {
         state sku {ui gui}
     }
 
-    if {$params(generate-keys)} {
-        main-generate-keys
-        main-exit
-    }
+
     if {$params(version)} {
         main-version
         main-exit
@@ -226,19 +239,12 @@ proc main {} {
 
     read-config
 
-    # embedded bootstrap vigo list
-    set lst [slurp [file join $starkit::topdir bootstrap_ips.lst]]
-    set vigos ""
-    foreach v $lst {
-        set v [string trim $v]
-        if {[is-valid-ip $v]} {
-            lappend vigos $v
-        }
+    read-vigos
+
+    if {$params(generate-keys)} {
+        main-generate-keys
+        main-exit
     }
-    state sku {vigos $vigos}
-    puts "vigos: $vigos"
-    #TODO use vigos to get current time - why do we need it before welcome?.
-    #TODO isn't certificate signing start date a problem in case of vigos in different timezones? Consider signing with golang crypto libraries
     
     # Copy cadir because it  must be accessible from outside of starkit
     # Overwrites certs on every run
@@ -390,6 +396,7 @@ proc main-generate-keys {} {
 
 
     # POST csr and save cert
+    puts stderr "vigos: [state sku vigos]"
     for {set i 0} {$i<[llength [state sku vigos]]} {incr i} {
         if {[catch {open $csr r} fd err] == 1} {
             log "Failed to open $csr for reading"
