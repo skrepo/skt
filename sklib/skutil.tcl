@@ -208,7 +208,7 @@ proc verify-signature {pubkey filepath} {
         return 0
     }
     log $cmd returned: $out
-    return [expr {$out eq "Verified OK"}]
+    return [string equal "Verfied OK" $out]
 }
 
 

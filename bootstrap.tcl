@@ -5,9 +5,25 @@ if {![catch {package require starkit}]} {
   starkit::startup
 }
 
+set builddate [clock format [clock seconds] -gmt 1]
 
 proc ex {args} {
     return [exec -- {*}$args >&@ stdout]
+}
+
+# only for text files, assumes utf-8 encoding
+proc slurp {path} {
+    set fd [open $path r]
+    fconfigure $fd -encoding utf-8
+    set data [read $fd]
+    close $fd
+    return $data
+}
+
+proc spit {path content} {
+    set fd [open $path w]
+    puts -nonewline $fd $content
+    close $fd
 }
 
 proc generalize-arch {arch} {

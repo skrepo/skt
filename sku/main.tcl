@@ -241,6 +241,9 @@ proc main {} {
 
     read-vigos
 
+    puts stderr [build-date]
+    puts stderr [build-version]
+
     if {$params(generate-keys)} {
         main-generate-keys
         main-exit
@@ -537,6 +540,7 @@ if 0 {
 }
     set ::conf [::ovconf::parse config.ovpn]
     after idle ReceiveWelcome
+    after idle CheckForUpdates
 }
 
 proc MovedResized {window x y w h} {
@@ -1071,8 +1075,19 @@ proc ClickDisconnect {} {
     skd-write stop
 }
 
-proc check-for-upgrades {} {
-    # TODO check and save latest version with signature
+# TODO check and save latest version with signature
+
+# TODO just refactor to be able to call
+#retry-curl url iplist onOk onError
+
+proc build-version {} {
+    memoize
+    return [slurp [file join $starkit::topdir buildver.txt]]
+}
+
+proc build-date {} {
+    memoize
+    return [slurp [file join $starkit::topdir builddate.txt]]
 }
 
 
