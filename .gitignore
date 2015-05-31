@@ -5,3 +5,5 @@ dist
 config.ovpn
 base-tcl
 base-tcl.exe
+skd/builddate.txt
+sku/builddate.txt

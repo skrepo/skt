@@ -19,9 +19,11 @@ namespace eval ::asyncdns {
     namespace ensemble create
 }
 
+
 # Simple options (-flag value) parser. Every flag must have value
 # Removes options from varName. Returns options array
 # If non-empty the allowed list is to validate flag names against
+# Copied from skutil.tcl
 proc ::asyncdns::parseopts {varName {allowed {}}} {
     upvar $varName var
     array set options {}

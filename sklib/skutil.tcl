@@ -357,6 +357,80 @@ proc parseopts {varName {allowed {}}} {
     return [array get options]
 }
 
+# old version
+if 0 {
+proc namedarg {arglist name {default ""}} {
+    set i [lsearch -exact $arglist $name]
+    if {$i != -1} {
+        return [lindex $arglist [expr {$i+1}]]
+    } else {
+        return $default
+    }
+}
+}
+
+
+# Parse argument list to get value of the named argument
+# For example:
+#   namedarg {10 -arg2 20 -arg3 30 40 -arg5 50 60} -arg3
+# should return 30
+# For non-existing argument name return $default or empty string if not given
+# It's a simpler alternative to parseopts
+proc namedarg {arglist name {default ""}} {
+    if {[llength $arglist] % 2 == 1} {
+        set arglist [lrange $arglist 0 end-1]
+    }
+    array set arr $arglist
+    if {[info exists arr(-$name)]} {
+        return $arr(-$name)
+    } else {
+        return $default
+    }
+}
+
+proc arg {name {default ""}} {
+    upvar args a
+    return [namedarg $a $name $default]
+}
+
+proc args* {command} {
+    upvar args arglist
+    if {[llength $arglist] % 2 == 1} {
+        set odd [lindex $arglist end]
+        set arglist [lrange $arglist 0 end-1]
+    }
+    array set arr $arglist
+    {*}$command
+    if {[info exists odd]} {
+        return [concat [array get arr] $odd]
+    } else {
+        return [array get arr]
+    }
+}
+
+proc args+ {name value} {
+    args* [list set arr(-$name) $value]
+}
+
+proc args- {name} {
+    args* [list array unset arr -$name]
+}
+
+
+proc fromargs {names {defaults {}}} {
+    upvar args a
+    foreach {name default} [lzip $names $defaults] {
+        uplevel [list set $name [namedarg $a $name $default]]
+    }
+}
+
+
+proc test1 {args} {
+    fromargs aa
+    fromargs {bb cc}
+    fromargs {dd ee ff} {8888 9999}
+    puts "$aa $bb $cc $dd $ee $ff"
+}
 
 
 # recursively copy contents of the $from dir to the $to dir 
@@ -435,6 +509,19 @@ proc lcount {a} {
     }
     return $c
 }
+
+# Combine lists so that the elements alternate (a0 b0 a1 b1 a2 b2 ...)
+# Useful for iterating 2 lists in sync:
+# foreach {aval bval} [lzip $a $b] {...}
+proc lzip {a b} {
+    set result {}
+    set len [expr {max([llength $a],[llength $b])}]
+    for {set i 0} {$i<$len} {incr i} {
+        lappend result [lindex $a $i] [lindex $b $i]
+    }
+    return $result
+}
+
 
 
 
