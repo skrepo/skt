@@ -20,16 +20,28 @@ namespace eval csp {
             if {$operator ne "<-"} {
                 error "Unrecognized operator $operator. Should be <-"
             }
-            while {![CSendReady %CHANNEL%]} {
-                uplevel yield
+            if {[info coroutine] eq ""} {
+                while {![CSendReady %CHANNEL%]} {
+                    vwait ::csp::resume
+                }
+            } else {
+                while {![CSendReady %CHANNEL%]} {
+                    uplevel yield
+                }
             }
             CAppend %CHANNEL% $val
             after idle ::csp::goupdate
             # post-send extra logic for rendez-vous channels
             if {![CBuffered %CHANNEL%]} {
                 # wait again for container empty (receiver collected value)
-                while {![CEmpty %CHANNEL%]} {
-                    uplevel yield
+                if {[info coroutine] eq ""} {
+                    while {![CEmpty %CHANNEL%]} {
+                        vwait ::csp::resume
+                    }
+                } else {
+                    while {![CEmpty %CHANNEL%]} {
+                        uplevel yield
+                    }
                 }
             }
         }
@@ -136,6 +148,7 @@ proc ::csp::goupdate {} {
             $r
         }
     }
+    set ::csp::resume 1
 }
 
 
@@ -147,9 +160,15 @@ proc ::csp::CReceive {ch} {
 }
 
 proc ::csp::<- {ch} {
-    # check if ch contains elements, return element or yield empty
-    while {[CEmpty $ch]} {
-        uplevel yield
+    # check if ch contains elements, if so return element, yield otherwise
+    if {[info coroutine] eq ""} {
+        while {[CEmpty $ch]} {
+            vwait ::csp::resume
+        }
+    } else {
+        while {[CEmpty $ch]} {
+            uplevel yield
+        }
     }
     set elem [CReceive $ch]
     after idle ::csp::goupdate
@@ -186,7 +205,11 @@ proc ::csp::select {a} {
         set ready_count [expr {[llength $triples] / 3}]
         if {$ready_count == 0} {
             if {$default == 0} {
-                uplevel yield
+                if {[info coroutine] eq ""} {
+                    vwait ::csp::resume
+                } else {
+                    uplevel yield
+                }
             } else {
                 return [uplevel $defaultbody]
             }

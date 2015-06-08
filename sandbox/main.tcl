@@ -7,6 +7,7 @@ puts "c1=$c1"
 
 ticker t1 1000
 timer t2 3000
+timer t3 4000
 
 proc myrout {t} {
     puts "myrout"
@@ -27,17 +28,22 @@ proc selrout {t1 t2} {
             }
         }
     }
-
 }
 
 #go myrout $t1
 go selrout $t1 $t2
 puts "main"
 
-#puts "ticker: [<- $t1]"
+#while 1 { puts "ticker: [<- $t1]" }
+
+$t1 <- blabla
+$t1 <- uuu
+$t1 <- tttt
+
+<- $t3
 
 
-vwait forever
+#vwait forever
 
 
 
