@@ -1,6 +1,5 @@
 package provide skutil 0.0.0
 
-package require vfs::zip
 
 #TODO test it on Windows with \r\n
 proc strip-blank-lines {s} {
@@ -293,6 +292,7 @@ proc static {varName {initialValue ""}} {
 
 
 proc unzip {zipfile {destdir .}} {
+    package require vfs::zip
     set mntfile [vfs::zip::Mount $zipfile $zipfile]
     foreach f [glob [file join $zipfile *]] {
       file copy $f $destdir
@@ -357,18 +357,6 @@ proc parseopts {varName {allowed {}}} {
     return [array get options]
 }
 
-# old version
-if 0 {
-proc namedarg {arglist name {default ""}} {
-    set i [lsearch -exact $arglist $name]
-    if {$i != -1} {
-        return [lindex $arglist [expr {$i+1}]]
-    } else {
-        return $default
-    }
-}
-}
-
 
 # Parse argument list to get value of the named argument
 # For example:
@@ -381,8 +369,8 @@ proc namedarg {arglist name {default ""}} {
         set arglist [lrange $arglist 0 end-1]
     }
     array set arr $arglist
-    if {[info exists arr(-$name)]} {
-        return $arr(-$name)
+    if {[info exists arr($name)]} {
+        return $arr($name)
     } else {
         return $default
     }
@@ -393,14 +381,31 @@ proc arg {name {default ""}} {
     return [namedarg $a $name $default]
 }
 
-proc args* {command} {
+# return arg list with only selected named args
+# take any number of arg names
+proc args= {args} {
+    upvar args a
+    set result {}
+    foreach name $args {
+        lappend result $name [namedarg $a $name]
+    }
+    return $result
+} 
+
+
+# return modified args with added/overwritten name-value pairs:
+# args+ name1 value1 name2 value2 ...
+# takes any number of name-value pairs 
+proc args+ {args} {
     upvar args arglist
     if {[llength $arglist] % 2 == 1} {
         set odd [lindex $arglist end]
         set arglist [lrange $arglist 0 end-1]
     }
     array set arr $arglist
-    {*}$command
+    foreach {name value} $args {
+        list set arr($name) $value
+    }
     if {[info exists odd]} {
         return [concat [array get arr] $odd]
     } else {
@@ -408,27 +413,40 @@ proc args* {command} {
     }
 }
 
-proc args+ {name value} {
-    args* [list set arr(-$name) $value]
-}
-
-proc args- {name} {
-    args* [list array unset arr -$name]
+# takes any number of names
+proc args- {args} {
+    upvar args arglist
+    if {[llength $arglist] % 2 == 1} {
+        set odd [lindex $arglist end]
+        set arglist [lrange $arglist 0 end-1]
+    }
+    array set arr $arglist
+    foreach {name} $args {
+        list array unset arr $name
+    }
+    if {[info exists odd]} {
+        return [concat [array get arr] $odd]
+    } else {
+        return [array get arr]
+    }
 }
 
 
 proc fromargs {names {defaults {}}} {
     upvar args a
     foreach {name default} [lzip $names $defaults] {
-        uplevel [list set $name [namedarg $a $name $default]]
+        if {[string index $name 0] ne "-"} {
+            error "fromargs argument name '$name' must start with dash"
+        }
+        uplevel [list set [string range $name 1 end] [namedarg $a $name $default]]
     }
 }
 
 
 proc test1 {args} {
-    fromargs aa
-    fromargs {bb cc}
-    fromargs {dd ee ff} {8888 9999}
+    fromargs -aa
+    fromargs {-bb -cc}
+    fromargs {-dd -ee -ff} {8888 9999}
     puts "$aa $bb $cc $dd $ee $ff"
 }
 

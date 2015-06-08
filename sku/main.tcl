@@ -173,6 +173,8 @@ proc main {} {
         start_retries 0
         # Embedded bootstrap vigo list
         vigos ""
+        #
+        vigo_lastok 0
         # temporary
         slist ""
         # new client id
@@ -539,8 +541,10 @@ if 0 {
 
 }
     set ::conf [::ovconf::parse config.ovpn]
-    after idle ReceiveWelcome
-    after idle CheckForUpdates
+
+    set cn [state sku cn]
+    after idle [list curl-retry -urlpath /welcome?cn=$cn -proto https -port 10443 -expected_hostname www.securitykiss.com -host_lastok [state sku vigo_lastok] -hosts [state sku vigos] -onOk onReceiveWelcome -onError onReceiveWelcomeError]
+    after idle [list curl-retry -urlpath /check-for-updates -proto https -port 10443 -expected_hostname www.securitykiss.com -host_lastok [state sku vigo_lastok] -hosts [state sku vigos] -onOk onCheckForUpdates -onError onCheckForUpdatesError]
 }
 
 proc MovedResized {window x y w h} {
@@ -849,17 +853,15 @@ proc place-image {path lbl} {
         $lbl configure -image $imgobj
     }
 }
-    
-# TODO just refactor to be able to call
-#retry-curl hosts onOk onError host_lastok attempts tok
-#
-#proc curl-retry {hosts onOk onError {urlpath /} {proto https} {port 0} {indiv_timeout 8000} {expected_hostname ""} {host_lastok ""} {attempts 0} {tok ""}} 
+
+
 proc curl-retry {args} {
     # Unfortunately http package which may call this proc is catching callback errors 
     # and they don't propagate to our background-error, so we need to catch them all here and log
     if {[catch {
-        fromargs {urlpath indiv_timeout attempts proto port expected_hostname host_lastok hosts onOk onError tok}
+        fromargs {-urlpath -indiv_timeout -attempts -proto -port -expected_hostname -host_lastok -hosts -onOk -onError -tok} \
                  {/ 8000 0 https}
+        puts stderr "$onOk attempts: $attempts"
         if {$proto ne "http" && $proto ne "https"} {
             fatal "Wrong proto: $proto"
         }
@@ -876,31 +878,32 @@ proc curl-retry {args} {
                 set status [http::status $tok]
                 if {$status eq "ok" && $ncode == 200} {
                     # the callback is responsible for http::cleanup
-                    after idle {*}onOk $tok
+                    after idle {*}$onOk {*}[args= -tok -host_lastok]
                     return
                 }
             }
             log Request with token $tok failed. Status: $status, ncode: $ncode
             incr attempts
+            puts stderr "$onOk incremented: $attempts"
             http::cleanup $tok
         }
      
         # We are here only if curl request did not succeed yet
         # Try again if max retries not exceeded
         if {$attempts < [llength $hosts]} {
-            set host [get-next-host $host_lastok $attempts]
+            set host [get-next-host $hosts $host_lastok $attempts]
             if {$expected_hostname eq ""} {
                 set expected_hostname $host
             }
             # although scheduled for non-blocking async it may still throw error here when network is unreachable
             if {[catch {https curl $proto://$host:${port}${urlpath} -timeout $indiv_timeout -expected-hostname $expected_hostname \
-                    -command [concat curl-retry [args- tok] -tok]} out err] == 1} {
+                    -command [concat curl-retry [args- -tok -attempts] -attempts $attempts -tok]} out err] == 1} {
                 log $err
-                after idle {curl-retry [args+ tok error]}
+                after idle {curl-retry [args+ -tok error -attempts $attempts]}
             }
         } else {
             # curl-retry failed for all hosts
-            after idle {*}onError
+            after idle {*}$onError
             return
         }
     } out err] == 1} {
@@ -909,67 +912,39 @@ proc curl-retry {args} {
     }
 }
 
-
-proc ReceiveWelcome {{tok ""}} {
-    static attempts 0
-    static vigo_lastok
-    # Unfortunately http is catching callback errors and they don't propagate to our background-error, so we need to catch them all here and log
-    if {[catch {
-        if {$tok eq ""} {
-            # reset retry counter when called initially (without the token that comes from http callback)
-            set attempts 0
-        } else {
-            if {$tok ne "error"} {
-                set ncode [http::ncode $tok]
-                set status [http::status $tok]
-                set data [http::data $tok]
-                upvar #0 $tok state
-                set url $state(url)
-                if {$status eq "ok" && $ncode == 200} {
-                    #TODO save welcome in config
-                    #tk_messageBox -message "Welcome received: $data" -type ok
-                    log Welcome message received:\n$data
-                    puts stderr "welcome: $data"
-    
-                    set d [json::json2dict $data]
-                    puts stderr "dict: $d"
-                    puts stderr ""
-                    set slist [dict get $d server-lists JADEITE]
-                    state sku {slist $slist}
-    
-                    array set parsed [https parseurl $url]
-                    set vigo_lastok $parsed(host)
-                    http::cleanup $tok
-                    return
-                }
-            }
-            log Request for token $tok failed
-            incr attempts
-            http::cleanup $tok
-        }
-     
-        # We are here only if welcome request did not succeed yet
-        # Try again if max retries not exceeded
-        if {$attempts < [llength [state sku vigos]]} {
-            set cn [state sku cn]
-            set vigo [get-next-vigo $vigo_lastok $attempts]
-            # although scheduled for non-blocking async it may still throw error here when network is unreachable
-            if {[catch {https curl https://$vigo:10443/welcome?cn=$cn -timeout 8000 -expected-hostname www.securitykiss.com -command ReceiveWelcome} out err] == 1} {
-                log $err
-                after idle {ReceiveWelcome error}
-            }
-        } else {
-            # ReceiveWelcome failed for all vigos
-            #TODO use cached config
-            tk_messageBox -message "Could not receive Welcome message" -type ok
-            return
-        }
-    } out err] == 1} {
-        # catch was returning 2 in spite of no error (-code 0) - that's why the check == 1 above. Probably bug in Tcl
-        error $err
-    }
+proc onReceiveWelcome {args} {
+    fromargs {-tok -host_lastok}
+    set data [http::data $tok]
+    #TODO save welcome in config
+    #tk_messageBox -message "Welcome received: $data" -type ok
+    log Welcome message received:\n$data
+    puts stderr "welcome: $data"
+    set d [json::json2dict $data]
+    puts stderr "dict: $d"
+    puts stderr ""
+    set slist [dict get $d serverLists JADEITE]
+    state sku {slist $slist}
+    state sku {vigo_lastok $host_lastok}
+    http::cleanup $tok
 }
 
+proc onReceiveWelcomeError {args} {
+    # ReceiveWelcome failed for all vigos
+    #TODO use cached config
+    tk_messageBox -message "Could not receive Welcome message" -type ok
+}
+
+proc onCheckForUpdates {args} {
+    fromargs {-tok -host_lastok}
+    set data [http::data $tok]
+    puts stderr "onCheckForUpdates: $data"
+    state sku {vigo_lastok $host_lastok}
+    http::cleanup $tok
+}
+
+proc onCheckForUpdatesError {args} {
+    puts stderr "onCheckForUpdatesError: $args"
+}
 
 
 
@@ -987,13 +962,7 @@ proc get-next-host {hosts host_lastok attempt} {
 proc get-next-vigo {vigo_lastok attempt} {
     #TODO if connected use vigo internal IP regardless of attempt
     #else use vigo list
-    set i [lsearch -exact [state sku vigos] $vigo_lastok]
-    if {$i == -1} {
-        set i 0
-    }
-    set next [expr {($i + $attempt) % [llength [state sku vigos]]}]
-    set vigo [lindex [state sku vigos] $next]
-    return $vigo
+    return [get-next-host [state sku vigos] $vigo_lastok $attempt]
 }
 
 

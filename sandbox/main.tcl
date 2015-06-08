@@ -1,3 +1,48 @@
+package require csp
+namespace import csp::*
+
+channel c1
+
+puts "c1=$c1"
+
+ticker t1 1000
+timer t2 3000
+
+proc myrout {t} {
+    puts "myrout"
+    while 1 {
+        puts [<- $t]
+    }
+}
+
+proc selrout {t1 t2} {
+    puts "selrout"
+    while 1 {
+        select {
+            <- $t1 {
+                puts "select t1: [<- $t1]"
+            }
+            <- $t2 {
+                puts "select t2: [<- $t2]"
+            }
+        }
+    }
+
+}
+
+#go myrout $t1
+go selrout $t1 $t2
+puts "main"
+
+#puts "ticker: [<- $t1]"
+
+
+vwait forever
+
+
+
+if 0 {
+
 package require linuxdeps
 package require skutil
 package require Tclx
@@ -28,3 +73,4 @@ vwait forever
 puts "BEFORE linuxdeps"
 linuxdeps tk-install
 puts "AFTER linuxdeps"
+}
