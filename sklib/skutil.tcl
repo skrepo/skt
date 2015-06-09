@@ -436,7 +436,7 @@ proc args- {args} {
 proc fromargs {names {defaults {}}} {
     upvar args a
     foreach {name default} [lzip $names $defaults] {
-        if {[string index $name 0] ne "-"} {
+        if {![string match -* $name]} {
             error "fromargs argument name '$name' must start with dash"
         }
         uplevel [list set [string range $name 1 end] [namedarg $a $name $default]]

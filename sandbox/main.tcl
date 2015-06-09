@@ -18,13 +18,37 @@ proc http_handler {httpout httperr tok} {
     }
 }
 
-proc curl-hosts {tryout tryerr hosts hindex urlpath indiv_timeout proto port expected_hostname} {
+#proc curl-hosts {tryout tryerr hosts hindex urlpath indiv_timeout proto port expected_hostname} {
+proc curl-hosts {tryout tryerr args} {
+    fromargs {-urlpath -indiv_timeout -hosts -hindex -proto -port -expected_hostname} \
+             {/ 5000 {} 0 https}
+    if {$proto ne "http" && $proto ne "https"} {
+        error "Wrong proto: $proto"
+    }
+    if {$port eq ""} {
+        if {$proto eq "http"} {
+            set port 80
+        } elseif {$proto eq "https"} {
+            set port 443
+        }
+    }
+    set opts {}
+    if {$indiv_timeout ne ""} {
+        lappend opts -timeout $indiv_timeout
+    }
+    if {$expected_hostname ne ""} {
+        lappend opts -expected-hostname $expected_hostname
+    }
+
     channel httpout
     channel httperr
     set hlen [llength $hosts]
     foreach i [seq $hlen] {
         set host [lindex $hosts [expr {($hindex+$i) % $hlen}]]
-        https curl $proto://$host:${port}${urlpath} -timeout $indiv_timeout -expected-hostname $expected_hostname -command [list http_handler $httpout $httperr]
+        if {[catch {https curl $proto://$host:${port}${urlpath} {*}$opts -command [list http_handler $httpout $httperr]} out err]} {
+            log $err
+            continue
+        }
         puts "waiting for $host"
         select {
             <- $httpout {
@@ -62,7 +86,7 @@ set proto https
 set port 443
 set expected_hostname www.securitykiss.com
 
-go curl-hosts $tryout $tryerr $hosts $hindex $urlpath $indiv_timeout $proto $port $expected_hostname
+go curl-hosts $tryout $tryerr -hosts $hosts -hindex $hindex -urlpath $urlpath -indiv_timeout $indiv_timeout -proto $proto -port $port -expected_hostname $expected_hostname
 
 select {
     <- $tryout {
