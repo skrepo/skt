@@ -90,36 +90,38 @@ proc ::csp::CReceiveReady {ch} {
 # Close the channel named by ch
 # 3. channel ch purge
 # Close the channel and release resources (further references to the channel will throw error)
-proc ::csp::channel {chName {cap 0}} {
+proc ::csp::channel {chVars {cap 0}} {
     variable Channel
     variable ChannelCap
     variable ChannelCloseMark
     variable CTemplate
-    upvar $chName ch
-    if {$cap eq "close"} {
-        set ChannelCloseMark($ch) 1
-        channel ch purge
-        after idle {after 0 ::csp::goupdate}
-    } elseif {$cap eq "purge"} {
-        if {![CNameCorrect $ch]} {
-            error "Wrong channel name: $ch"
+    lmap chVar $chVars {
+        upvar $chVar ch
+        if {$cap eq "close"} {
+            set ChannelCloseMark($ch) 1
+            channel ch purge
+            after idle {after 0 ::csp::goupdate}
+        } elseif {$cap eq "purge"} {
+            if {![CNameCorrect $ch]} {
+                error "Wrong channel name: $ch"
+            }
+            # if channel command still exists
+            if {[info procs $ch] ne ""} {
+                unset Channel($ch)
+                unset ChannelCap($ch)
+                unset ChannelCloseMark($ch)
+                rename $ch ""
+            }
+        } else {
+            set ch [NewChannel]
+            # initialize channel as a list or do nothing if exists
+            set Channel($ch) {}
+            set ChannelCap($ch) $cap
+            set ChannelCloseMark($ch) 0
+            namespace eval ::csp [string map [list %CHANNEL% $ch] $CTemplate]
         }
-        # if channel command still exists
-        if {[info procs $ch] ne ""} {
-            unset Channel($ch)
-            unset ChannelCap($ch)
-            unset ChannelCloseMark($ch)
-            rename $ch ""
-        }
-    } else {
-        set ch [NewChannel]
-        # initialize channel as a list or do nothing if exists
-        set Channel($ch) {}
-        set ChannelCap($ch) $cap
-        set ChannelCloseMark($ch) 0
-        namespace eval ::csp [string map [list %CHANNEL% $ch] $CTemplate]
+        set ch
     }
-    return $ch
 }
 
 # A channel is considered closed if no longer exists (but its name is correct) 
@@ -213,9 +215,15 @@ proc ::csp::goupdate {} {
     foreach r [array names Routine] {
         if {[info commands $r] eq ""} {
             # coroutine must have ended so remove it from the array
-            unset Routine($r)
+            catch {unset Routine($r)}
         } else {
-            $r
+            # cannot run the already running coroutine - catch error when it happens
+            #puts stderr "CURRENT COROUTINE: [info coroutine]"
+            #puts stderr "r: $r"
+            # this may regularly throw 'coroutine "::csp::Routine_N" is already running'
+            if {[catch {$r} out err]} {
+                #puts stderr "OUT: $out, ERR: $err"
+            }
         }
     }
     set ::csp::resume 1

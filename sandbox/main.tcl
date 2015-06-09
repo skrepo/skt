@@ -6,8 +6,10 @@ package require skutil
 namespace import csp::*
 
 proc http_handler {httpout httperr tok} {
-    # need to catch error in case the handler triggers after the channels were closed
-    catch {
+    # Need to catch error in case the handler triggers after the channels were closed
+    # Also: unfortunately http package which may call this proc is catching callback errors 
+    # and they don't propagate to our background-error, so we need to catch them all here and log
+    if {[catch {
         set ncode [http::ncode $tok]
         set status [http::status $tok]
         if {$status eq "ok" && $ncode == 200} {
@@ -15,10 +17,11 @@ proc http_handler {httpout httperr tok} {
         } else {
             $httperr <- $tok
         }
+    } out err]} {
+        error $err
     }
 }
 
-#proc curl-hosts {tryout tryerr hosts hindex urlpath indiv_timeout proto port expected_hostname} {
 proc curl-hosts {tryout tryerr args} {
     fromargs {-urlpath -indiv_timeout -hosts -hindex -proto -port -expected_hostname} \
              {/ 5000 {} 0 https}
@@ -40,8 +43,7 @@ proc curl-hosts {tryout tryerr args} {
         lappend opts -expected-hostname $expected_hostname
     }
 
-    channel httpout
-    channel httperr
+    channel {httpout httperr}
     set hlen [llength $hosts]
     foreach i [seq $hlen] {
         set host [lindex $hosts [expr {($hindex+$i) % $hlen}]]
@@ -57,8 +59,7 @@ proc curl-hosts {tryout tryerr args} {
                 http::cleanup $token
                 puts "curl-hosts ok data: $data"
                 $tryout <- $data
-                channel httpout close
-                channel httperr close
+                channel {httpout httperr} close
                 return
             }
             <- $httperr {
@@ -70,12 +71,10 @@ proc curl-hosts {tryout tryerr args} {
         }
     }
     $tryerr <- "All hosts failed error"
-    channel httpout close
-    channel httperr close
+    channel {httpout httperr} close
 }
 
-channel tryout
-channel tryerr
+channel {tryout tryerr}
 set hosts {8.8.8.8 8.8.4.4 91.227.221.115}
 #set hosts {8.8.8.8 8.8.4.4}
 #hosts start index
@@ -99,8 +98,7 @@ select {
     }
 }
 
-channel tryout close
-channel tryerr close
+channel {tryout tryerr} close
 
 puts Finished
 
