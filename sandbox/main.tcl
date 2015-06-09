@@ -1,6 +1,23 @@
 package require csp
 namespace import csp::*
 
+proc tryhosts {ch hosts urlpath proto port expected_hostname} {
+    https curl $proto://$host:${port}${urlpath} -timeout $indiv_timeout -expected-hostname $expected_hostname \
+        -command [concat curl-retry [args- -tok -attempts] -attempts $attempts -tok
+}
+
+
+channel chresp
+set hosts {8.8.8.8 8.8.4.4 91.227.221.115}
+set urlpath /test.html
+set proto https
+set port 443
+set expected_hostname www.securitykiss.com
+
+go tryhosts $chresp $hosts $urlpath $proto $port $expected_hostname
+
+
+if 0 {
 channel c1
 
 puts "c1=$c1"
@@ -30,8 +47,17 @@ proc selrout {t1 t2} {
     }
 }
 
+proc receiver {c} {
+    puts "receiver started"
+    while 1 {
+        puts "receiver: [<- $c]"
+    }
+    puts "receiver ended"
+}
+
+
 #go myrout $t1
-go selrout $t1 $t2
+#go selrout $t1 $t2
 puts "main"
 
 #while 1 { puts "ticker: [<- $t1]" }
@@ -43,8 +69,21 @@ $t1 <- tttt
 <- $t3
 
 
-#vwait forever
+channel c1 10
 
+$c1 <- 11
+$c1 <- 22
+channel c1 close
+
+#go receiver $c1
+
+
+range v $c1 {
+    puts "bing: $v"
+}
+
+#vwait forever
+}
 
 
 if 0 {

@@ -8,6 +8,8 @@ namespace eval csp {
     # channel capacity (buffer size)
     variable ChannelCap
     array set ChannelCap {}
+    variable ChannelCloseMark
+    array set ChannelCloseMark {}
     variable Routine
     array set Routine {}
     # counters to produce unique Routine and Channel names
@@ -20,38 +22,47 @@ namespace eval csp {
             if {$operator ne "<-"} {
                 error "Unrecognized operator $operator. Should be <-"
             }
-            if {[info coroutine] eq ""} {
-                while {![CSendReady %CHANNEL%]} {
-                    vwait ::csp::resume
+            if {[CClosed %CHANNEL%]} {
+                error "Cannot send to the closed channel %CHANNEL%"
+            }
+            while {![CSendReady %CHANNEL%]} {
+                if {[CClosed %CHANNEL%]} {
+                    error "Cannot send to the closed channel %CHANNEL%"
                 }
-            } else {
-                while {![CSendReady %CHANNEL%]} {
-                    uplevel yield
-                }
+                Wait
             }
             CAppend %CHANNEL% $val
-            after idle ::csp::goupdate
+            after idle {after 0 ::csp::goupdate}
             # post-send extra logic for rendez-vous channels
             if {![CBuffered %CHANNEL%]} {
                 # wait again for container empty (receiver collected value)
-                if {[info coroutine] eq ""} {
-                    while {![CEmpty %CHANNEL%]} {
-                        vwait ::csp::resume
+                while {![CEmpty %CHANNEL%]} {
+                    if {[CClosed %CHANNEL%]} {
+                        error "Cannot send to the closed channel %CHANNEL%"
                     }
-                } else {
-                    while {![CEmpty %CHANNEL%]} {
-                        uplevel yield
-                    }
+                    Wait
                 }
             }
         }
     }
 
-    namespace export go channel select timer ticker <-
+    namespace export go channel select timer ticker range <-
     namespace ensemble create
 }
 
+proc ::csp::Wait {} {
+    if {[info coroutine] eq ""} {
+        vwait ::csp::resume
+    } else {
+        yield
+    }
+}
+
+
 proc ::csp::CSendReady {ch} {
+    if {[CClosed $ch]} {
+        return 0
+    }
     if {[CBuffered $ch]} {
         return [expr {! [CFull $ch]}]
     } else {
@@ -59,21 +70,44 @@ proc ::csp::CSendReady {ch} {
     }
 }
 
+proc ::csp::CReceiveReady {ch} {
+    return [expr {![CEmpty $ch]}]
+}
 
-# create channel (with internal name) and place that name in given var
+
+
+# 1. channel ch ?cap? 
+# Create channel (with internal name) and place that name in given var
 # the default buffer size (capacity) is zero which means rendez-vous channel
+# 2. channel ch close
+# Close the channel named by ch
+# 3. channel ch purge
+# Close the channel and release resources (further references to the channel will throw error)
 proc ::csp::channel {varName {cap 0}} {
     variable Channel
     variable ChannelCap
+    variable ChannelCloseMark
     variable CTemplate
-    upvar $varName var    
-    set var [NewChannel]
-    # initialize channel as a list or do nothing if exists
-    set Channel($var) {}
-    set ChannelCap($var) $cap
-    namespace eval ::csp [string map [list %CHANNEL% $var] $CTemplate]
+    upvar $varName var
+    if {$cap eq "close"} {
+        set ChannelCloseMark($var) 1
+        after idle {after 0 ::csp::goupdate}
+    } else {
+        set var [NewChannel]
+        # initialize channel as a list or do nothing if exists
+        set Channel($var) {}
+        set ChannelCap($var) $cap
+        set ChannelCloseMark($var) 0
+        namespace eval ::csp [string map [list %CHANNEL% $var] $CTemplate]
+    }
     return $var
 }
+
+proc ::csp::CClosed {ch} {
+    variable ChannelCloseMark
+    return $ChannelCloseMark($ch)
+}
+
 
 # uconditionally append to the channel - internal only
 proc ::csp::CAppend {ch val} {
@@ -131,7 +165,7 @@ proc ::csp::go {args} {
     set rname [::csp::NewRoutine]
     coroutine $rname {*}$args
     set Routine($rname) 1
-    after idle ::csp::goupdate
+    after idle {after 0 ::csp::goupdate}
     return $rname
 }
 
@@ -161,17 +195,15 @@ proc ::csp::CReceive {ch} {
 
 proc ::csp::<- {ch} {
     # check if ch contains elements, if so return element, yield otherwise
-    if {[info coroutine] eq ""} {
-        while {[CEmpty $ch]} {
-            vwait ::csp::resume
+    while {![CReceiveReady $ch]} {
+        # if closed and empty channel break the upper loop
+        if {[CClosed $ch]} {
+            return -code break
         }
-    } else {
-        while {[CEmpty $ch]} {
-            uplevel yield
-        }
+        Wait
     }
     set elem [CReceive $ch]
-    after idle ::csp::goupdate
+    after idle {after 0 ::csp::goupdate}
     return $elem
 }
 
@@ -192,7 +224,7 @@ proc ::csp::select {a} {
                 }
             } elseif {$dir eq "<-"} {
                 set channel [uplevel subst $ch]
-                if {![CEmpty $channel]} {
+                if {[CReceiveReady $channel]} {
                     lappend triples r $channel $body
                 }
             } elseif {$dir eq "default"} {
@@ -205,11 +237,7 @@ proc ::csp::select {a} {
         set ready_count [expr {[llength $triples] / 3}]
         if {$ready_count == 0} {
             if {$default == 0} {
-                if {[info coroutine] eq ""} {
-                    vwait ::csp::resume
-                } else {
-                    uplevel yield
-                }
+                Wait
             } else {
                 return [uplevel $defaultbody]
             }
@@ -251,5 +279,16 @@ proc ::csp::ticker {varName ms} {
     after $ms csp::go ticker_routine $ch $ms
     return $ch
 }
+
+# receive from channel until closed
+proc ::csp::range {varName ch body} {
+    uplevel [subst {
+        while 1 {
+            set $varName \[<- $ch\]
+            $body
+        }
+    }]
+}
+
 
 
