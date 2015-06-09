@@ -2,22 +2,28 @@ package require csp
 package require tls
 package require https
 package require http
+package require skutil
 namespace import csp::*
 
 proc http_handler {httpout httperr tok} {
-    set ncode [http::ncode $tok]
-    set status [http::status $tok]
-    if {$status eq "ok" && $ncode == 200} {
-        $httpout <- $tok
-    } else {
-        $httperr <- $tok
+    # need to catch error in case the handler triggers after the channels were closed
+    catch {
+        set ncode [http::ncode $tok]
+        set status [http::status $tok]
+        if {$status eq "ok" && $ncode == 200} {
+            $httpout <- $tok
+        } else {
+            $httperr <- $tok
+        }
     }
 }
 
-proc tryhosts {tryout tryerr hosts urlpath indiv_timeout proto port expected_hostname} {
+proc curl-hosts {tryout tryerr hosts hindex urlpath indiv_timeout proto port expected_hostname} {
     channel httpout
     channel httperr
-    foreach host $hosts {
+    set hlen [llength $hosts]
+    foreach i [seq $hlen] {
+        set host [lindex $hosts [expr {($hindex+$i) % $hlen}]]
         https curl $proto://$host:${port}${urlpath} -timeout $indiv_timeout -expected-hostname $expected_hostname -command [list http_handler $httpout $httperr]
         puts "waiting for $host"
         select {
@@ -25,7 +31,7 @@ proc tryhosts {tryout tryerr hosts urlpath indiv_timeout proto port expected_hos
                 set token [<- $httpout]
                 set data [http::data $token]
                 http::cleanup $token
-                puts "tryhosts ok data: $data"
+                puts "curl-hosts ok data: $data"
                 $tryout <- $data
                 channel httpout close
                 channel httperr close
@@ -33,7 +39,7 @@ proc tryhosts {tryout tryerr hosts urlpath indiv_timeout proto port expected_hos
             }
             <- $httperr {
                 set token [<- $httperr]
-                puts "tryhosts error for token $token"
+                puts "curl-hosts failed with status: [http::status $token] error: [http::error $token]"
                 http::cleanup $token
                 #TODO logerr
             }
@@ -48,23 +54,24 @@ channel tryout
 channel tryerr
 set hosts {8.8.8.8 8.8.4.4 91.227.221.115}
 #set hosts {8.8.8.8 8.8.4.4}
+#hosts start index
+set hindex 3
 set urlpath /test.html
 set indiv_timeout 3000
 set proto https
 set port 443
-set expected_hostname www.securitykiss.info
+set expected_hostname www.securitykiss.com
 
-go tryhosts $tryout $tryerr $hosts $urlpath $indiv_timeout $proto $port $expected_hostname
-
+go curl-hosts $tryout $tryerr $hosts $hindex $urlpath $indiv_timeout $proto $port $expected_hostname
 
 select {
     <- $tryout {
         set data [<- $tryout]
-        puts "tryhosts success data: $data"
+        puts "curl-hosts success data: $data"
     }
     <- $tryerr {
         set err [<- $tryerr]
-        puts "tryhosts failed with error: $err"
+        puts "curl-hosts failed with error: $err"
     }
 }
 

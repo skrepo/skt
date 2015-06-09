@@ -325,6 +325,7 @@ proc rand-byte-hex {} {
     return [format %02x [rand-byte]]
 }
 
+# return list of numbers from 0 to n-1
 proc seq {n} {
     set res {}
     for {set i 0} {$i < $n} {incr i} {
