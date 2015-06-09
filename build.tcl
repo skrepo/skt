@@ -85,7 +85,7 @@ proc release {} {
 prepare-lib sklib 0.0.0
 
 #build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
-build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0}
+build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0 tls-1.6.4}
 ex ./build/sandbox/linux-x86_64/sandbox.bin
 
 #build-total

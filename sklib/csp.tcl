@@ -71,6 +71,13 @@ proc ::csp::CSendReady {ch} {
 }
 
 proc ::csp::CReceiveReady {ch} {
+    if {![CNameCorrect $ch]} {
+        error "Wrong channel name: $ch"
+    }
+    # if channel command no longer exists
+    if {[info procs $ch] eq ""} {
+        return 0
+    }
     return [expr {![CEmpty $ch]}]
 }
 
@@ -83,27 +90,48 @@ proc ::csp::CReceiveReady {ch} {
 # Close the channel named by ch
 # 3. channel ch purge
 # Close the channel and release resources (further references to the channel will throw error)
-proc ::csp::channel {varName {cap 0}} {
+proc ::csp::channel {chName {cap 0}} {
     variable Channel
     variable ChannelCap
     variable ChannelCloseMark
     variable CTemplate
-    upvar $varName var
+    upvar $chName ch
     if {$cap eq "close"} {
-        set ChannelCloseMark($var) 1
+        set ChannelCloseMark($ch) 1
+        channel ch purge
         after idle {after 0 ::csp::goupdate}
+    } elseif {$cap eq "purge"} {
+        if {![CNameCorrect $ch]} {
+            error "Wrong channel name: $ch"
+        }
+        # if channel command still exists
+        if {[info procs $ch] ne ""} {
+            unset Channel($ch)
+            unset ChannelCap($ch)
+            unset ChannelCloseMark($ch)
+            rename $ch ""
+        }
     } else {
-        set var [NewChannel]
+        set ch [NewChannel]
         # initialize channel as a list or do nothing if exists
-        set Channel($var) {}
-        set ChannelCap($var) $cap
-        set ChannelCloseMark($var) 0
-        namespace eval ::csp [string map [list %CHANNEL% $var] $CTemplate]
+        set Channel($ch) {}
+        set ChannelCap($ch) $cap
+        set ChannelCloseMark($ch) 0
+        namespace eval ::csp [string map [list %CHANNEL% $ch] $CTemplate]
     }
-    return $var
+    return $ch
 }
 
+# A channel is considered closed if no longer exists (but its name is correct) 
+# or if it was marked as closed
 proc ::csp::CClosed {ch} {
+    if {![CNameCorrect $ch]} {
+        error "Wrong channel name: $ch"
+    }
+    # if channel command no longer exists
+    if {[info procs $ch] eq ""} {
+        return 1
+    }
     variable ChannelCloseMark
     return $ChannelCloseMark($ch)
 }
@@ -123,6 +151,13 @@ proc ::csp::CBuffered {ch} {
 }
 
 proc ::csp::CEmpty {ch} {
+    if {![CNameCorrect $ch]} {
+        error "Wrong channel name: $ch"
+    }
+    # if channel command no longer exists
+    if {[info procs $ch] eq ""} {
+        return 1
+    }
     variable Channel
     return [expr {[llength $Channel($ch)] == 0}]
 }
@@ -159,6 +194,7 @@ proc ::csp::NewChannel {} {
 
 
 # invoke proc in a routine
+# args should be proc name and arguments
 proc ::csp::go {args} {
     variable Routine
     # args contain the routine name with arguments
@@ -193,11 +229,17 @@ proc ::csp::CReceive {ch} {
     return $elem
 }
 
+proc ::csp::CNameCorrect {ch} {
+    return [regexp {::csp::Channel_\d+} $ch]
+}
+
+
 proc ::csp::<- {ch} {
     # check if ch contains elements, if so return element, yield otherwise
     while {![CReceiveReady $ch]} {
         # if closed and empty channel break the upper loop
         if {[CClosed $ch]} {
+            channel ch purge
             return -code break
         }
         Wait
@@ -261,8 +303,8 @@ proc ::csp::timer_routine {ch} {
     $ch <- [clock seconds]
 }
 
-proc ::csp::timer {varName ms} {
-    upvar $varName ch
+proc ::csp::timer {chName ms} {
+    upvar $chName ch
     csp::channel ch 0
     after $ms csp::go timer_routine $ch
     return $ch
@@ -273,8 +315,8 @@ proc ::csp::ticker_routine {ch ms} {
     after $ms csp::go ticker_routine $ch $ms
 }
 
-proc ::csp::ticker {varName ms} {
-    upvar $varName ch
+proc ::csp::ticker {chName ms} {
+    upvar $chName ch
     csp::channel ch 0
     after $ms csp::go ticker_routine $ch $ms
     return $ch

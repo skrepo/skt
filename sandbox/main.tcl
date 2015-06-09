@@ -1,20 +1,85 @@
 package require csp
+package require tls
+package require https
+package require http
 namespace import csp::*
 
-proc tryhosts {ch hosts urlpath proto port expected_hostname} {
-    https curl $proto://$host:${port}${urlpath} -timeout $indiv_timeout -expected-hostname $expected_hostname \
-        -command [concat curl-retry [args- -tok -attempts] -attempts $attempts -tok
+proc http_handler {httpout httperr tok} {
+    set ncode [http::ncode $tok]
+    set status [http::status $tok]
+    if {$status eq "ok" && $ncode == 200} {
+        $httpout <- $tok
+    } else {
+        $httperr <- $tok
+    }
 }
 
+proc tryhosts {tryout tryerr hosts urlpath indiv_timeout proto port expected_hostname} {
+    channel httpout
+    channel httperr
+    foreach host $hosts {
+        https curl $proto://$host:${port}${urlpath} -timeout $indiv_timeout -expected-hostname $expected_hostname -command [list http_handler $httpout $httperr]
+        puts "waiting for $host"
+        select {
+            <- $httpout {
+                set token [<- $httpout]
+                set data [http::data $token]
+                http::cleanup $token
+                puts "tryhosts ok data: $data"
+                $tryout <- $data
+                channel httpout close
+                channel httperr close
+                return
+            }
+            <- $httperr {
+                set token [<- $httperr]
+                puts "tryhosts error for token $token"
+                http::cleanup $token
+                #TODO logerr
+            }
+        }
+    }
+    $tryerr <- "All hosts failed error"
+    channel httpout close
+    channel httperr close
+}
 
-channel chresp
+channel tryout
+channel tryerr
 set hosts {8.8.8.8 8.8.4.4 91.227.221.115}
+#set hosts {8.8.8.8 8.8.4.4}
 set urlpath /test.html
+set indiv_timeout 3000
 set proto https
 set port 443
-set expected_hostname www.securitykiss.com
+set expected_hostname www.securitykiss.info
 
-go tryhosts $chresp $hosts $urlpath $proto $port $expected_hostname
+go tryhosts $tryout $tryerr $hosts $urlpath $indiv_timeout $proto $port $expected_hostname
+
+
+select {
+    <- $tryout {
+        set data [<- $tryout]
+        puts "tryhosts success data: $data"
+    }
+    <- $tryerr {
+        set err [<- $tryerr]
+        puts "tryhosts failed with error: $err"
+    }
+}
+
+channel tryout close
+channel tryerr close
+
+puts Finished
+
+
+
+
+
+
+
+
 
 
 if 0 {
