@@ -986,66 +986,6 @@ proc curl-hosts {tryout tryerr args} {
     $tryerr <- "All hosts failed error"
 }
 
-# @deprecated
-proc curl-retry {args} {
-    # Unfortunately http package which may call this proc is catching callback errors 
-    # and they don't propagate to our background-error, so we need to catch them all here and log
-    if {[catch {
-        fromargs {-urlpath -indiv_timeout -attempts -proto -port -expected_hostname -host_lastok -hosts -onOk -onError -tok} \
-                 {/ 8000 0 https}
-        puts stderr "$onOk attempts: $attempts"
-        if {$proto ne "http" && $proto ne "https"} {
-            fatal "Wrong proto: $proto"
-        }
-        if {$port eq ""} {
-            if {$proto eq "http"} {
-                set port 80
-            } elseif {$proto eq "https"} {
-                set port 443
-            }
-        }
-        if {$tok ne ""} {
-            if {$tok ne "error"} {
-                set ncode [http::ncode $tok]
-                set status [http::status $tok]
-                if {$status eq "ok" && $ncode == 200} {
-                    # the callback is responsible for http::cleanup
-                    after idle {*}$onOk {*}[args= -tok -host_lastok]
-                    return
-                }
-            }
-            log Request with token $tok failed. Status: $status, ncode: $ncode
-            incr attempts
-            puts stderr "$onOk incremented: $attempts"
-            http::cleanup $tok
-        }
-     
-        # We are here only if curl request did not succeed yet
-        # Try again if max retries not exceeded
-        if {$attempts < [llength $hosts]} {
-            set host [get-next-host $hosts $host_lastok $attempts]
-            if {$expected_hostname eq ""} {
-                set expected_hostname $host
-            }
-            # although scheduled for non-blocking async it may still throw error here when network is unreachable
-            if {[catch {https curl $proto://$host:${port}${urlpath} -timeout $indiv_timeout -expected-hostname $expected_hostname \
-                    -command [concat curl-retry [args- -tok -attempts] -attempts $attempts -tok]} out err] == 1} {
-                log $err
-                after idle {curl-retry [args+ -tok error -attempts $attempts]}
-            }
-        } else {
-            # curl-retry failed for all hosts
-            after idle {*}$onError
-            return
-        }
-    } out err] == 1} {
-        # catch was returning 2 in spite of no error (-code 0) - that's why the check == 1 above. Probably bug in Tcl
-        error $err
-    }
-}
-
-
-
 
 # get next host to try based on the attempt number relative the last succeeded host
 proc get-next-host {hosts host_lastok attempt} {

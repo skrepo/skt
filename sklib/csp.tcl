@@ -226,6 +226,7 @@ proc ::csp::goupdate {} {
             }
         }
     }
+    # it is enough to resume only once - see vwait experiments in vwait1.tcl
     set ::csp::resume 1
 }
 

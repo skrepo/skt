@@ -1,7 +1,5 @@
 package provide unix 0.0.0
 package require Tclx
-# to prevent name conflicts
-# rename ::select ""
 
 namespace eval ::unix {
     namespace export relinquish-root is-x-running
