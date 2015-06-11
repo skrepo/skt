@@ -221,9 +221,10 @@ proc ::csp::goupdate {} {
             #puts stderr "CURRENT COROUTINE: [info coroutine]"
             #puts stderr "r: $r"
             # this may regularly throw 'coroutine "::csp::Routine_N" is already running'
-            if {[catch {$r} out err]} {
+            after idle [list after 0 catch $r]
+            #if {[catch {$r} out err]} 
                 #puts stderr "OUT: $out, ERR: $err"
-            }
+            
         }
     }
     # it is enough to resume only once - see vwait experiments in vwait1.tcl
