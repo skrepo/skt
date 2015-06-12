@@ -91,11 +91,15 @@ prepare-lib sklib 0.0.0
 #build-total
 
 #i18n code2msg ./sku/main.tcl {es pl} ./sku/messages.txt 
-build-sku linux x86_64
+#build-sku linux x86_64
 
 #build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 sklib-0.0.0 Tclx-8.4}
 #ex ./build/sample/linux-ix86/sample.bin
 
+package require tcltest
+#source ./sklib/csp_test1.tcl 
+tcltest::configure -testdir [file normalize ./sklib]
+tcltest::runAllTests
 
 exit
 

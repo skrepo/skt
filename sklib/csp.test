@@ -1,0 +1,101 @@
+
+if {"::tcltest" ne [namespace children]} {
+    package require tcltest
+    namespace import -force ::tcltest::*
+}
+if {"::csp" ne [namespace children]} {
+    lappend auto_path [file normalize ./lib/generic]
+    package require csp
+    namespace import csp::*
+}
+
+test csp-1.1 {simple sender receiver rendez-vous} -body {
+    proc sender {ch} {
+        foreach i {1 2 3 4} {
+            puts -nonewline i$i
+            $ch <- $i
+        }
+    }
+    proc receiver {ch} {
+        while 1 {
+            puts -nonewline o[<- $ch]
+        }
+    }
+    channel ch
+    go sender $ch
+    go receiver $ch
+    after 500 set little 1
+    vwait little
+    return
+} -output {i1o1i2o2i3o3i4o4}
+
+test csp-1.2 {simple sender receiver buffered channel} -body {
+    proc sender {ch} {
+        foreach i {1 2 3 4} {
+            puts -nonewline i$i
+            $ch <- $i
+        }
+    }
+    proc receiver {ch} {
+        while 1 {
+            puts -nonewline o[<- $ch]
+        }
+    }
+    channel ch 5
+    go sender $ch
+    go receiver $ch
+    after 500 set little 1
+    vwait little
+    channel ch close
+    return
+} -output {i1i2i3i4o1o2o3o4}
+
+test csp-1.3 {ping pong rendez-vous} -body {
+    proc p1 {chin chout} {
+        while 1 {
+            $chout <- [<- $chin]
+        }
+    }
+    proc p2 {chin chout} {
+        foreach i {1 2 3 4} {
+            puts -nonewline $i
+            $chout <- $i
+            puts -nonewline [<- $chin]
+        }
+    }
+    channel {ch1 ch2}
+    go p1 $ch1 $ch2
+    go p2 $ch2 $ch1
+    after 500 set little 1
+    vwait little
+    channel {ch1 ch2} close
+    return
+} -output {11223344}
+
+
+test csp-1.4 {ping pong buffered channels} -body {
+    proc p1 {chin chout} {
+        while 1 {
+            $chout <- [<- $chin]
+        }
+    }
+    proc p2 {chin chout} {
+        foreach i {1 2 3 4} {
+            puts -nonewline $i
+            $chout <- $i
+            puts -nonewline [<- $chin]
+        }
+    }
+    channel {ch1 ch2} 5
+    go p1 $ch1 $ch2
+    go p2 $ch2 $ch1
+    after 500 set little 1
+    vwait little
+    channel {ch1 ch2} close
+    return
+} -output {11223344}
+
+
+::tcltest::cleanupTests
+return
+

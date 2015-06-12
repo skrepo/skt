@@ -341,6 +341,3 @@ proc ::csp::range {varName ch body} {
         }
     }]
 }
-
-
-
