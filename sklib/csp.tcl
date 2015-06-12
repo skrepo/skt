@@ -19,45 +19,69 @@ namespace eval csp {
     # Channel proc template
     variable CTemplate {
         proc %CHANNEL% {operator val} {
-            if {$operator ne "<-"} {
-                error "Unrecognized operator $operator. Should be <-"
-            }
-            if {[CClosed %CHANNEL%]} {
-                error "Cannot send to the closed channel %CHANNEL%"
-            }
+            CheckOperator $operator
+            CheckClosed %CHANNEL%
             while {![CSendReady %CHANNEL%]} {
-                if {[CClosed %CHANNEL%]} {
-                    error "Cannot send to the closed channel %CHANNEL%"
-                }
-                Wait
+                CheckClosed %CHANNEL%
+                Wait$operator
             }
             CAppend %CHANNEL% $val
             after idle {after 0 ::csp::goupdate}
             # post-send extra logic for rendez-vous channels
             if {![CBuffered %CHANNEL%]} {
-                # wait again for container empty (receiver collected value)
+                # wait again for container empty (once receiver collected the value)
                 while {![CEmpty %CHANNEL%]} {
-                    if {[CClosed %CHANNEL%]} {
-                        error "Cannot send to the closed channel %CHANNEL%"
-                    }
-                    Wait
+                    CheckClosed %CHANNEL%
+                    Wait$operator
                 }
             }
         }
     }
 
-    namespace export go channel select timer ticker range <-
+    namespace export go channel select timer ticker range <- <-!
     namespace ensemble create
 }
 
-proc ::csp::Wait {} {
+proc ::csp::Wait<- {} {
+    yield
+}
+
+proc ::csp::Wait<-! {} {
+    vwait ::csp::resume
+}
+
+proc ::csp::IsOperator {op} {
+    return [expr {$op in {<- <-!}}]
+}
+
+proc ::csp::CheckOperator {op} {
+    if {![IsOperator $op]} {
+        error "Unrecognized operator $op. Should be <- or <-!"
+    }
     if {[info coroutine] eq ""} {
-        vwait ::csp::resume
+        if {$op eq "<-"} {
+            error "<- can only be used in a coroutine"
+        }
     } else {
-        yield
+        if {$op eq "<-!"} {
+            error "<-! should not be used in a coroutine"
+        }
     }
 }
 
+# throw error if channel is closed
+proc ::csp::CheckClosed {ch} {
+    if {[CClosed $ch]} {
+        error "Cannot send to the closed channel %CHANNEL%"
+    }
+}
+
+# throw error if incorrect channel name
+proc ::csp::CheckName {ch} {
+    if {![regexp {::csp::Channel_\d+} $ch]} {
+        error "Wrong channel name: $ch"
+    }
+}
 
 proc ::csp::CSendReady {ch} {
     if {[CClosed $ch]} {
@@ -71,9 +95,7 @@ proc ::csp::CSendReady {ch} {
 }
 
 proc ::csp::CReceiveReady {ch} {
-    if {![CNameCorrect $ch]} {
-        error "Wrong channel name: $ch"
-    }
+    CheckName $ch 
     # if channel command no longer exists
     if {[info procs $ch] eq ""} {
         return 0
@@ -102,9 +124,7 @@ proc ::csp::channel {chVars {cap 0}} {
             channel ch purge
             after idle {after 0 ::csp::goupdate}
         } elseif {$cap eq "purge"} {
-            if {![CNameCorrect $ch]} {
-                error "Wrong channel name: $ch"
-            }
+            CheckName $ch
             # if channel command still exists
             if {[info procs $ch] ne ""} {
                 unset Channel($ch)
@@ -127,9 +147,7 @@ proc ::csp::channel {chVars {cap 0}} {
 # A channel is considered closed if no longer exists (but its name is correct) 
 # or if it was marked as closed
 proc ::csp::CClosed {ch} {
-    if {![CNameCorrect $ch]} {
-        error "Wrong channel name: $ch"
-    }
+    CheckName $ch
     # if channel command no longer exists
     if {[info procs $ch] eq ""} {
         return 1
@@ -153,9 +171,7 @@ proc ::csp::CBuffered {ch} {
 }
 
 proc ::csp::CEmpty {ch} {
-    if {![CNameCorrect $ch]} {
-        error "Wrong channel name: $ch"
-    }
+    CheckName $ch
     # if channel command no longer exists
     if {[info procs $ch] eq ""} {
         return 1
@@ -239,12 +255,8 @@ proc ::csp::CReceive {ch} {
     return $elem
 }
 
-proc ::csp::CNameCorrect {ch} {
-    return [regexp {::csp::Channel_\d+} $ch]
-}
-
-
-proc ::csp::<- {ch} {
+proc ::csp::ReceiveWith {ch operator} {
+    CheckOperator $operator
     # check if ch contains elements, if so return element, yield otherwise
     while {![CReceiveReady $ch]} {
         # if closed and empty channel break the upper loop
@@ -252,44 +264,73 @@ proc ::csp::<- {ch} {
             channel ch purge
             return -code break
         }
-        Wait
+        Wait$operator
     }
     set elem [CReceive $ch]
     after idle {after 0 ::csp::goupdate}
     return $elem
 }
 
+# Can be only used from coroutine
+# Uses yield for wait
+proc ::csp::<- {ch} {
+    return [ReceiveWith $ch <-]
+}
+
+# Can be used from non-coroutine
+# Uses vwait for wait => nested event loops
+# It means that not ready channel in nested vwait 
+# may block an upstream channel that become ready
+# Use with care. Avoid if you can.
+proc ::csp::<-! {ch} {
+    return [ReceiveWith $ch <-!]
+}
+
 
 proc ::csp::select {a} {
     set ready_count 0
     while {$ready_count == 0} {
-        # (dir ch body) triples ready for send/receive
+        # (op ch body) triples ready for send/receive
         set triples {}
         set default 0
-        set defaultbody ""
-        foreach {dir ch body} $a {
-            if {$ch eq "<-"} {
-                lassign [list $dir $ch] ch dir
+        set defaultbody {}
+        set operator {}
+        foreach {op ch body} $a {
+            if {[IsOperator $ch]} {
+                lassign [list $op $ch] ch op
                 set channel [uplevel subst $ch]
+                if {$op ni $operator} {
+                    lappend operator $op
+                }
                 if {[CSendReady $channel]} {
                     lappend triples s $channel $body
                 }
-            } elseif {$dir eq "<-"} {
+            } elseif {[IsOperator $op]} {
                 set channel [uplevel subst $ch]
+                if {$op ni $operator} {
+                    lappend operator $op
+                }
                 if {[CReceiveReady $channel]} {
                     lappend triples r $channel $body
                 }
-            } elseif {$dir eq "default"} {
+            } elseif {$op eq "default"} {
                 set default 1
                 set defaultbody $ch
             } else {
-                error "Wrong select arguments: $dir $ch"
+                error "Wrong select arguments: $op $ch"
             }
         }
+        if {[llength $operator] == 0} {
+            error "<- or <-! operator required in select"
+        }
+        if {[llength $operator] > 1} {
+            error "<- and <-! should not be mixed in a single select"
+        }
+        CheckOperator $operator
         set ready_count [expr {[llength $triples] / 3}]
         if {$ready_count == 0} {
             if {$default == 0} {
-                Wait
+                Wait$operator
             } else {
                 return [uplevel $defaultbody]
             }
@@ -303,11 +344,9 @@ proc ::csp::select {a} {
         set triple [lrange $triples [expr {$random * 3}] [expr {$random * 3 + 2}]]
     }
      
-    lassign $triple dir ch body
+    lassign $triple op ch body
     return [uplevel $body]
 }
-
-
 
 proc ::csp::timer_routine {ch} {
     $ch <- [clock seconds]

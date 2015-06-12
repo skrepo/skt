@@ -96,6 +96,51 @@ test csp-1.4 {ping pong buffered channels} -body {
 } -output {11223344}
 
 
+test csp-1.5 {sync coroutine with main control flow} -body {
+    proc p1 {ch} {
+        puts -nonewline [<- $ch]
+    }
+    channel ch
+    go p1 $ch
+    puts -nonewline a
+    # this will be run outside of coroutine
+    after 200 $ch <-! 1
+    puts -nonewline b
+    after 500 set little 1
+    vwait little
+    puts -nonewline c
+    channel ch close
+    return
+} -output {ab1c}
+
+
+test csp-1.6 {sync coroutine with main control flow - reverse} -body {
+    proc p1 {ch} {
+        foreach i {1 2 3} {
+            puts -nonewline i$i
+            $ch <- $i
+        }
+    }
+    channel ch
+    go p1 $ch
+    puts -nonewline a
+    # this will be run out of coroutine
+    after 200 puts -nonewline o\[<-! $ch\]
+    puts -nonewline b
+    after 300 puts -nonewline o\[<-! $ch\]
+    puts -nonewline c
+    after 400 puts -nonewline o\[<-! $ch\]
+    puts -nonewline d
+    after 500 set little 1
+    vwait little
+    puts -nonewline e
+    channel ch close
+    return
+} -output {i1abcdo1i2o2i3o3e}
+
+
+
+
 ::tcltest::cleanupTests
 return
 
