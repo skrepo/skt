@@ -20,6 +20,8 @@ namespace eval csp {
             if {$operator eq "close"} {
                 # delete channel command == channel closed
                 rename %CHANNEL% "" 
+                # let the CDrained purge the channel if empty
+                CDrained %CHANNEL%
                 SetResume
                 return
             }
