@@ -27,10 +27,6 @@ package require i18n
 package require csp
 namespace import csp::*
 
-#puts stderr "existing select: [info body select]"
-
-puts stderr "select: [namespace origin select]"
-
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
 
@@ -139,7 +135,7 @@ proc read-vigos {} {
         }
     }
     state sku {vigos $vigos}
-    puts "vigos: $vigos"
+    puts stderr "vigos: $vigos"
     #TODO use vigos to get current time - why do we need it before welcome?.
     #TODO isn't certificate signing start date a problem in case of vigos in different timezones? Consider signing with golang crypto libraries
 }
@@ -562,6 +558,7 @@ if 0 {
 proc check-for-updates {} {
     channel {chout cherr} 1
     vigo-curl $chout $cherr /check-for-updates
+    puts stderr "check-for-updates"
     select {
         <- $chout {
             set data [<- $chout]
@@ -914,24 +911,6 @@ proc place-image {path lbl} {
     }
 }
 
-
-proc http_handler {httpout httperr tok} {
-    # Need to catch error in case the handler triggers after the channels were closed
-    # Also: unfortunately http package which may call this proc is catching callback errors 
-    # and they don't propagate to our background-error, so we need to catch them all here and log
-    if {[catch {
-        set ncode [http::ncode $tok]
-        set status [http::status $tok]
-        if {$status eq "ok" && $ncode == 200} {
-            $httpout <- $tok
-        } else {
-            $httperr <- $tok
-        }
-    } out err]} {
-        log $err
-    }
-}
-
 proc curl-hosts {tryout tryerr args} {
     fromargs {-urlpath -indiv_timeout -hosts -hindex -proto -port -expected_hostname} \
              {/ 5000 {} 0 https}
@@ -956,36 +935,36 @@ proc curl-hosts {tryout tryerr args} {
     set hlen [llength $hosts]
     foreach i [seq $hlen] {
         set host_index [expr {($hindex+$i) % $hlen}]
-        # hindex is the index to start from when iterating hosts
+        # host_index is the index to start from when iterating hosts
         set host [lindex $hosts $host_index]
         set url $proto://$host:${port}${urlpath}
-        channel {httpout httperr} 1
-        if {[catch {https curl $url {*}$opts -command [list http_handler $httpout $httperr]} out err] == 0} {
-            puts "waiting for $host"
-            select {
-                <- $httpout {
-                    set token [<- $httpout]
-                    set data [http::data $token]
-                    http::cleanup $token
-                    
-                    state sku {vigo_lastok $host_index}
-                    puts "curl-hosts $url success. data: $data"
-                    $tryout <- $data
-                    $httpout close
-                    $httperr close
-                    return
-                }
-                <- $httperr {
-                    set token [<- $httperr]
-                    log "curl-hosts $url failed with status: [http::status $token], error: [http::error $token]"
-                    http::cleanup $token
-                }
-            }
-        } else { 
+        channel chhttp 1
+        if {[catch {https curl $url {*}$opts -command [-> $chhttp]} out err]} {
+            catch {$chhttp close}
             log $err
+        } else {
+            puts stderr "waiting for $host"
+            # Need to catch error in case the handler triggers after the channel was closed (if using select with timer channel for timeouts)
+            if {[catch {
+                set tok [<- $chhttp]
+                $chhttp close
+                set ncode [http::ncode $tok]
+                set status [http::status $tok]
+                if {$status eq "ok" && $ncode == 200} {
+                    set data [http::data $tok]
+                    http::cleanup $tok
+                    state sku {vigo_lastok $host_index}
+                    log "curl-hosts $url success. data: $data"
+                    $tryout <- $data
+                    return
+                } else {
+                    log "curl-hosts $url failed with status: [http::status $tok], error: [http::error $tok]"
+                    http::cleanup $tok
+                }
+            } out err]} {
+                log $err
+            }
         }
-        $httpout close
-        $httperr close
     }
     $tryerr <- "All hosts failed error"
 }
