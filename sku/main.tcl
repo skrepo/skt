@@ -939,30 +939,28 @@ proc curl-hosts {tryout tryerr args} {
         set host [lindex $hosts $host_index]
         set url $proto://$host:${port}${urlpath}
         channel chhttp 1
-        if {[catch {https curl $url {*}$opts -command [-> $chhttp]} out err]} {
-            catch {$chhttp close}
-            log $err
-        } else {
-            puts stderr "waiting for $host"
-            # Need to catch error in case the handler triggers after the channel was closed (if using select with timer channel for timeouts)
-            if {[catch {
-                set tok [<- $chhttp]
+        # Need to catch error in case the handler triggers after the channel was closed (if using select with timer channel for timeouts)
+        # or https curl throws error immediately
+        try {
+            https curl $url {*}$opts -command [-> $chhttp]
+            set tok [<- $chhttp]
+            set ncode [http::ncode $tok]
+            set status [http::status $tok]
+            if {$status eq "ok" && $ncode == 200} {
+                set data [http::data $tok]
+                state sku {vigo_lastok $host_index}
+                log "curl-hosts $url success. data: $data"
+                $tryout <- $data
+                return
+            } else {
+                log "curl-hosts $url failed with status: [http::status $tok], error: [http::error $tok]"
+            }
+        } on error {e1 e2} { 
+            log $e1 $e2
+        } finally {
+            catch {
+                http::cleanup $tok
                 $chhttp close
-                set ncode [http::ncode $tok]
-                set status [http::status $tok]
-                if {$status eq "ok" && $ncode == 200} {
-                    set data [http::data $tok]
-                    http::cleanup $tok
-                    state sku {vigo_lastok $host_index}
-                    log "curl-hosts $url success. data: $data"
-                    $tryout <- $data
-                    return
-                } else {
-                    log "curl-hosts $url failed with status: [http::status $tok], error: [http::error $tok]"
-                    http::cleanup $tok
-                }
-            } out err]} {
-                log $err
             }
         }
     }
