@@ -18,15 +18,20 @@ namespace eval csp {
 
     # Channel proc template
     variable CTemplate {
-        proc %CHANNEL% {operator val} {
+        proc %CHANNEL% {operator {val ""}} {
+            if {$operator eq "close"} {
+                set ChannelCloseMark(%CHANNEL%) 1
+                rename %CHANNEL% "" 
+                SetResume
+                return
+            }
             CheckOperator $operator
-            CheckClosed %CHANNEL%
             while {![CSendReady %CHANNEL%]} {
                 CheckClosed %CHANNEL%
                 Wait$operator
             }
             CAppend %CHANNEL% $val
-            after idle {after 0 ::csp::goupdate}
+            SetResume
             # post-send extra logic for rendez-vous channels
             if {![CBuffered %CHANNEL%]} {
                 # wait again for container empty (once receiver collected the value)
@@ -38,7 +43,7 @@ namespace eval csp {
         }
     }
 
-    namespace export go channel select timer ticker range <- <-!
+    namespace export go channel select timer ticker range <- <-! -> ->>
     namespace ensemble create
 }
 
@@ -103,15 +108,22 @@ proc ::csp::CReceiveReady {ch} {
     return [expr {![CEmpty $ch]}]
 }
 
+# remove the channel completely
+proc ::csp::CPurge {ch} {
+    CheckName $ch
+    catch {
+        unset Channel($ch)
+        unset ChannelCap($ch)
+        unset ChannelCloseMark($ch)
+        rename $ch ""
+        SetResume
+    }
+}
 
 
-# 1. channel ch ?cap? 
-# Create channel (with internal name) and place that name in given var
+# channel chlist ?cap? 
+# Create channel(s) (with internal name) and place that name in given var
 # the default buffer size (capacity) is zero which means rendez-vous channel
-# 2. channel ch close
-# Close the channel named by ch
-# 3. channel ch purge
-# Close the channel and release resources (further references to the channel will throw error)
 proc ::csp::channel {chVars {cap 0}} {
     variable Channel
     variable ChannelCap
@@ -119,28 +131,12 @@ proc ::csp::channel {chVars {cap 0}} {
     variable CTemplate
     lmap chVar $chVars {
         upvar $chVar ch
-        if {$cap eq "close"} {
-            set ChannelCloseMark($ch) 1
-            channel ch purge
-            after idle {after 0 ::csp::goupdate}
-        } elseif {$cap eq "purge"} {
-            CheckName $ch
-            # if channel command still exists
-            if {[info procs $ch] ne ""} {
-                unset Channel($ch)
-                unset ChannelCap($ch)
-                unset ChannelCloseMark($ch)
-                rename $ch ""
-            }
-        } else {
-            set ch [NewChannel]
-            # initialize channel as a list or do nothing if exists
-            set Channel($ch) {}
-            set ChannelCap($ch) $cap
-            set ChannelCloseMark($ch) 0
-            namespace eval ::csp [string map [list %CHANNEL% $ch] $CTemplate]
-        }
-        set ch
+        set ch [NewChannel]
+        # initialize channel as a list or do nothing if exists
+        set Channel($ch) {}
+        set ChannelCap($ch) $cap
+        set ChannelCloseMark($ch) 0
+        namespace eval ::csp [string map [list %CHANNEL% $ch] $CTemplate]
     }
 }
 
@@ -219,14 +215,15 @@ proc ::csp::go {args} {
     set rname [::csp::NewRoutine]
     coroutine $rname {*}$args
     set Routine($rname) 1
-    after idle {after 0 ::csp::goupdate}
+    SetResume
     return $rname
 }
 
-# TODO every routine should save in Routine array if it did anything last time when called
-# if it was idle set 0 in the array
-# if all idle don't schedule next goupdate
-proc ::csp::goupdate {} {
+proc ::csp::SetResume {} {
+    after idle {after 0 ::csp::Resume}
+}
+
+proc ::csp::Resume {} {
     variable Routine
     foreach r [array names Routine] {
         if {[info commands $r] eq ""} {
@@ -237,13 +234,13 @@ proc ::csp::goupdate {} {
             #puts stderr "CURRENT COROUTINE: [info coroutine]"
             #puts stderr "r: $r"
             # this may regularly throw 'coroutine "::csp::Routine_N" is already running'
-            after idle [list after 0 catch $r]
+            catch $r
+            #after idle [list after 0 catch $r]
             #if {[catch {$r} out err]} 
                 #puts stderr "OUT: $out, ERR: $err"
             
         }
     }
-    # it is enough to resume only once - see vwait experiments in vwait1.tcl
     set ::csp::resume 1
 }
 
@@ -261,13 +258,13 @@ proc ::csp::ReceiveWith {ch operator} {
     while {![CReceiveReady $ch]} {
         # if closed and empty channel break the upper loop
         if {[CClosed $ch]} {
-            channel ch purge
+            CPurge $ch
             return -code break
         }
         Wait$operator
     }
     set elem [CReceive $ch]
-    after idle {after 0 ::csp::goupdate}
+    SetResume
     return $elem
 }
 
@@ -286,6 +283,36 @@ proc ::csp::<-! {ch} {
     return [ReceiveWith $ch <-!]
 }
 
+
+# Create a callback handler being a coroutine which when called
+# will send callback arguments to the given channel
+proc ::csp::-> {ch} {
+    # this coroutine will not be registered in Routine array for unblocking calls
+    # it should be called from the userland callback
+    set routine [NewRoutine]
+    coroutine $routine OneTimeSender $ch
+    return $routine
+}
+
+proc ::csp::OneTimeSender {ch} {
+    set cbargs [yield]
+    $ch <- $cbargs
+}
+
+proc ::csp::->> {ch} {
+    # this coroutine will not be registered in Routine array for unblocking calls
+    # it should be called from the userland callback
+    set routine [NewRoutine]
+    coroutine $routine MultiSender $ch
+    return $routine
+}
+
+proc ::csp::MultiSender {ch} {
+    while 1 {
+        set cbargs [yield]
+        $ch <- $cbargs
+    }
+}
 
 proc ::csp::select {a} {
     set ready_count 0
@@ -348,31 +375,31 @@ proc ::csp::select {a} {
     return [uplevel $body]
 }
 
-proc ::csp::timer_routine {ch} {
-    $ch <- [clock seconds]
-}
-
 proc ::csp::timer {chName ms} {
     upvar $chName ch
-    csp::channel ch 0
-    after $ms csp::go timer_routine $ch
+    csp::channel ch
+    after $ms [-> $ch] {[clock seconds]}
     return $ch
 }
 
-proc ::csp::ticker_routine {ch ms} {
+proc ::csp::TickerRoutine {ch ms} {
     $ch <- [clock seconds]
-    after $ms csp::go ticker_routine $ch $ms
+    after $ms csp::go TickerRoutine $ch $ms
 }
 
 proc ::csp::ticker {chName ms} {
     upvar $chName ch
     csp::channel ch 0
-    after $ms csp::go ticker_routine $ch $ms
+    after $ms csp::go TickerRoutine $ch $ms
     return $ch
 }
 
-# receive from channel until closed
+# receive from channel until closed in coroutine
 proc ::csp::range {varName ch body} {
+    CheckName $ch
+    if {[info coroutine] eq ""} {
+        error "range can only be used in a coroutine"
+    }
     uplevel [subst {
         while 1 {
             set $varName \[<- $ch\]

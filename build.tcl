@@ -99,6 +99,7 @@ prepare-lib sklib 0.0.0
 package require tcltest
 #source ./sklib/csp_test1.tcl 
 tcltest::configure -testdir [file normalize ./sklib]
+#tcltest::configure -outfile [file normalize tcltest.out]
 tcltest::runAllTests
 
 exit

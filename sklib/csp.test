@@ -46,7 +46,7 @@ test csp-1.2 {simple sender receiver buffered channel} -body {
     go receiver $ch
     after 500 set little 1
     vwait little
-    channel ch close
+    $ch close
     return
 } -output {i1i2i3i4o1o2o3o4}
 
@@ -68,7 +68,8 @@ test csp-1.3 {ping pong rendez-vous} -body {
     go p2 $ch2 $ch1
     after 500 set little 1
     vwait little
-    channel {ch1 ch2} close
+    $ch1 close
+    $ch2 close
     return
 } -output {11223344}
 
@@ -91,7 +92,8 @@ test csp-1.4 {ping pong buffered channels} -body {
     go p2 $ch2 $ch1
     after 500 set little 1
     vwait little
-    channel {ch1 ch2} close
+    $ch1 close
+    $ch2 close
     return
 } -output {11223344}
 
@@ -109,7 +111,7 @@ test csp-1.5 {sync coroutine with main control flow} -body {
     after 500 set little 1
     vwait little
     puts -nonewline c
-    channel ch close
+    $ch close
     return
 } -output {ab1c}
 
@@ -134,11 +136,46 @@ test csp-1.6 {sync coroutine with main control flow - reverse} -body {
     after 500 set little 1
     vwait little
     puts -nonewline e
-    channel ch close
+    $ch close
     return
 } -output {i1abcdo1i2o2i3o3e}
 
 
+test csp-1.7 {simple timer} -body {
+    timer ch 200
+    puts "Before"
+    puts -nonewline [<-! $ch]
+    puts "After"
+    $ch close
+    return
+} -match regexp -output {\d{10}}
+
+test csp-1.8 {simple ticker} -body {
+    ticker ch 500
+    foreach i {1 2 3} {
+        puts -nonewline [<-! $ch]
+    }
+    $ch close
+    return
+} -match regexp -output {(\d{10}){3}}
+
+test csp-1.9 {range in coroutine} -body {
+    channel ch
+    after 100 [-> $ch] a
+    after 200 [-> $ch] b
+    after 300 [-> $ch] c
+    after 400 $ch close
+    proc p1 {ch} {
+        range v $ch {
+            puts -nonewline $v
+        }
+        put -nonewline p1end
+    }
+    go p1 $ch
+    after 500 set little 1
+    vwait little
+    return
+} -output {abcp1end}
 
 
 ::tcltest::cleanupTests
