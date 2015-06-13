@@ -8,20 +8,31 @@ if {![catch {package require starkit}]} {
   starkit::startup
 }
 
+
+
 package require ovconf
 package require tls
 #package require http
 package require cmdline
 package require unix
+# unix requires Tclx which litters global namespace. Need to clean up to avoid conflict with csp
+rename ::select ""
 package require linuxdeps
 #http::register https 443 [list tls::socket]
-# skutil must be last required package in order to overwrite the log proc from Tclx
-package require skutil
 package require https
 package require anigif
 package require json
 package require inicfg
 package require i18n
+package require csp
+namespace import csp::*
+
+#puts stderr "existing select: [info body select]"
+
+puts stderr "select: [namespace origin select]"
+
+# skutil must be last required package in order to overwrite the log proc from Tclx
+package require skutil
 
 
 proc fatal {msg {err ""}} {
@@ -543,8 +554,55 @@ if 0 {
     set ::conf [::ovconf::parse config.ovpn]
 
     set cn [state sku cn]
-    after idle [list curl-retry -urlpath /welcome?cn=$cn -proto https -port 10443 -expected_hostname www.securitykiss.com -host_lastok [state sku vigo_lastok] -hosts [state sku vigos] -onOk onReceiveWelcome -onError onReceiveWelcomeError]
-    after idle [list curl-retry -urlpath /check-for-updates -proto https -port 10443 -expected_hostname www.securitykiss.com -host_lastok [state sku vigo_lastok] -hosts [state sku vigos] -onOk onCheckForUpdates -onError onCheckForUpdatesError]
+    go check-for-updates
+    go get-welcome $cn
+
+}
+
+proc check-for-updates {} {
+    channel {chout cherr} 1
+    vigo-curl $chout $cherr /check-for-updates
+    select {
+        <- $chout {
+            set data [<- $chout]
+            puts stderr "Check for updates: $data"
+        }
+        <- $cherr {
+            set err [<- $cherr]
+            puts stderr "Check failed: $err"
+        }
+    }
+    channel {chout cherr} close
+}
+
+proc get-welcome {cn} {
+    channel {chout cherr} 1
+    vigo-curl $chout $cherr /welcome?cn=$cn
+    select {
+        <- $chout {
+            set data [<- $chout]
+            log Welcome message received:\n$data
+            puts stderr "welcome: $data"
+            set d [json::json2dict $data]
+            puts stderr "dict: $d"
+            puts stderr ""
+            set slist [dict get $d serverLists JADEITE]
+            state sku {slist $slist}
+            tk_messageBox -message "Welcome message received" -type ok
+        }
+        <- $cherr {
+            set err [<- $cherr]
+            #TODO use cached config
+            tk_messageBox -message "Could not receive Welcome message" -type ok
+            log get-welcome failed with error: $err
+        }
+    }
+    channel {chout cherr} close
+}
+
+
+proc vigo-curl {chout cherr urlpath} {
+    go curl-hosts $chout $cherr -hosts [state sku vigos] -hindex [state sku vigo_lastok] -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
 }
 
 proc MovedResized {window x y w h} {
@@ -855,6 +913,80 @@ proc place-image {path lbl} {
 }
 
 
+proc http_handler {httpout httperr tok} {
+    # Need to catch error in case the handler triggers after the channels were closed
+    # Also: unfortunately http package which may call this proc is catching callback errors 
+    # and they don't propagate to our background-error, so we need to catch them all here and log
+    if {[catch {
+        set ncode [http::ncode $tok]
+        set status [http::status $tok]
+        if {$status eq "ok" && $ncode == 200} {
+            $httpout <- $tok
+        } else {
+            $httperr <- $tok
+        }
+    } out err]} {
+        log $err
+    }
+}
+
+proc curl-hosts {tryout tryerr args} {
+    fromargs {-urlpath -indiv_timeout -hosts -hindex -proto -port -expected_hostname} \
+             {/ 5000 {} 0 https}
+    if {$proto ne "http" && $proto ne "https"} {
+        error "Wrong proto: $proto"
+    }
+    if {$port eq ""} {
+        if {$proto eq "http"} {
+            set port 80
+        } elseif {$proto eq "https"} {
+            set port 443
+        }
+    }
+    set opts {}
+    if {$indiv_timeout ne ""} {
+        lappend opts -timeout $indiv_timeout
+    }
+    if {$expected_hostname ne ""} {
+        lappend opts -expected-hostname $expected_hostname
+    }
+
+    set hlen [llength $hosts]
+    foreach i [seq $hlen] {
+        set host_index [expr {($hindex+$i) % $hlen}]
+        # hindex is the index to start from when iterating hosts
+        set host [lindex $hosts $host_index]
+        set url $proto://$host:${port}${urlpath}
+        channel {httpout httperr} 1
+        if {[catch {https curl $url {*}$opts -command [list http_handler $httpout $httperr]} out err] == 0} {
+            puts "waiting for $host"
+            select {
+                <- $httpout {
+                    set token [<- $httpout]
+                    set data [http::data $token]
+                    http::cleanup $token
+                    
+                    state sku {vigo_lastok $host_index}
+                    puts "curl-hosts $url success. data: $data"
+                    $tryout <- $data
+                    channel {httpout httperr} close
+                    return
+                }
+                <- $httperr {
+                    set token [<- $httperr]
+                    log "curl-hosts $url failed with status: [http::status $token], error: [http::error $token]"
+                    http::cleanup $token
+                }
+            }
+        } else { 
+            log $err
+        }
+        channel {httpout httperr} close
+    }
+    $tryerr <- "All hosts failed error"
+}
+
+# @deprecated
 proc curl-retry {args} {
     # Unfortunately http package which may call this proc is catching callback errors 
     # and they don't propagate to our background-error, so we need to catch them all here and log
@@ -912,39 +1044,6 @@ proc curl-retry {args} {
     }
 }
 
-proc onReceiveWelcome {args} {
-    fromargs {-tok -host_lastok}
-    set data [http::data $tok]
-    #TODO save welcome in config
-    #tk_messageBox -message "Welcome received: $data" -type ok
-    log Welcome message received:\n$data
-    puts stderr "welcome: $data"
-    set d [json::json2dict $data]
-    puts stderr "dict: $d"
-    puts stderr ""
-    set slist [dict get $d serverLists JADEITE]
-    state sku {slist $slist}
-    state sku {vigo_lastok $host_lastok}
-    http::cleanup $tok
-}
-
-proc onReceiveWelcomeError {args} {
-    # ReceiveWelcome failed for all vigos
-    #TODO use cached config
-    tk_messageBox -message "Could not receive Welcome message" -type ok
-}
-
-proc onCheckForUpdates {args} {
-    fromargs {-tok -host_lastok}
-    set data [http::data $tok]
-    puts stderr "onCheckForUpdates: $data"
-    state sku {vigo_lastok $host_lastok}
-    http::cleanup $tok
-}
-
-proc onCheckForUpdatesError {args} {
-    puts stderr "onCheckForUpdatesError: $args"
-}
 
 
 
