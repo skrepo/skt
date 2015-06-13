@@ -8,8 +8,6 @@ namespace eval csp {
     # channel capacity (buffer size)
     variable ChannelCap
     array set ChannelCap {}
-    variable ChannelCloseMark
-    array set ChannelCloseMark {}
     variable Routine
     array set Routine {}
     # counters to produce unique Routine and Channel names
@@ -20,7 +18,7 @@ namespace eval csp {
     variable CTemplate {
         proc %CHANNEL% {operator {val ""}} {
             if {$operator eq "close"} {
-                set ChannelCloseMark(%CHANNEL%) 1
+                # delete channel command == channel closed
                 rename %CHANNEL% "" 
                 SetResume
                 return
@@ -43,7 +41,7 @@ namespace eval csp {
         }
     }
 
-    namespace export go channel select timer ticker range <- <-! -> ->>
+    namespace export go channel select timer ticker range range! <- <-! -> ->>
     namespace ensemble create
 }
 
@@ -77,7 +75,7 @@ proc ::csp::CheckOperator {op} {
 # throw error if channel is closed
 proc ::csp::CheckClosed {ch} {
     if {[CClosed $ch]} {
-        error "Cannot send to the closed channel %CHANNEL%"
+        error "Cannot send to the closed channel $ch"
     }
 }
 
@@ -101,10 +99,6 @@ proc ::csp::CSendReady {ch} {
 
 proc ::csp::CReceiveReady {ch} {
     CheckName $ch 
-    # if channel command no longer exists
-    if {[info procs $ch] eq ""} {
-        return 0
-    }
     return [expr {![CEmpty $ch]}]
 }
 
@@ -114,7 +108,6 @@ proc ::csp::CPurge {ch} {
     catch {
         unset Channel($ch)
         unset ChannelCap($ch)
-        unset ChannelCloseMark($ch)
         rename $ch ""
         SetResume
     }
@@ -127,7 +120,6 @@ proc ::csp::CPurge {ch} {
 proc ::csp::channel {chVars {cap 0}} {
     variable Channel
     variable ChannelCap
-    variable ChannelCloseMark
     variable CTemplate
     lmap chVar $chVars {
         upvar $chVar ch
@@ -135,21 +127,15 @@ proc ::csp::channel {chVars {cap 0}} {
         # initialize channel as a list or do nothing if exists
         set Channel($ch) {}
         set ChannelCap($ch) $cap
-        set ChannelCloseMark($ch) 0
         namespace eval ::csp [string map [list %CHANNEL% $ch] $CTemplate]
     }
 }
 
 # A channel is considered closed if no longer exists (but its name is correct) 
-# or if it was marked as closed
 proc ::csp::CClosed {ch} {
     CheckName $ch
     # if channel command no longer exists
-    if {[info procs $ch] eq ""} {
-        return 1
-    }
-    variable ChannelCloseMark
-    return $ChannelCloseMark($ch)
+    return [expr {[info procs $ch] eq ""}]
 }
 
 
@@ -167,13 +153,13 @@ proc ::csp::CBuffered {ch} {
 }
 
 proc ::csp::CEmpty {ch} {
+    variable Channel
     CheckName $ch
-    # if channel command no longer exists
-    if {[info procs $ch] eq ""} {
+    if {[info exists Channel($ch)]} {
+        return [expr {[llength $Channel($ch)] == 0}]
+    } else {
         return 1
     }
-    variable Channel
-    return [expr {[llength $Channel($ch)] == 0}]
 }
 
 
@@ -252,14 +238,28 @@ proc ::csp::CReceive {ch} {
     return $elem
 }
 
+
+proc ::csp::CDrained {ch} {
+    CheckName $ch
+    # drained = empty and closed
+    set drained [expr {![CReceiveReady $ch] && [CClosed $ch]}]
+    if {$drained} {
+        # just in case purge every time
+        CPurge $ch
+        return 1
+    } else {
+        return 0
+    }
+}
+
+
 proc ::csp::ReceiveWith {ch operator} {
     CheckOperator $operator
     # check if ch contains elements, if so return element, yield otherwise
     while {![CReceiveReady $ch]} {
-        # if closed and empty channel break the upper loop
-        if {[CClosed $ch]} {
-            CPurge $ch
-            return -code break
+        # trying to receive from empty and closed channel should clean up the channel and throw error
+        if {[CDrained $ch]} {
+            error "Cannot receive from a drained (empty and closed) channel $ch"
         }
         Wait$operator
     }
@@ -268,12 +268,14 @@ proc ::csp::ReceiveWith {ch operator} {
     return $elem
 }
 
+# Receive from channel, wait if channel not ready, throw error if channel is drained
 # Can be only used from coroutine
 # Uses yield for wait
 proc ::csp::<- {ch} {
     return [ReceiveWith $ch <-]
 }
 
+# Receive from channel, wait if channel not ready, throw error if channel is drained
 # Can be used from non-coroutine
 # Uses vwait for wait => nested event loops
 # It means that not ready channel in nested vwait 
@@ -296,7 +298,9 @@ proc ::csp::-> {ch} {
 
 proc ::csp::OneTimeSender {ch} {
     set cbargs [yield]
-    $ch <- $cbargs
+    if {![CClosed $ch]} {
+        $ch <- $cbargs
+    }
 }
 
 proc ::csp::->> {ch} {
@@ -308,9 +312,11 @@ proc ::csp::->> {ch} {
 }
 
 proc ::csp::MultiSender {ch} {
-    while 1 {
+    while {![CClosed $ch]} {
         set cbargs [yield]
-        $ch <- $cbargs
+        if {![CClosed $ch]} {
+            $ch <- $cbargs
+        }
     }
 }
 
@@ -383,8 +389,10 @@ proc ::csp::timer {chName ms} {
 }
 
 proc ::csp::TickerRoutine {ch ms} {
-    $ch <- [clock seconds]
-    after $ms csp::go TickerRoutine $ch $ms
+    if {![CClosed $ch]} {
+        $ch <- [clock seconds]
+        after $ms csp::go TickerRoutine $ch $ms
+    }
 }
 
 proc ::csp::ticker {chName ms} {
@@ -394,16 +402,31 @@ proc ::csp::ticker {chName ms} {
     return $ch
 }
 
-# receive from channel until closed in coroutine
-proc ::csp::range {varName ch body} {
+# receive from channel until closed
+proc ::csp::RangeWith {operator varName ch body} {
     CheckName $ch
-    if {[info coroutine] eq ""} {
-        error "range can only be used in a coroutine"
-    }
-    uplevel [subst {
+    uplevel [subst -nocommands {
         while 1 {
-            set $varName \[<- $ch\]
+            if {[catch {set $varName [$operator $ch]} out err]} {
+                break
+            }
             $body
         }
     }]
+}
+
+# receive from channel until closed in coroutine
+proc ::csp::range {varName ch body} {
+    if {[info coroutine] eq ""} {
+        error "range can only be used in a coroutine"
+    }
+    RangeWith <- $varName $ch $body
+}
+
+# receive from channel until closed in main control flow
+proc ::csp::range! {varName ch body} {
+    if {[info coroutine] ne ""} {
+        error "range! should not be used in a coroutine"
+    }
+    RangeWith <-! $varName $ch $body
 }

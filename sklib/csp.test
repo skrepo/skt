@@ -2,6 +2,8 @@
 if {"::tcltest" ne [namespace children]} {
     package require tcltest
     namespace import -force ::tcltest::*
+    tcltest::configure -match *
+    tcltest::configure -debug 0
 }
 if {"::csp" ne [namespace children]} {
     lappend auto_path [file normalize ./lib/generic]
@@ -24,7 +26,7 @@ test csp-1.1 {simple sender receiver rendez-vous} -body {
     channel ch
     go sender $ch
     go receiver $ch
-    after 500 set little 1
+    after 501 set little 1
     vwait little
     return
 } -output {i1o1i2o2i3o3i4o4}
@@ -44,7 +46,7 @@ test csp-1.2 {simple sender receiver buffered channel} -body {
     channel ch 5
     go sender $ch
     go receiver $ch
-    after 500 set little 1
+    after 502 set little 1
     vwait little
     $ch close
     return
@@ -66,7 +68,7 @@ test csp-1.3 {ping pong rendez-vous} -body {
     channel {ch1 ch2}
     go p1 $ch1 $ch2
     go p2 $ch2 $ch1
-    after 500 set little 1
+    after 503 set little 1
     vwait little
     $ch1 close
     $ch2 close
@@ -90,7 +92,7 @@ test csp-1.4 {ping pong buffered channels} -body {
     channel {ch1 ch2} 5
     go p1 $ch1 $ch2
     go p2 $ch2 $ch1
-    after 500 set little 1
+    after 504 set little 1
     vwait little
     $ch1 close
     $ch2 close
@@ -108,7 +110,7 @@ test csp-1.5 {sync coroutine with main control flow} -body {
     # this will be run outside of coroutine
     after 200 $ch <-! 1
     puts -nonewline b
-    after 500 set little 1
+    after 505 set little 1
     vwait little
     puts -nonewline c
     $ch close
@@ -133,7 +135,7 @@ test csp-1.6 {sync coroutine with main control flow - reverse} -body {
     puts -nonewline c
     after 400 puts -nonewline o\[<-! $ch\]
     puts -nonewline d
-    after 500 set little 1
+    after 506 set little 1
     vwait little
     puts -nonewline e
     $ch close
@@ -151,7 +153,7 @@ test csp-1.7 {simple timer} -body {
 } -match regexp -output {\d{10}}
 
 test csp-1.8 {simple ticker} -body {
-    ticker ch 500
+    ticker ch 508
     foreach i {1 2 3} {
         puts -nonewline [<-! $ch]
     }
@@ -169,13 +171,26 @@ test csp-1.9 {range in coroutine} -body {
         range v $ch {
             puts -nonewline $v
         }
-        put -nonewline p1end
+        puts -nonewline d
     }
     go p1 $ch
-    after 500 set little 1
+    after 509 set little 1
     vwait little
     return
-} -output {abcp1end}
+} -output {abcd}
+
+test csp-1.10 {range! in main} -body {
+    channel ch
+    after 100 [-> $ch] a
+    after 200 [-> $ch] b
+    after 300 [-> $ch] c
+    after 400 $ch close
+    range! v $ch {
+        puts -nonewline $v
+    }
+    puts -nonewline d
+    return
+} -output {abcd}
 
 
 ::tcltest::cleanupTests

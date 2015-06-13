@@ -572,7 +572,8 @@ proc check-for-updates {} {
             puts stderr "Check failed: $err"
         }
     }
-    channel {chout cherr} close
+    $chout close
+    $cherr close
 }
 
 proc get-welcome {cn} {
@@ -597,7 +598,8 @@ proc get-welcome {cn} {
             log get-welcome failed with error: $err
         }
     }
-    channel {chout cherr} close
+    $chout close
+    $cherr close
 }
 
 
@@ -969,7 +971,8 @@ proc curl-hosts {tryout tryerr args} {
                     state sku {vigo_lastok $host_index}
                     puts "curl-hosts $url success. data: $data"
                     $tryout <- $data
-                    channel {httpout httperr} close
+                    $httpout close
+                    $httperr close
                     return
                 }
                 <- $httperr {
@@ -981,7 +984,8 @@ proc curl-hosts {tryout tryerr args} {
         } else { 
             log $err
         }
-        channel {httpout httperr} close
+        $httpout close
+        $httperr close
     }
     $tryerr <- "All hosts failed error"
 }
