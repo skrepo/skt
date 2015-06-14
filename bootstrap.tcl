@@ -160,7 +160,7 @@ proc wget {url filepath} {
 proc copy-pkg {os arch pkgname ver proj} {
   prepare-pkg $os $arch $pkgname $ver
   set libdir [file join build $proj $os-$arch $proj.vfs lib]
-  puts "Copying package $pkgname-$ver to $libdir"
+  #puts "Copying package $pkgname-$ver to $libdir"
   if {\
     [catch {file copy -force [file join lib $os-$arch $pkgname-$ver] $libdir}] &&\
     [catch {file copy -force [file join lib generic $pkgname-$ver]   $libdir}]} {
@@ -175,11 +175,11 @@ proc prepare-pkg {os arch pkgname ver} {
   set target_path_indep [file join lib generic $pkgname-$ver]
   # nothing to do if pkg exists in lib dir, it may be file or dir
   if {[file exists $target_path_depend]} {
-    puts "Already prepared: $target_path_depend"
+    #puts "Already prepared: $target_path_depend"
     return
   }
   if {[file exists $target_path_indep]} {
-    puts "Already prepared: $target_path_indep"
+    #puts "Already prepared: $target_path_indep"
     return
   }
   fetch-pkg $os $arch $pkgname $ver
