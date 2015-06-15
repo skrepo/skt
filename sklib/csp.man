@@ -151,7 +151,7 @@ Since it must work in a single-threaded interpreter, waiting is non-blocking. In
 
 [section EXAMPLES]
 [subsection {Example 1}]
-Simple message passing over unbuffered channel
+Simple message passing over an unbuffered channel
 [example {
     package require csp
     namespace import csp::*
@@ -160,6 +160,8 @@ Simple message passing over unbuffered channel
             puts "Sending $i"
             $ch <- $i
         }
+        puts "Closing channel"
+        $ch close
     }
     proc receiver1 {ch} {
         while 1 {
@@ -184,6 +186,7 @@ Sending 3
 Receiving 3
 Sending 4
 Receiving 4
+Closing channel
 }]
 
 The communication between the coroutines is coordinated because the channel is unbuffered.
@@ -191,7 +194,7 @@ The sender waits for the receiver.
 
 
 [subsection {Example 2}]
-Simple message passing over buffered channel
+Simple message passing over a buffered channel
 
 [example {
     package require csp
@@ -201,6 +204,8 @@ Simple message passing over buffered channel
             puts "Sending $i"
             $ch <- $i
         }
+        puts "Closing channel"
+        $ch close
     }
     proc receiver1 {ch} {
         while 1 {
@@ -223,10 +228,58 @@ Sending 3
 Receiving 1
 Receiving 2
 Sending 4
+Closing channel
 Receiving 3
 Receiving 4
+Error: Cannot receive from a drained (empty and closed) channel ::csp::Channel#1
+}]
+[para]
+Since the channel is buffered of size 2, the sender waits only on the third attempt.
+[para]
+Note that the channel was closed but we still receive messages. Only after the channel was emptied, trying to receive from the channel throws an error.
+
+
+[subsection {Example 3}]
+[para]
+Using [cmd range] for receiving from the channel until closed.
+[para]
+We can prevent throwing the error in the previous example by using the [cmd range] command instead of iterating blindly with [cmd while].
+Also if the channel is buffered we can send all messages first and iterate to receive using [cmd range] in a single coroutine.
+
+[example {
+    package require csp
+    namespace import csp::*
+
+    proc senderreceiver {ch} {
+        foreach i {1 2 3 4} {
+            puts "Sending $i"
+            $ch <- $i
+        }
+        puts "Closing channel"
+        $ch close
+        range msg $ch {
+            puts "Message $msg"
+        }
+        puts "Received all"
+    }
+    channel ch 10
+    go senderreceiver $ch
+    vwait forever
 }]
 
-Since the channel is buffered of size 2, the sender waits only on the third attempt.
+Output:
+
+[example {
+Sending 1
+Sending 2
+Sending 3
+Sending 4
+Closing channel
+Message 1
+Message 2
+Message 3
+Message 4
+Received all
+}]
 
 [manpage_end]

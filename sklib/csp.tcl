@@ -329,13 +329,19 @@ proc ::csp::-> {chVar} {
 # ch should be a newly created channel with exclusive rights for sending
 proc ::csp::OneTimeSender {ch} {
     # unconditionally push the callback arguments (returned by yield) to the channel
-    CAppend $ch [yield]
-    SetResume
+    set cbargs [yield]
+    if {![CClosed $ch]} {
+        CAppend $ch $cbargs
+        SetResume
+    }
 }
 
-proc ::csp::->>_old {chVar {size 0}} {
+
+
+proc ::csp::->> {chVar {maxbuffer 1000}} {
     upvar $chVar ch
-    channel ch $size
+    channel ch $maxbuffer
+    CMakeReadOnly $ch
     # this coroutine will not be registered in Routine array for unblocking calls
     # it should be called from the userland callback
     set routine [NewRoutine]
@@ -344,15 +350,15 @@ proc ::csp::->>_old {chVar {size 0}} {
 }
 
 proc ::csp::MultiSender {ch} {
-    puts "Entering MultiSender $ch"
-    puts "Before yield [CClosed $ch]"
-    set cbargs [yield]
-    while {![CClosed $ch]} {
-        puts "After yield [CClosed $ch]. cbargs: $cbargs"
-        if {![CClosed $ch]} {
-            puts "Before send [CClosed $ch]. Sending $cbargs"
-            $ch <- $cbargs
+    while 1 {
+        set cbargs [yield]
+        # terminate the coroutine if channel not ready for send 
+        if {![CSendReady $ch]} {
+            break
         }
+        # push the callback arguments (returned by yield) to the channel
+        CAppend $ch $cbargs
+        SetResume
     }
 }
 
@@ -445,8 +451,6 @@ proc ::csp::RangeWith {operator varName ch body} {
             try {
                 set $varName [$operator $ch]
             } on error {out err} {
-                puts "out: \$out"
-                puts "err: \$err"
                 break
             }
             $body

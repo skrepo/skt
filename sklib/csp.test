@@ -32,26 +32,30 @@ test csp-1.1 {simple sender receiver rendez-vous} -body {
     return
 } -output {i1o1i2o2i3o3i4o4}
 
-test csp-1.2 {simple sender receiver buffered channel} -body {
+test csp-1.2 {simple sender receiver buffered channel with close} -body {
     proc sender {ch} {
         foreach i {1 2 3 4} {
             puts -nonewline i$i
             $ch <- $i
         }
+        puts -nonewline close
+        $ch close
     }
     proc receiver {ch} {
-        while 1 {
-            puts -nonewline o[<- $ch]
+        try {
+            while 1 {
+                puts -nonewline o[<- $ch]
+            }
+        } on error {} {
         }
     }
-    channel ch 5
+    channel ch 2
     go sender $ch
     go receiver $ch
     after 502 set little 1
     vwait little
-    $ch close
     return
-} -output {i1i2i3i4o1o2o3o4}
+} -output {i1i2i3o1o2i4closeo3o4}
 
 test csp-1.3 {ping pong rendez-vous} -body {
     proc p1 {chin chout} {
@@ -167,11 +171,7 @@ test csp-1.9 {range in coroutine} -body {
     after 100 $callback a
     after 200 $callback b
     after 300 $callback c
-    after 300 $callback e
-    after 300 $callback f
-    after 300 $callback g
-
-    after 4000 $ch close
+    after 400 $ch close
     proc p1 {ch} {
         range v $ch {
             puts -nonewline $v
@@ -179,7 +179,7 @@ test csp-1.9 {range in coroutine} -body {
         puts -nonewline d
     }
     go p1 $ch
-    after 5090 set little 1
+    after 509 set little 1
     vwait little
     return
 } -output {abcd}
@@ -197,6 +197,10 @@ test csp-1.10 {range! in main} -body {
     return
 } -output {abcd}
 
+test csp-1.11 {} -body {
+
+    return
+}
 
 ::tcltest::cleanupTests
 return
