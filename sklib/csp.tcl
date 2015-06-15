@@ -1,3 +1,5 @@
+package require Tcl 8.6
+
 package provide csp 0.0.0
 
 namespace eval csp {
@@ -10,9 +12,8 @@ namespace eval csp {
     array set ChannelCap {}
     variable Routine
     array set Routine {}
-    # counters to produce unique Routine and Channel names
-    variable RCount 0
-    variable CCount 0
+    # counter/uid to produce unique Routine and Channel names
+    variable Uid 0
 
     # Channel proc template
     variable CTemplate {
@@ -83,7 +84,7 @@ proc ::csp::CheckClosed {ch} {
 
 # throw error if incorrect channel name
 proc ::csp::CheckName {ch} {
-    if {![regexp {::csp::Channel_\d+} $ch]} {
+    if {![regexp {::csp::Channel#\d+} $ch]} {
         error "Wrong channel name: $ch"
     }
 }
@@ -182,15 +183,11 @@ proc ::csp::CGet {ch} {
 
 # generate new routine name
 proc ::csp::NewRoutine {} {
-    variable RCount
-    incr RCount
-    return ::csp::Routine_$RCount
+    return ::csp::Routine#[incr ::csp::Uid]
 }
 
 proc ::csp::NewChannel {} {
-    variable CCount
-    incr CCount
-    return ::csp::Channel_$CCount
+    return ::csp::Channel#[incr ::csp::Uid]
 }
 
 
@@ -221,7 +218,7 @@ proc ::csp::Resume {} {
             # cannot run the already running coroutine - catch error when it happens
             #puts stderr "CURRENT COROUTINE: [info coroutine]"
             #puts stderr "r: $r"
-            # this may regularly throw 'coroutine "::csp::Routine_N" is already running'
+            # this may regularly throw 'coroutine "::csp::Routine#N" is already running'
             catch $r
             #after idle [list after 0 catch $r]
             #if {[catch {$r} out err]} 
@@ -323,8 +320,8 @@ proc ::csp::MultiSender {ch} {
 }
 
 proc ::csp::select {a} {
-    set ready_count 0
-    while {$ready_count == 0} {
+    set ready 0
+    while {$ready == 0} {
         # (op ch body) triples ready for send/receive
         set triples {}
         set default 0
@@ -362,8 +359,8 @@ proc ::csp::select {a} {
             error "<- and <-! should not be mixed in a single select"
         }
         CheckOperator $operator
-        set ready_count [expr {[llength $triples] / 3}]
-        if {$ready_count == 0} {
+        set ready [expr {[llength $triples] / 3}]
+        if {$ready == 0} {
             if {$default == 0} {
                 Wait$operator
             } else {
@@ -372,10 +369,10 @@ proc ::csp::select {a} {
         }
     }
 
-    if {$ready_count == 1} {
+    if {$ready == 1} {
         set triple $triples
     } else {
-        set random [expr {round(floor(rand()*$ready_count))}]
+        set random [expr {round(floor(rand()*$ready))}]
         set triple [lrange $triples [expr {$random * 3}] [expr {$random * 3 + 2}]]
     }
      

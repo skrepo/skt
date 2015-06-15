@@ -287,7 +287,7 @@ proc build {os arch_exact proj base {packages {}}} {
     # we don't copy base-tcl/tk to build folder. Having it in lib is enough - hence prepare-pkg
     prepare-pkg $os $arch {*}[split-last-dash $base]
     foreach pkgver $packages {
-      copy-pkg $os $arch {*}[split-last-dash $pkgver] $proj
+        copy-pkg $os $arch {*}[split-last-dash $pkgver] $proj
     }
     set vfs [file join $bld $proj.vfs]
     puts "Copying project source files to VFS dir: $vfs"
@@ -311,6 +311,15 @@ proc prepare-lib {pkgname ver} {
     copy-merge $pkgname $dest
     pkg_mkIndex $dest
 }
+
+proc doc {path} {
+    package require doctools
+    ::doctools::new mydtp -format html
+    set path [file normalize $path]
+    set dest [file join [file dir $path] [file root [file tail $path]].html]
+    spit $dest [mydtp format [slurp $path]]
+}
+
 
 
 #platforminfo

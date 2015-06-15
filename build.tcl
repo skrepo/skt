@@ -42,7 +42,7 @@ proc copy-flags {countries {sizes {16 24 64}}} {
 proc build-sku {os arch} {
     spit sku/builddate.txt $::builddate
     copy-flags {PL GB UK DE FR US}
-    build $os $arch sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 snit-2.3.2}
+    build $os $arch sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 snit-2.3.2 doctools-1.4.19 textutil::expander-1.3.1}
     ex sudo cp build/sku/linux-x86_64/sku.bin /usr/local/bin/sku.bin
 }
 
@@ -96,6 +96,9 @@ proc release {} {
 }
 
 prepare-lib sklib 0.0.0
+
+doc ./sklib/csp.man
+ex xdg-open ./sklib/csp.html
 
 #build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
 #build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0 tls-1.6.4}
