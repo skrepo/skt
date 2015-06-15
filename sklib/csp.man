@@ -1,106 +1,232 @@
 [comment {-*- tcl -*- doctools manpage}]
-[manpage_begin csp n 0.1.0]
+[vset VERSION 0.1.0]
+[manpage_begin csp n [vset VERSION]]
 [keywords csp]
 [keywords golang]
 [keywords concurrency]
 [keywords callback]
 [keywords channel]
-[copyright {2015 SecurityKISS Ltd <open.source@securitykiss.com>}]
-[titledesc {Golang style concurrency based on Communicating Sequential Processes}]
+[copyright {2015 SecurityKISS Ltd <open.source@securitykiss.com> - MIT License}]
+[titledesc {Golang style concurrency library based on Communicating Sequential Processes}]
 [moddesc   {Concurrency}]
 [category  {Concurrency}]
+[require Tcl 8.6]
+[require csp [opt [vset VERSION]]]
 [description]
 [para]
-
-
-
-The application described by this document, [syscmd diagram-viewer], is a
-lightweight processor for tklib diagram files
-
+The [package csp] package provides two concurrency primitives namely [term coroutines] and [term channels] which allow concurrent programming in the style of [uri https://en.wikipedia.org/wiki/Go_(programming_language) Golang].
+[para]
+The concepts originate in Hoare's [uri https://en.wikipedia.org/wiki/Communicating_sequential_processes {Communicating Sequential Processes}] while the syntax mimics the Golang implementation.
+[para]
+The CSP concurrency model may be visualized as a set of independent processes (coroutines) sending and receiving messages to the named channels. The control flow in the coroutines is coordinated at the points of sending and receiving messages i.e. the coroutine may need to wait while trying to send or receive.
+Since it must work in a single-threaded interpreter, waiting is non-blocking. Instead of blocking a waiting coroutine gives way to other coroutines.
 [para]
 
-[syscmd diagram-viewer] is based upon the package [package diagram].
-See it for examples and language reference.
-
-[subsection {USE CASES}]
-
-[syscmd diagram-viewer] was written with the following two use cases in
-mind.
-
-[para]
-[list_begin enumerated]
-[enum]
-Processing and display of one or more diagram files.
-
-[enum]
-Batch conversion of one or more diagram files into raster image files.
-
-[list_end]
-
-[para]
-
-[subsection {COMMAND LINE}]
+[section Concepts]
 
 [list_begin definitions]
 
-[call [cmd diagram-viewer] [method show] [arg inputfile]...]
+[def [cmd channel]]
 
-This is the form for use case [lb]1[rb]. The application opens a gui
-showing the list of input files to the left, allowing the user to
-choose which of them to render to the canvas on the right.
+    [list_begin definitions]
+    [def {There are two types of channels.}]
+        [list_begin definitions]
+            
+            [def [term {Unbuffered channels}]]
+            [para]
+            The unbuffered channel is a single value container that can be imagined as a rendez-vous venue where the sender must wait for the receiver to collect the message.
+            By default channels are unbuffered. 
+            
+            [def [term {Buffered channels}]]
+            [para]
+            The buffered channel behaves like a FIFO queue. 
+        [list_end]
+    [list_end]
 
-[call [cmd diagram-viewer] [method convert] [option -o] [arg output] [arg format] [arg inputfile]...]
+    [para]
+    [list_begin definitions]
+    [def {Whether receiver need to wait while trying to receive from a channel depends on the channel's internal state:}]
+        [list_begin definitions]
+        [def [term {ready for receive}]]
+            The buffered channel is ready for receive when it is not empty.
+            The unbuffered channel is ready for receive if there exists a sender waiting with a message on this channel.
+    
+        [def [term {ready for send}]]
+            The buffered channel is ready for send when it is not full.
+            The unbuffered channel is ready for send if there is no other sender already waiting on this channel. Note that 
+        [list_end]
+    [list_end]
 
-This is the form for use case [lb]2[rb]. The application converts
-the input files into raster image of the specified [arg format].
 
-[list_begin arguments]
+    channel chanVar ?size?
+    $chanVar close
 
-[arg_def path output in]
+    If size is zero (default) the created channel is unbuffered.
 
-This argument specifies where to write the generated image. It can
-be the path to a file or directory.
+    
+    [para]
+    [list_begin definitions]
+    [def {Channel lifecycle is described by 3 possible states:}]
+        [list_begin definitions]
+            [def [term created]]
+            Once the channel is created you can send to and receive from the channel.
+            [def [term closed]]
+            When the channel is closed you can still receive from the channel but you cannot send to it.
+            Trying to send to the closed channel throws an error.
+            It is responsibility of the library user to close the unused channels.
+            [def [term destroyed]]
+            The channel does not exist. 
+            After receiving all messages from the closed channel, the channel is destroyed.
+            Trying to send to or receive from the destroyed channel throws an error.
+        [list_end]
+    [list_end]
+    Note that creating a large number of channels that are properly closed but not emptied may result in a memory leak.
 
-[para]
 
-If the [arg output] does not exist then [lb]file dirname $output[rb]
-has to exist and must be a writable directory.
+[def [cmd coroutine]]
+    Coroutine is a procedure executing concurrently with other coroutines. 
+    Created:
+        go procName ?args?
 
-[para]
-In case of multiple input files the generated image will be written to
-a file in the directory, and the name of that file will be derived
-from the [arg inputfile], and [arg format].
+    procName is the name of the existing Tcl procedure that will be run as a coroutine.
+    You can create many coroutines from a single Tcl procedure, possibly called with different arguments
 
-[para]
-In case of a single input file the generated image will be written to
-the file.
+    Coroutine is destroyed when its execution ends.
 
-[arg_def (handle) format in]
 
-This argument specifies the image format to convert the diagrams into
-when processing the input. The application recognizes all formats
-supported by the [package Img] package, i.e. for which it can load a
-package [package img::[var format]]
+    Coroutines are multiplexed 
+    gives way to other coroutines
 
-[arg_def path inputfile in]
 
-This argument specifies the path to the diagram file to process. It
-has to exist, must be readable, and written in [term diagram] format.
+    Coroutines may send messages to channels and receive messages from channels. Any coroutine may act as a sender or receiver at different times. 
 
 [list_end]
+
+[section COMMANDS]
+
+[para]
+
+[list_begin definitions]
+[call [cmd ::csp::go] [arg procName] [opt [arg args]]]    
+    Create a coroutine by calling [arg procName] with arguments [arg args]
+[call [cmd ::csp::channel] [arg channelVar] [opt [arg size]]]
+    Create a channel object that will be contained in variable [arg channelVar].
+    [list_begin arguments]
+        [arg_def var channelVar]
+        [arg_def number size]
+    [list_end]
+    
+[call [cmd channelObj] [arg close]]
+    Close the channel [arg channelObj]
+
+[call [cmd channelObj] [arg <-] [arg msg]]
+    Send [arg msg] to channel [arg channelObj] in a coroutine.
+    
+[call [cmd channelObj] [arg <-!] [arg msg]]
+    Send [arg msg] to channel [arg channelObj] in a script (in the Tcl program main control flow).
+    
+[call [cmd ::csp::<-] [arg channelObj]]
+    Receive from channel [arg channelObj] in a coroutine.
+
+[call [cmd ::csp::<-!] [arg channelObj]]
+    Receive from channel [arg channelObj] in a script (in the Tcl program main control flow).
+
+[call [cmd ::csp::select] [arg operation] [arg body]]
+    
+[call [cmd ::csp::range] [arg varName] [arg channelObj] [arg body]]
+
+[call [cmd ::csp::range!] [arg varName] [arg channelObj] [arg body]]
+
+[call [cmd ::csp::timer] [arg channelVar] [arg ms]]
+
+[call [cmd ::csp::ticker] [arg channelVar] [arg ms]]
+
+[call [cmd ::csp::->] [arg channelVar] [opt [arg size]]]
+
+[call [cmd ::csp::->>] [arg channelVar] [opt [arg size]]]
+
 [para]
 
 [list_end]
 
-[section {BUGS, IDEAS, FEEDBACK}]
+[section EXAMPLES]
+[subsection {Example 1}]
+Simple message passing over unbuffered channel
+[example {
+    package require csp
+    namespace import csp::*
+    proc sender1 {ch} {
+        foreach i {1 2 3 4} {
+            puts "Sending $i"
+            $ch <- $i
+        }
+    }
+    proc receiver1 {ch} {
+        while 1 {
+            puts "Receiving [<- $ch]"
+        }
+    }
+    # create unbuffered (rendez-vous) channel
+    channel ch
+    go sender1 $ch
+    go receiver1 $ch
+    vwait forever
+}]
 
-This document, and the application it describes, will undoubtedly
-contain bugs and other problems.
+Output:
 
-Please report such in the category [emph diagram] of the
-[uri {http://sourceforge.net/tracker/?group_id=12883} {Tcllib SF Trackers}].
+[example {
+Sending 1
+Receiving 1
+Sending 2
+Receiving 2
+Sending 3
+Receiving 3
+Sending 4
+Receiving 4
+}]
 
-Please also report any ideas for enhancements you may have for either
-application and/or documentation.
-[vset CATEGORY diagram]
+The communication between the coroutines is coordinated because the channel is unbuffered.
+The sender waits for the receiver.
+
+
+[subsection {Example 2}]
+Simple message passing over buffered channel
+
+[example {
+    package require csp
+    namespace import csp::*
+    proc sender1 {ch} {
+        foreach i {1 2 3 4} {
+            puts "Sending $i"
+            $ch <- $i
+        }
+    }
+    proc receiver1 {ch} {
+        while 1 {
+            puts "Receiving [<- $ch]"
+        }
+    }
+    # create buffered channel of size 2
+    channel ch 2
+    go sender1 $ch
+    go receiver1 $ch
+    vwait forever
+}]
+
+Output:
+
+[example {
+Sending 1
+Sending 2
+Sending 3
+Receiving 1
+Receiving 2
+Sending 4
+Receiving 3
+Receiving 4
+}]
+
+Since the channel is buffered of size 2, the sender waits only on the third attempt.
+
 [manpage_end]

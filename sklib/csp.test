@@ -2,7 +2,8 @@
 if {"::tcltest" ne [namespace children]} {
     package require tcltest
     namespace import -force ::tcltest::*
-    tcltest::configure -match *
+    #tcltest::configure -match {csp-1.1 csp-1.2 csp-1.3 csp-1.4 csp-1.5 csp-1.6}
+    #tcltest::configure -match {csp-1.7}
     tcltest::configure -debug 0
 }
 if {"::csp" ne [namespace children]} {
@@ -162,11 +163,15 @@ test csp-1.8 {simple ticker} -body {
 } -match regexp -output {(\d{10}){3}}
 
 test csp-1.9 {range in coroutine} -body {
-    channel ch
-    after 100 [-> $ch] a
-    after 200 [-> $ch] b
-    after 300 [-> $ch] c
-    after 400 $ch close
+    set callback [->> ch]
+    after 100 $callback a
+    after 200 $callback b
+    after 300 $callback c
+    after 300 $callback e
+    after 300 $callback f
+    after 300 $callback g
+
+    after 4000 $ch close
     proc p1 {ch} {
         range v $ch {
             puts -nonewline $v
@@ -174,16 +179,16 @@ test csp-1.9 {range in coroutine} -body {
         puts -nonewline d
     }
     go p1 $ch
-    after 509 set little 1
+    after 5090 set little 1
     vwait little
     return
 } -output {abcd}
 
 test csp-1.10 {range! in main} -body {
-    channel ch
-    after 100 [-> $ch] a
-    after 200 [-> $ch] b
-    after 300 [-> $ch] c
+    set callback [->> ch]
+    after 100 $callback a
+    after 200 $callback b
+    after 300 $callback c
     after 400 $ch close
     range! v $ch {
         puts -nonewline $v

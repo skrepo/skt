@@ -938,11 +938,10 @@ proc curl-hosts {tryout tryerr args} {
         # host_index is the index to start from when iterating hosts
         set host [lindex $hosts $host_index]
         set url $proto://$host:${port}${urlpath}
-        channel chhttp 1
         # Need to catch error in case the handler triggers after the channel was closed (if using select with timer channel for timeouts)
         # or https curl throws error immediately
         try {
-            https curl $url {*}$opts -command [-> $chhttp]
+            https curl $url {*}$opts -command [-> chhttp]
             set tok [<- $chhttp]
             set ncode [http::ncode $tok]
             set status [http::status $tok]

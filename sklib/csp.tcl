@@ -10,43 +10,49 @@ namespace eval csp {
     # channel capacity (buffer size)
     variable ChannelCap
     array set ChannelCap {}
+    variable ChannelReadOnly
+    array set ChannelReadOnly {}
     variable Routine
     array set Routine {}
     # counter/uid to produce unique Routine and Channel names
     variable Uid 0
 
-    # Channel proc template
-    variable CTemplate {
-        proc %CHANNEL% {operator {val ""}} {
-            if {$operator eq "close"} {
-                # delete channel command == channel closed
-                rename %CHANNEL% "" 
-                # let the CDrained purge the channel if empty
-                CDrained %CHANNEL%
-                SetResume
-                return
-            }
-            CheckOperator $operator
-            while {![CSendReady %CHANNEL%]} {
-                CheckClosed %CHANNEL%
-                Wait$operator
-            }
-            CAppend %CHANNEL% $val
-            SetResume
-            # post-send extra logic for rendez-vous channels
-            if {![CBuffered %CHANNEL%]} {
-                # wait again for container empty (once receiver collected the value)
-                while {![CEmpty %CHANNEL%]} {
-                    CheckClosed %CHANNEL%
-                    Wait$operator
-                }
-            }
-        }
-    }
-
     namespace export go channel select timer ticker range range! <- <-! -> ->>
     namespace ensemble create
 }
+
+
+proc ::csp::ChannelProxy {ch operator val} {
+    if {$operator eq "close"} {
+        # delete channel command == channel closed
+        rename $ch "" 
+        # let the CDrained purge the channel if empty
+        CDrained $ch
+        SetResume
+        return
+    }
+    CheckOperator $operator
+    if {[CReadOnly $ch]} {
+        error "Cannot send to read only channel $ch"
+    }
+
+    while {![CSendReady $ch]} {
+        CheckClosed $ch
+        Wait$operator
+    }
+    CAppend $ch $val
+    SetResume
+    # post-send extra logic for rendez-vous channels
+    if {![CBuffered $ch]} {
+        # wait again for container empty (once receiver collected the value)
+        while {![CEmpty $ch]} {
+            CheckClosed $ch
+            Wait$operator
+        }
+    }
+}
+
+
 
 proc ::csp::Wait<- {} {
     yield
@@ -111,6 +117,7 @@ proc ::csp::CPurge {ch} {
     catch {
         unset Channel($ch)
         unset ChannelCap($ch)
+        unset ChannelReadOnly($ch)
         rename $ch ""
         SetResume
     }
@@ -130,9 +137,27 @@ proc ::csp::channel {chVars {cap 0}} {
         # initialize channel as a list or do nothing if exists
         set Channel($ch) {}
         set ChannelCap($ch) $cap
-        namespace eval ::csp [string map [list %CHANNEL% $ch] $CTemplate]
+        # create channel object from the template
+        namespace eval ::csp [string map [list %CHANNEL% $ch] {
+            proc %CHANNEL% {operator {val ""}} {
+                ::csp::ChannelProxy %CHANNEL% $operator $val
+            }
+        }]
     }
 }
+
+# Sending will be possible only by using internal CAppend
+proc ::csp::CMakeReadOnly {ch} {
+    variable ChannelReadOnly
+    set ChannelReadOnly($ch) 1
+}
+
+proc ::csp::CReadOnly {ch} {
+    variable ChannelReadOnly
+    return [info exists ChannelReadOnly($ch)]
+}
+
+
 
 # A channel is considered closed if no longer exists (but its name is correct) 
 proc ::csp::CClosed {ch} {
@@ -204,10 +229,12 @@ proc ::csp::go {args} {
     return $rname
 }
 
+# schedule wake-up
 proc ::csp::SetResume {} {
     after idle {after 0 ::csp::Resume}
 }
 
+# notify routines to reevaluate resume conditions
 proc ::csp::Resume {} {
     variable Routine
     foreach r [array names Routine] {
@@ -286,8 +313,12 @@ proc ::csp::<-! {ch} {
 
 
 # Create a callback handler being a coroutine which when called
-# will send callback arguments to the given channel
-proc ::csp::-> {ch} {
+# will send callback arguments to the newly created channel
+# The library user should only receive from that channel
+proc ::csp::-> {chVar} {
+    upvar $chVar ch
+    channel ch
+    CMakeReadOnly $ch
     # this coroutine will not be registered in Routine array for unblocking calls
     # it should be called from the userland callback
     set routine [NewRoutine]
@@ -295,14 +326,16 @@ proc ::csp::-> {ch} {
     return $routine
 }
 
+# ch should be a newly created channel with exclusive rights for sending
 proc ::csp::OneTimeSender {ch} {
-    set cbargs [yield]
-    if {![CClosed $ch]} {
-        $ch <- $cbargs
-    }
+    # unconditionally push the callback arguments (returned by yield) to the channel
+    CAppend $ch [yield]
+    SetResume
 }
 
-proc ::csp::->> {ch} {
+proc ::csp::->>_old {chVar {size 0}} {
+    upvar $chVar ch
+    channel ch $size
     # this coroutine will not be registered in Routine array for unblocking calls
     # it should be called from the userland callback
     set routine [NewRoutine]
@@ -311,9 +344,13 @@ proc ::csp::->> {ch} {
 }
 
 proc ::csp::MultiSender {ch} {
+    puts "Entering MultiSender $ch"
+    puts "Before yield [CClosed $ch]"
+    set cbargs [yield]
     while {![CClosed $ch]} {
-        set cbargs [yield]
+        puts "After yield [CClosed $ch]. cbargs: $cbargs"
         if {![CClosed $ch]} {
+            puts "Before send [CClosed $ch]. Sending $cbargs"
             $ch <- $cbargs
         }
     }
@@ -380,10 +417,9 @@ proc ::csp::select {a} {
     return [uplevel $body]
 }
 
-proc ::csp::timer {chName ms} {
-    upvar $chName ch
-    csp::channel ch
-    after $ms [-> $ch] {[clock seconds]}
+proc ::csp::timer {chVar ms} {
+    upvar $chVar ch
+    after $ms [-> ch] {[clock seconds]}
     return $ch
 }
 
@@ -394,8 +430,8 @@ proc ::csp::TickerRoutine {ch ms} {
     }
 }
 
-proc ::csp::ticker {chName ms} {
-    upvar $chName ch
+proc ::csp::ticker {chVar ms} {
+    upvar $chVar ch
     csp::channel ch 0
     after $ms csp::go TickerRoutine $ch $ms
     return $ch
@@ -406,7 +442,11 @@ proc ::csp::RangeWith {operator varName ch body} {
     CheckName $ch
     uplevel [subst -nocommands {
         while 1 {
-            if {[catch {set $varName [$operator $ch]} out err]} {
+            try {
+                set $varName [$operator $ch]
+            } on error {out err} {
+                puts "out: \$out"
+                puts "err: \$err"
                 break
             }
             $body

@@ -113,10 +113,9 @@ build-sku linux x86_64
 #ex ./build/sample/linux-ix86/sample.bin
 
 package require tcltest
-#source ./sklib/csp_test1.tcl 
 tcltest::configure -testdir [file normalize ./sklib]
 #tcltest::configure -outfile [file normalize tcltest.out]
-#tcltest::runAllTests
+tcltest::runAllTests
 
 exit
 
