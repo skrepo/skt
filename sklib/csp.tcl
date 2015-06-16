@@ -342,6 +342,11 @@ proc ::csp::OneTimeSender {ch} {
 }
 
 
+# EXPERIMENTAL - works well with Tk sparse events like mouse clicks or key press buttons
+# The problem is that in another typical use case i.e. reading from nonblocking file/socket chan
+# the constant hammering with events from fileevent starves other coroutines 
+# and overflows the channel buffer here.
+# 
 # Create a channel and a callback handler being a coroutine which when called
 # will send callback single argument to the newly created channel
 # The library user should only receive from that channel
@@ -396,6 +401,11 @@ proc ::csp::select {a} {
             lappend substa $op $ch $body
         } else {
             lappend substa [uplevel subst $op] [uplevel subst $ch] $body
+            # also make sure that body block contains <- operator
+            # this is to prevent common mistake: body without send/receive operation
+            if {![string match *<-* $body]} {
+                error "select block should contain <- operator in\n$body"
+            }
         }
     }
     while {$ready == 0} {

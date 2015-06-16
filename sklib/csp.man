@@ -7,7 +7,7 @@
 [keywords callback]
 [keywords channel]
 [keywords actors]
-[copyright {2015 SecurityKISS Ltd <open.source@securitykiss.com> - MIT License}]
+[copyright {2015 SecurityKISS Ltd <open.source@securitykiss.com> - MIT License - Bug reports and feedback are welcome}]
 [titledesc {Golang style concurrency library based on Communicating Sequential Processes}]
 [moddesc   {Concurrency}]
 [category  {Concurrency}]
@@ -144,7 +144,7 @@ Since it must work in a single-threaded interpreter, waiting is non-blocking. In
 
 [call [cmd ::csp::->] [arg channelVar] [opt [arg size]]]
 
-[call [cmd ::csp::->>] [arg channelVar] [opt [arg size]]]
+[call [cmd ::csp::forward] [arg fromChannel] [arg toChannel]]
 
 [para]
 
@@ -240,6 +240,8 @@ Since the channel is buffered of size 2, the sender waits only on the third atte
 Note that the channel was closed but we still receive messages. Only after the channel was emptied, trying to receive from the channel throws an error.
 
 
+
+
 [subsection {Example 3}]
 [para]
 Using [cmd range] for receiving from the channel until closed.
@@ -284,6 +286,384 @@ Received all
 }]
 
 
+
+
+
+[subsection {Example 4}]
+[para]
+Channels can be used to coordinate future events. We use [cmd after] to create coroutine that will send to the channel. 
+[para]
+Instead of using direct callback which cannot keep local state we consume events in [cmd adder] which can keep sum in local variable.
+[para]
+[example {
+    package require csp
+    namespace import csp::*
+    proc adder {ch} {
+        set sum 0
+        while 1 {
+            set number [<- $ch]
+            incr sum $number
+            puts "adder received $number. The sum is $sum"
+        }
+    }
+    proc trigger {ch number} {
+        $ch <- $number
+    }
+    channel ch
+    go adder $ch
+    after 1000 go trigger $ch 1
+    after 3000 go trigger $ch 3
+    after 5000 go trigger $ch 5
+    puts "Enter event loop"
+    vwait forever
+}]
+
+Output:
+
+[example {
+Enter event loop
+adder received 1. The sum is 1
+adder received 3. The sum is 4
+adder received 5. The sum is 9
+}]
+
+
+
+
+
+[subsection {Example 5}]
+[para]
+Use [cmd timer] to create a channel supplying scheduled messages in the future.
+[para]
+[example {
+    package require csp
+    namespace import csp::*
+
+    proc future {ch} {
+        try {
+            puts "future happened at  [<- $ch]"
+            puts "try to receive again:"
+            puts "[<- $ch]"
+        } on error {out err} {
+            puts "error: $out"
+        }
+    }
+
+    timer ch 2000
+    go future $ch
+    puts "Enter event loop at [clock microseconds]"
+    vwait forever
+}]
+
+Output:
+
+[example {
+Enter event loop at 1434472163190638
+future happened at  1434472165189759
+try to receive again:
+error: Cannot receive from a drained (empty and closed) channel ::csp::Channel#1
+}]
+[para]
+
+Instead of scheduling events with [cmd after] we can use [cmd timer] to create a special receive only channel. There will be only one message send to this channel after the specified time so we can pass this channel to another coroutine that will wait for that message. The message from the timer channel represents unix epoch time in microseconds. The timer channel will be automatically destroyed after first receive so trying to receive again will throw an error.
+
+
+
+
+
+[subsection {Example 6}]
+[para]
+Using [cmd ticker] we can create receive only channel from which we can consume timestamp messages at regular intervals.
+
+[example {
+    package require csp
+    namespace import csp::*
+
+    proc future {ch} {
+        set count 0
+        while 1 {
+            incr count
+            puts "future $count received at [<- $ch]"
+        }
+    }
+
+    ticker ch 1000
+    go future $ch
+    puts "Enter event loop at  [clock microseconds]"
+    vwait forever
+}]
+
+Output:
+
+[example {
+Enter event loop at  1434472822879684
+future 1 received at 1434472823879110
+future 2 received at 1434472824882163
+future 3 received at 1434472825884246
+...
+}]
+
+
+
+
+[subsection {Example 7}]
+[para]
+
+[cmd ticker] command returns the created channel so we can use it in place in combination with [cmd range] to further simplify the example
+
+[example {
+    package require csp
+    namespace import csp::*
+    proc counter {} {
+        range t [ticker ch 1000] {
+            puts "received $t"
+        }
+    }
+    go counter
+    vwait forever
+}]
+
+Output:
+
+[example {
+received 1434474325947677
+received 1434474326950822
+received 1434474327952904
+...
+}]
+
+
+
+
+
+[subsection {Example 8}]
+[para]
+Closing the channel by another scheduled event breaks the [cmd range] loop
+
+[example {
+    package require csp
+    namespace import csp::*
+    proc counter {ch} {
+        range t $ch {
+            puts "received $t"
+        }
+        puts "counter exit"
+    }
+    ticker ch 1000
+    go counter $ch
+    after 4500 $ch close
+    puts "Enter event loop at [clock microseconds]"
+    vwait forever
+}]
+
+Output:
+
+[example {
+Enter event loop at 1434474384645704
+received 1434474385644900
+received 1434474386648105
+received 1434474387650088
+received 1434474388652345
+counter exit
+}]
+
+
+
+[subsection {Example 9}]
+[para]
+Redirect callback call argument to a channel using [cmd ->] command.
+
+[example {
+    package require http
+    package require csp
+    namespace import csp::*
+    proc main {} {
+        http::geturl http://securitykiss.com/rest/now -command [-> ch]
+        puts "fetched: [http::data [<- $ch]]"
+    }
+    go main
+    vwait forever
+}]
+
+Output:
+
+[example {
+fetched: 1434474568
+}]
+
+[para]
+[package csp] package makes it easy to integrate channels and coroutines with existing event driven code.
+Using the [cmd ->] utility command we can make channels work with callback driven commands and at the same time avoid callback hell.
+[para]
+[cmd ->] [arg ch] creates a channel ch and returns a new coroutine that may be used in place of a callback.
+The channel will be destroyed after receiving a single value.
+The single argument passed to the callback will be available to receive from the created channel.
+[para]
+Such code organization promotes local reasoning - it helps writing linear code with local state kept in proc variables. Otherwise the callback would require keeping state in global variables.
+[para]
+Note that there is a limitation in replacing callbacks with [cmd ->] command: only a single- or zero- argument callbacks can be replaced.
+In case of zero-argument callbacks an empty string is sent to the channel.
+
+
+
+[subsection {Example 10}]
+[para]
+Use [cmd select] command to choose ready channels.
+
+[example {
+    package require http
+    package require csp
+    namespace import csp::*
+    proc main {} {
+        http::geturl http://securitykiss.com/rest/slow/now -command [-> ch1]
+        http::geturl http://securitykiss.com/rest/slow/now -command [-> ch2]
+        select {
+            <- $ch1 {
+                puts "from first request: [http::data [<- $ch1]]"
+            }
+            <- $ch2 {
+                puts "from second request: [http::data [<- $ch2]]"
+            }
+        }
+    }
+    go main
+    vwait forever
+}]
+
+Output:
+
+[example {
+from first request: 1434483100
+}]
+
+[para]
+Previous example with callback channels does not extend to making parallel http requests because one waiting channel would prevent receiving from the other.
+The [cmd select] command chooses which of a set of possible send or receive operations will proceed. In this example [cmd select] command examines two callback channels and depending on which one is ready for receive first, it evaluates corresponding body block.
+
+
+[subsection {Example 11}]
+[para]
+Combine [cmd timer] created channel with [cmd select] to enforce timeouts.
+[example {
+    package require http
+    package require csp
+    namespace import csp::*
+    proc main {} {
+        http::geturl http://securitykiss.com/rest/slow/now -command [-> ch1]
+        http::geturl http://securitykiss.com/rest/slow/now -command [-> ch2]
+        timer t1 400
+        select {
+            <- $ch1 {
+                puts "from first request: [http::data [<- $ch1]]"
+            }
+            <- $ch2 {
+                puts "from second request: [http::data [<- $ch2]]"
+            }
+            <- $t1 {
+                puts "requests timed out at [<- $t1]"
+            }
+        }
+    }
+    go main
+    vwait forever
+}]
+
+Output:
+
+[example {
+requests timed out at 1434484003634953
+}]
+[para]
+Since [cmd select] chooses from the set of channels whichever is ready first, by adding the [cmd timer] created channel to select from, we can implement timeout as in the example above.
+
+
+
+[subsection {Example 12}]
+[para]
+Use [cmd select] with the default clause.
+
+[example {
+    package require http
+    package require csp
+    namespace import csp::*
+    proc DisplayResult {ch1 ch2} {
+        set result [select {
+            <- $ch1 {
+                http::data [<- $ch1]
+            }
+            <- $ch2 {
+                http::data [<- $ch2]
+            }
+            default {
+                subst "no response was ready"
+            }
+        }]
+        puts "DisplayResult: $result"
+    }
+    proc main {} {
+        http::geturl http://securitykiss.com/rest/slow/now -command [-> ch1]
+        http::geturl http://securitykiss.com/rest/slow/now -command [-> ch2]
+        after 400 go DisplayResult $ch1 $ch2
+    }
+    go main
+    vwait forever
+}]
+
+Output:
+
+[example {
+DisplayResult: no response was ready
+}]
+
+[para]
+[cmd select] command is potentially waiting if no channel is ready. Sometimes we need to proceed no matter what so [cmd select] makes it possible to return without waiting if the [cmd default] clause is provided. This example also shows that [cmd select] has a return value. In this case the result returned by [cmd select] is either HTTP response or the value specified in the default block if no channel is ready.
+
+
+
+
+[subsection {Example 13}]
+[para]
+
+[example {
+
+}]
+
+Output:
+
+[example {
+
+}]
+
+
+
+
+[subsection {Example 7}]
+[para]
+
+[example {
+
+}]
+
+Output:
+
+[example {
+
+}]
+
+
+
+[subsection {Example 7}]
+[para]
+
+[example {
+
+}]
+
+Output:
+
+[example {
+
+}]
 
 
 [manpage_end]
