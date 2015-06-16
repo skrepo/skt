@@ -17,7 +17,7 @@ namespace eval csp {
     # counter/uid to produce unique Routine and Channel names
     variable Uid 0
 
-    namespace export go channel select timer ticker range range! <- <-! -> ->>
+    namespace export go channel select timer ticker range range! <- <-! -> ->> forward
     namespace ensemble create
 }
 
@@ -312,9 +312,13 @@ proc ::csp::<-! {ch} {
 }
 
 
-# Create a callback handler being a coroutine which when called
-# will send callback arguments to the newly created channel
+# Create a channel and a callback handler being a coroutine which when called
+# will send callback single argument to the newly created channel
 # The library user should only receive from that channel
+# It is designed for one-time callbacks i.e. the coroutine exits after first call.
+# The channel will be automatically destroyed after receiving the first message.
+# The limitation is that the callback must be a single- or zero- argument callback
+# In case of no-argument callback empty string is sent to the channel
 proc ::csp::-> {chVar} {
     upvar $chVar ch
     channel ch
@@ -329,15 +333,21 @@ proc ::csp::-> {chVar} {
 # ch should be a newly created channel with exclusive rights for sending
 proc ::csp::OneTimeSender {ch} {
     # unconditionally push the callback arguments (returned by yield) to the channel
-    set cbargs [yield]
+    set arg [yield]
     if {![CClosed $ch]} {
-        CAppend $ch $cbargs
+        CAppend $ch $arg
+        $ch close
         SetResume
     }
 }
 
 
-
+# Create a channel and a callback handler being a coroutine which when called
+# will send callback single argument to the newly created channel
+# The library user should only receive from that channel
+# It is designed for multi-time callbacks i.e. the coroutine resumes after every callback. 
+# The limitation is that the callback must be a single- or zero- argument callback
+# In case of no-argument callback empty string is sent to the channel
 proc ::csp::->> {chVar {maxbuffer 1000}} {
     upvar $chVar ch
     channel ch $maxbuffer
@@ -351,42 +361,64 @@ proc ::csp::->> {chVar {maxbuffer 1000}} {
 
 proc ::csp::MultiSender {ch} {
     while 1 {
-        set cbargs [yield]
+        set arg [yield]
         # terminate the coroutine if channel not ready for send 
         if {![CSendReady $ch]} {
             break
         }
         # push the callback arguments (returned by yield) to the channel
-        CAppend $ch $cbargs
+        CAppend $ch $arg
         SetResume
     }
 }
 
+proc ::csp::Forward {from to} {
+    range msg $from {
+        # destination channel may be closed in the meantime so catch error and don't break the loop
+        # it is to clear the $from channels 
+        catch {$to <- $msg}
+    }
+}
+
+proc ::csp::forward {froms to} {
+    foreach from $froms {
+        go ::csp::Forward $from $to
+    }
+}
+
+
 proc ::csp::select {a} {
     set ready 0
+    # ensure that operator and channel are substituted only once
+    set substa {}
+    foreach {op ch body} $a {
+        if {$op eq "default"} {
+            lappend substa $op $ch $body
+        } else {
+            lappend substa [uplevel subst $op] [uplevel subst $ch] $body
+        }
+    }
     while {$ready == 0} {
         # (op ch body) triples ready for send/receive
         set triples {}
         set default 0
         set defaultbody {}
         set operator {}
-        foreach {op ch body} $a {
+        foreach {op ch body} $substa {
             if {[IsOperator $ch]} {
                 lassign [list $op $ch] ch op
-                set channel [uplevel subst $ch]
                 if {$op ni $operator} {
                     lappend operator $op
                 }
-                if {[CSendReady $channel]} {
-                    lappend triples s $channel $body
+                if {[CSendReady $ch]} {
+                    lappend triples s $ch $body
                 }
             } elseif {[IsOperator $op]} {
-                set channel [uplevel subst $ch]
                 if {$op ni $operator} {
                     lappend operator $op
                 }
-                if {[CReceiveReady $channel]} {
-                    lappend triples r $channel $body
+                if {[CReceiveReady $ch]} {
+                    lappend triples r $ch $body
                 }
             } elseif {$op eq "default"} {
                 set default 1
@@ -425,13 +457,13 @@ proc ::csp::select {a} {
 
 proc ::csp::timer {chVar ms} {
     upvar $chVar ch
-    after $ms [-> ch] {[clock seconds]}
+    after $ms [-> ch] {[clock microseconds]}
     return $ch
 }
 
 proc ::csp::TickerRoutine {ch ms} {
     if {![CClosed $ch]} {
-        $ch <- [clock seconds]
+        $ch <- [clock microseconds]
         after $ms csp::go TickerRoutine $ch $ms
     }
 }
@@ -443,13 +475,16 @@ proc ::csp::ticker {chVar ms} {
     return $ch
 }
 
-# receive from channel until closed
-proc ::csp::RangeWith {operator varName ch body} {
-    CheckName $ch
+
+# receive from channel until closed in coroutine
+proc ::csp::range {varName ch body} {
+    if {[info coroutine] eq ""} {
+        error "range can only be used in a coroutine"
+    }
     uplevel [subst -nocommands {
         while 1 {
             try {
-                set $varName [$operator $ch]
+                set $varName [<- $ch]
             } on error {out err} {
                 break
             }
@@ -458,18 +493,19 @@ proc ::csp::RangeWith {operator varName ch body} {
     }]
 }
 
-# receive from channel until closed in coroutine
-proc ::csp::range {varName ch body} {
-    if {[info coroutine] eq ""} {
-        error "range can only be used in a coroutine"
-    }
-    RangeWith <- $varName $ch $body
-}
-
 # receive from channel until closed in main control flow
 proc ::csp::range! {varName ch body} {
     if {[info coroutine] ne ""} {
         error "range! should not be used in a coroutine"
     }
-    RangeWith <-! $varName $ch $body
+    uplevel [subst -nocommands {
+        while 1 {
+            try {
+                set $varName [<-! $ch]
+            } on error {out err} {
+                break
+            }
+            $body
+        }
+    }]
 }

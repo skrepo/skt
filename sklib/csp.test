@@ -150,21 +150,18 @@ test csp-1.6 {sync coroutine with main control flow - reverse} -body {
 
 test csp-1.7 {simple timer} -body {
     timer ch 200
-    puts "Before"
     puts -nonewline [<-! $ch]
-    puts "After"
-    $ch close
     return
-} -match regexp -output {\d{10}}
+} -match regexp -output {^\d{16}$}
 
 test csp-1.8 {simple ticker} -body {
     ticker ch 508
     foreach i {1 2 3} {
-        puts -nonewline [<-! $ch]
+        puts -nonewline "[<-! $ch] "
     }
     $ch close
     return
-} -match regexp -output {(\d{10}){3}}
+} -match regexp -output {^(\d{16} ){3}$}
 
 test csp-1.9 {range in coroutine} -body {
     set callback [->> ch]
@@ -198,7 +195,10 @@ test csp-1.10 {range! in main} -body {
 } -output {abcd}
 
 test csp-1.11 {} -body {
+    return
+}
 
+test csp-1.12 {} -body {
     return
 }
 

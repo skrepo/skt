@@ -6,6 +6,7 @@
 [keywords concurrency]
 [keywords callback]
 [keywords channel]
+[keywords actors]
 [copyright {2015 SecurityKISS Ltd <open.source@securitykiss.com> - MIT License}]
 [titledesc {Golang style concurrency library based on Communicating Sequential Processes}]
 [moddesc   {Concurrency}]
@@ -281,5 +282,8 @@ Message 3
 Message 4
 Received all
 }]
+
+
+
 
 [manpage_end]
