@@ -401,11 +401,6 @@ proc ::csp::select {a} {
             lappend substa $op $ch $body
         } else {
             lappend substa [uplevel subst $op] [uplevel subst $ch] $body
-            # also make sure that body block contains <- operator
-            # this is to prevent common mistake: body without send/receive operation
-            if {![string match *<-* $body]} {
-                error "select block should contain <- operator in\n$body"
-            }
         }
     }
     while {$ready == 0} {

@@ -85,23 +85,28 @@ Since it must work in a single-threaded interpreter, waiting is non-blocking. In
 
 
 [def [cmd coroutine]]
-    Coroutine is a procedure executing concurrently with other coroutines. 
-    Created:
-        go procName ?args?
+[para]
+    [term Coroutine] is a procedure executing concurrently with other coroutines. 
+    [term Coroutine] may send messages to and receive messages from [term channels]. Any coroutine may act as a sender or receiver at different times. If [term channel] is not ready a coroutine waits by giving way to other coroutines. This makes the coroutine execution multiplexed at the points of sending to or receiving from channels.
+    [para]
 
-    procName is the name of the existing Tcl procedure that will be run as a coroutine.
-    You can create many coroutines from a single Tcl procedure, possibly called with different arguments
+    [term Coroutine] is created with:
 
+    [para]
+        [cmd go] [arg procName] [arg [opt args]]
+
+    [para]
+    where [arg procName] is the name of the existing Tcl procedure that will be run as a coroutine.
+    You can create many coroutines from a single Tcl procedure, possibly called with different arguments.
+
+    [para]
     Coroutine is destroyed when its execution ends.
 
-
-    Coroutines are multiplexed 
-    gives way to other coroutines
-
-
-    Coroutines may send messages to channels and receive messages from channels. Any coroutine may act as a sender or receiver at different times. 
-
+    [para]
+    We reuse the term [term coroutine] known from Tcl (modelled on Lua) coroutines, but they are are not equivalent. [package csp] coroutines are implemented in terms of Tcl coroutines and it's better not to mix [package csp] and Tcl coroutines in a single program.
 [list_end]
+
+
 
 [section COMMANDS]
 
@@ -142,7 +147,9 @@ Since it must work in a single-threaded interpreter, waiting is non-blocking. In
 
 [call [cmd ::csp::ticker] [arg channelVar] [arg ms]]
 
-[call [cmd ::csp::->] [arg channelVar] [opt [arg size]]]
+[call [cmd ::csp::->] [arg channelVar]]
+
+[call [cmd ::csp::->>] [arg channelVar] [opt [arg size]]]
 
 [call [cmd ::csp::forward] [arg fromChannel] [arg toChannel]]
 
@@ -621,18 +628,99 @@ DisplayResult: no response was ready
 
 
 
+
 [subsection {Example 13}]
 [para]
+Funnel multiple channels into a single channel using [cmd forward] command.
 
 [example {
+    package require http
+    package require csp
+    namespace import csp::*
+    proc main {} {
+        set urls {
+            http://securitykiss.com
+            http://meetup.com
+            http://reddit.com
+            http://google.com
+            http://twitter.com
+            http://bitcoin.org
+        }
+        channel f
+        foreach url $urls {
+            http::geturl $url -method HEAD -command [-> ch]
+            forward $ch $f
+        }
+        after 200 $f close
+        range token $f {
+            upvar #0 $token state
+            puts "$state(http)\t$state(url)"
+        }
+        puts "main exit"
+    }
+    go main
+    vwait forever
 
 }]
 
 Output:
 
 [example {
-
+HTTP/1.1 302 Found  http://google.com/
+HTTP/1.1 301 Moved Permanently  http://reddit.com/
+HTTP/1.1 301 Moved Permanently  http://securitykiss.com/
+main exit
 }]
+
+[para]
+When we want to listen on many channels, especially when they are dynamically created for example per URL as in the above example, [cmd select] command becomes awkward because it requires specifying logic for every channel.
+[para]
+In the example above we spawn a HTTP request for every URL and forward messages from individual "callback channels" into the single "funnel channel" [arg f]. In this way the responses are available in a single channel so we can apply common logic to the results. We also set the timeout for the requests by closing the "funnel channel" after some time. Responses that don't make it within a specified timeout are ignored.
+
+
+
+[subsection {Example 14}]
+[para]
+Redirect callback multi call argument to a long-lived channel using [cmd ->>] command.
+
+[example {
+    package require Tk
+    package require csp
+    namespace import csp::*
+
+    proc main {} {
+        set number 5
+        frame .f
+        button .f.left -text <<< -command [->> chleft]
+        label .f.lbl -text $number
+        button .f.right -text >>> -command [->> chright]
+        grid .f.left .f.lbl .f.right
+        grid .f
+        while 1 {
+            select {
+                <- $chleft {
+                    <- $chleft
+                    incr number -1
+                }
+                <- $chright {
+                    <- $chright
+                    incr number
+                }
+            }
+            .f.lbl configure -text $number
+        }
+    }
+    go main
+}]
+
+[para]
+In previous examples the [cmd ->] command created short-lived disposable callback channels that could be received from only once.
+Often an existing command require a callback that will be called many times over long period of time. In such case [cmd ->>] comes to play. 
+It returns a coroutine that may be called many times in place of the callback. Callback argument is passed to the newly created buffered channel that can be later received from to consume the messages (callback arguments).
+[para]
+In this example similar functionality could be achieved in a simpler way using [arg -textvariable] on [cmd label] but it would require a global variable instead of local [arg number].
+[para]
+The same limitations regarding callback arguments arity apply as for the [cmd ->] command.
 
 
 
