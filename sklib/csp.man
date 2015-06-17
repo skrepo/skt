@@ -7,7 +7,7 @@
 [keywords callback]
 [keywords channel]
 [keywords actors]
-[copyright {2015 SecurityKISS Ltd <open.source@securitykiss.com> - MIT License - Bug reports and feedback are welcome}]
+[copyright {2015 SecurityKISS Ltd <open.source@securitykiss.com> - MIT License - Feedback and bug reports are welcome}]
 [titledesc {Golang style concurrency library based on Communicating Sequential Processes}]
 [moddesc   {Concurrency}]
 [category  {Concurrency}]
@@ -755,7 +755,7 @@ The same limitations regarding callback arguments arity apply as for the [cmd ->
 
 
 
-[subsection {Example 7}]
+[subsection {Example 16}]
 [para]
 
 [example {
@@ -772,21 +772,116 @@ Output:
 
 
 
-[subsection {Example 7}]
+[subsection {Example 17}]
 [para]
+A more complex example using the already discussed constructs.
 
 [example {
-
+    # A simple web crawler/scraper demonstrating the csp style programming in Tcl
+    # In this example we have 2 coroutines: a crawler and a parser "connected" with 2 channels.
+    # The crawler receives the url to process from the urls channel and spawns a http request
+    # Immediately sends the pair: (url, callback channel from http request) 
+    # into a pending requests channel for further processing by the parser.
+    # The parser receives the http token from the received callback channel 
+    # and fetches the page content from the url in order to extract more urls.
+    # The new urls are sent to the urls channel where the crawler takes over again.
+     
+ 
+    package require http
+    package require csp
+    namespace import csp::*
+ 
+    # The crawler coroutine is initialized with 3 channels:
+    # urls - channel with urls waiting to process
+    # requests - channel with pending http requests
+    # quit - synchronization channel to communicate end of coroutine
+    proc crawler {urls requests quit} {
+        # list of visited urls
+        set visited {}
+        range url $urls {
+            if {$url ni $visited} {
+                http::geturl $url -command [-> req]
+                lappend visited $url
+                # note we are passing channel object over a channel
+                $requests <- [list $url $req]
+            }
+        }
+        $quit <- 1
+    }
+ 
+ 
+    # The parser coroutine is initialized with 3 channels:
+    # urls - channel with urls waiting to process
+    # requests - channel with pending http requests
+    # quit - synchronization channel to communicate end of coroutine
+    proc parser {urls requests quit} {
+        set count 0
+        range msg $requests {
+            lassign $msg url req
+            timer timeout 5000
+            select {
+                <- $req {
+                    set token [<- $req]
+                    set data [http::data $token]
+                    puts "Fetched URL $url with content size [string length $data] bytes"
+                    foreach {_ href} [regexp -nocase -all -inline {href="(.*?)"} $data] {
+                        if {![string match http:* $href] && ![string match mailto:* $href]} {
+                            # catch error if channel has been closed
+                            $urls <- [create_url $url $href]
+                        }
+                    }
+                }
+                <- $timeout {
+                    <- $timeout
+                    puts "Request to $url timed out"
+                }
+            }
+            # we stop after fetching 10 urls
+            if {[incr count] >= 10} {
+                $urls close
+                $requests close
+            }
+        }
+        $quit <- 1
+    }
+ 
+    # utility function to construct urls
+    proc create_url {current href} {
+        regexp {(http://[^/]*)(.*)} $current _ base path
+        if {[string match /* $href]} {
+            return $base$href
+        } else {
+            return $current$href
+        }
+    }
+ 
+ 
+    # channel containing urls to process
+    # this channel must have rather large buffer so that the urls to crawl can queue
+    channel urls 10000
+    # channel containing (url req) pairs representing pending http requests
+    # size of this channel determines parallelism i.e. the maximum number of pending requests at the same time
+    channel requests 3
+    # coordination channels that make the main program wait until coroutines end
+    channel crawler_quit
+    channel parser_quit
+    go crawler $urls $requests $crawler_quit
+    go parser $urls $requests $parser_quit
+ 
+    # send the seed url to initiate crawling
+    $urls <-! "http://www.tcl.tk/man/tcl8.6/"
+ 
+    # Gracefully exit - wait for coroutines to complete
+    <-! $crawler_quit
+    <-! $parser_quit
 }]
 
-Output:
-
-[example {
-
-}]
-
-
-
+In particular it is worth to note:
+[list_begin itemized]
+[item] it is allowed to pass a channel object over the channel
+[item] use of [arg quit] synchronization channel to communicate end of coroutine
+[item] closing channels as a way to terminate [cmd range] iteration
+[list_end]
 
 
 [subsection {Example 7}]
@@ -820,21 +915,6 @@ Output:
     }
 }]
 
-
-
-
-[subsection {Example 7}]
-[para]
-
-[example {
-
-}]
-
-Output:
-
-[example {
-
-}]
 
 
 [manpage_end]

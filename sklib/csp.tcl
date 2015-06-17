@@ -499,10 +499,10 @@ proc ::csp::range {varName ch body} {
         while 1 {
             try {
                 set $varName [<- $ch]
+                $body
             } on error {out err} {
                 break
             }
-            $body
         }
     }]
 }
@@ -516,10 +516,10 @@ proc ::csp::range! {varName ch body} {
         while 1 {
             try {
                 set $varName [<-! $ch]
+                $body
             } on error {out err} {
                 break
             }
-            $body
         }
     }]
 }
