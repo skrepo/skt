@@ -22,6 +22,7 @@ The concepts originate in Hoare's [uri https://en.wikipedia.org/wiki/Communicati
 The CSP concurrency model may be visualized as a set of independent processes (coroutines) sending and receiving messages to the named channels. The control flow in the coroutines is coordinated at the points of sending and receiving messages i.e. the coroutine may need to wait while trying to send or receive.
 Since it must work in a single-threaded interpreter, waiting is non-blocking. Instead of blocking a waiting coroutine gives way to other coroutines.
 [para]
+This concurrency model may also be seen as a generalization of Unix [uri https://en.wikipedia.org/wiki/Named_pipe {named pipes}] where processes and pipes correspond to coroutines and channels.
 
 [section Concepts]
 
@@ -445,6 +446,34 @@ received 1434474327952904
 
 [subsection {Example 8}]
 [para]
+
+Another example of using [cmd ticker] to implement the canonical countdown counter from [uri http://wiki.tcl.tk/946 {Tcl wiki}].
+
+[example {
+    package require Tk
+    package require csp
+    namespace import csp::*
+
+    proc countdown {varName} {
+        upvar $varName var
+        range _ [ticker t 1000 #10] {
+            incr var -1
+        }
+    }
+
+    set count 10
+    label .counter -font {Helvetica 72} -width 3 -textvariable count
+    grid .counter -padx 100 -pady 100
+    go countdown count
+}]
+
+
+
+
+
+
+[subsection {Example 9}]
+[para]
 Closing the channel by another scheduled event breaks the [cmd range] loop
 
 [example {
@@ -476,7 +505,7 @@ counter exit
 
 
 
-[subsection {Example 9}]
+[subsection {Example 10}]
 [para]
 Redirect callback call argument to a channel using [cmd ->] command.
 
@@ -513,7 +542,7 @@ In case of zero-argument callbacks an empty string is sent to the channel.
 
 
 
-[subsection {Example 10}]
+[subsection {Example 11}]
 [para]
 Use [cmd select] command to choose ready channels.
 
@@ -548,7 +577,7 @@ Previous example with callback channels does not extend to making parallel http 
 The [cmd select] command chooses which of a set of possible send or receive operations will proceed. In this example [cmd select] command examines two callback channels and depending on which one is ready for receive first, it evaluates corresponding body block.
 
 
-[subsection {Example 11}]
+[subsection {Example 12}]
 [para]
 Combine [cmd timer] created channel with [cmd select] to enforce timeouts.
 [example {
@@ -585,7 +614,7 @@ Since [cmd select] chooses from the set of channels whichever is ready first, by
 
 
 
-[subsection {Example 12}]
+[subsection {Example 13}]
 [para]
 Use [cmd select] with the default clause.
 
@@ -629,7 +658,7 @@ DisplayResult: no response was ready
 
 
 
-[subsection {Example 13}]
+[subsection {Example 14}]
 [para]
 Funnel multiple channels into a single channel using [cmd forward] command.
 
@@ -679,7 +708,7 @@ In the example above we spawn a HTTP request for every URL and forward messages 
 
 
 
-[subsection {Example 14}]
+[subsection {Example 15}]
 [para]
 Redirect callback multi call argument to a long-lived channel using [cmd ->>] command.
 
@@ -692,7 +721,7 @@ Redirect callback multi call argument to a long-lived channel using [cmd ->>] co
         set number 5
         frame .f
         button .f.left -text <<< -command [->> chleft]
-        label .f.lbl -text $number
+        label .f.lbl -font {Helvetica 24} -text $number
         button .f.right -text >>> -command [->> chright]
         grid .f.left .f.lbl .f.right
         grid .f
@@ -725,6 +754,7 @@ The same limitations regarding callback arguments arity apply as for the [cmd ->
 
 
 
+
 [subsection {Example 7}]
 [para]
 
@@ -737,6 +767,59 @@ Output:
 [example {
 
 }]
+
+
+
+
+
+[subsection {Example 7}]
+[para]
+
+[example {
+
+}]
+
+Output:
+
+[example {
+
+}]
+
+
+
+
+
+[subsection {Example 7}]
+[para]
+
+[example {
+
+}]
+
+Output:
+
+[example {
+
+}]
+
+
+
+
+[subsection {Example 7}]
+[para]
+
+[example {
+    package require Tk
+    package require csp
+    namespace import csp::*
+    set count 5
+    label .counter -font {Helvetica 72} -width 3 -textvariable count
+    grid .counter -padx 100 -pady 100
+    range! _ [ticker t 1000 #$count] {
+        incr count -1
+    }
+}]
+
 
 
 

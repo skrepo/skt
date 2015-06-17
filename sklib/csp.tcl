@@ -235,6 +235,8 @@ proc ::csp::SetResume {} {
 }
 
 # notify routines to reevaluate resume conditions
+# this is a naive implementation that tries all started routines
+# it may be improved by keeping track of the yielding routines (yield [info coroutine])
 proc ::csp::Resume {} {
     variable Routine
     foreach r [array names Routine] {
@@ -243,11 +245,8 @@ proc ::csp::Resume {} {
             catch {unset Routine($r)}
         } else {
             # cannot run the already running coroutine - catch error when it happens
-            #puts stderr "CURRENT COROUTINE: [info coroutine]"
-            #puts stderr "r: $r"
             # this may regularly throw 'coroutine "::csp::Routine#N" is already running'
             catch $r
-            #after idle [list after 0 catch $r]
             #if {[catch {$r} out err]} 
                 #puts stderr "OUT: $out, ERR: $err"
             
@@ -460,23 +459,33 @@ proc ::csp::select {a} {
     return [uplevel $body]
 }
 
-proc ::csp::timer {chVar ms} {
+proc ::csp::timer {chVar interval} {
     upvar $chVar ch
-    after $ms [-> ch] {[clock microseconds]}
+    after $interval [-> ch] {[clock microseconds]}
     return $ch
 }
 
-proc ::csp::TickerRoutine {ch ms} {
+proc ::csp::TickerRoutine {ch interval closeafter} {
     if {![CClosed $ch]} {
+        if {[regexp {#(\d+)} $closeafter _ ticksleft]} {
+            if {$ticksleft <= 0} {
+                $ch close
+                return
+            }
+            set closeafter #[incr ticksleft -1]
+        }
         $ch <- [clock microseconds]
-        after $ms csp::go TickerRoutine $ch $ms
-    }
+        after $interval csp::go TickerRoutine $ch $interval $closeafter
+     }
 }
 
-proc ::csp::ticker {chVar ms} {
+proc ::csp::ticker {chVar interval {closeafter 0}} {
     upvar $chVar ch
-    csp::channel ch 0
-    after $ms csp::go TickerRoutine $ch $ms
+    csp::channel ch
+    if {$closeafter != 0 && [string is integer -strict $closeafter]} {
+        after $closeafter $ch close
+    }
+    after $interval csp::go TickerRoutine $ch $interval $closeafter
     return $ch
 }
 
