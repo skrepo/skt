@@ -757,22 +757,63 @@ The same limitations regarding callback arguments arity apply as for the [cmd ->
 
 [subsection {Example 16}]
 [para]
+Channel operations like [cmd <-] and [cmd range] can be used only in coroutines. Using coroutines for channel driven coordination is the recommended way of using [package csp] package. 
+[para]
+It may happen that we need to use channels outside of coroutines. It is possible with corresponding [cmd <-!] and [cmd range!] commands but there are caveats.
+The "bang" terminated commands are implemented using vwait nested calls and have many limitations. Thus they should be used with extra care and only in simple scenarios. Especially it is not guaranteed that they will work correctly if used inside callbacks.
+[para]
+In this example we show a simple scenario where receiving from the channel in the main script control flow makes sense as a way to synchronize coroutine termination.
 
 [example {
-
+ 
+    package require http
+    package require csp
+    namespace import csp::*
+ 
+    proc worker {ch_quit} {
+        http::geturl http://securitykiss.com/rest/now -command [-> ch]
+        puts "fetched: [http::data [<- $ch]]"
+        $ch_quit <- 1
+    }
+ 
+    # termination coordination channel
+    channel ch_quit
+ 
+    go worker $ch_quit
+ 
+    <-! $ch_quit
+ 
 }]
 
 Output:
 
 [example {
-
+fetched: 1434556219
 }]
 
-
+Without the last line the script would exit immediately without giving the coroutine a chance to fetch the url.
 
 
 
 [subsection {Example 17}]
+[para]
+Following the "bang" terminated command trail, this example shows how [cmd range!] command may further simplify the previous countdown counter example.
+
+[example {
+    package require Tk
+    package require csp
+    namespace import csp::*
+    set count 5
+    label .counter -font {Helvetica 72} -width 3 -textvariable count
+    grid .counter -padx 100 -pady 100
+    range! _ [ticker t 1000 #$count] {
+        incr count -1
+    }
+}]
+
+
+
+[subsection {Example 18}]
 [para]
 A more complex example using the already discussed constructs.
 
@@ -876,45 +917,12 @@ A more complex example using the already discussed constructs.
     <-! $parser_quit
 }]
 
-In particular it is worth to note:
+In particular it is worth noting:
 [list_begin itemized]
 [item] it is allowed to pass a channel object over the channel
 [item] use of [arg quit] synchronization channel to communicate end of coroutine
 [item] closing channels as a way to terminate [cmd range] iteration
 [list_end]
-
-
-[subsection {Example 7}]
-[para]
-
-[example {
-
-}]
-
-Output:
-
-[example {
-
-}]
-
-
-
-
-[subsection {Example 7}]
-[para]
-
-[example {
-    package require Tk
-    package require csp
-    namespace import csp::*
-    set count 5
-    label .counter -font {Helvetica 72} -width 3 -textvariable count
-    grid .counter -padx 100 -pady 100
-    range! _ [ticker t 1000 #$count] {
-        incr count -1
-    }
-}]
-
 
 
 [manpage_end]
