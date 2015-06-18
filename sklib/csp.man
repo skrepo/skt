@@ -186,9 +186,13 @@ The select command provides a way to handle multiple channels. It is a switch li
 
 [call [cmd ::csp::timer] [arg channelVar] [arg interval]]
     Create a receive-only channel with scheduled message in [arg interval] milliseconds. Trying to receive from the channel will cause the coroutine to wait [arg interval] milliseconds since creation. Eventually the received message is a Unix epoch time in microseconds. After receiving the message the channel is closed and destroyed.
+    [para]
+    Returns the created channel.
 
 [call [cmd ::csp::ticker] [arg channelVar] [arg interval] [arg [opt closeafter]]]
     Create a receive-only channel with scheduled messages every [arg interval] milliseconds. 
+    [para]
+    Returns the created channel.
 
 The optional [arg closeafter] argument determines when the channel is closed. It may take one of the 2 forms:
     [list_begin itemized]
@@ -198,10 +202,17 @@ The optional [arg closeafter] argument determines when the channel is closed. It
     If [arg closeafter] argument is not provided, the [cmd ticker] channel emits messages endlessly.
 
 [call [cmd ::csp::->] [arg channelVar]]
+    Creates a channel and returns a new coroutine that may be called with a single argument. The coroutine is meant for integration with callback-driven code and to be used in place of one-time callback. The channel is placed in [arg channelVar] and will be destroyed after receiving a single message. The single argument passed to the callback will be available to receive from the created channel.
+    [para]
+Note that there is a limitation in replacing callbacks with -> command: only a single- or zero- argument callbacks can be replaced. In case of zero-argument callbacks an empty string is sent to the channel.
 
 [call [cmd ::csp::->>] [arg channelVar] [opt [arg size]]]
+    Creates a buffered channel of size [arg size] and returns a new coroutine that may be used in place of a callback. The coroutine may be called many times and the callback arguments are internally sent to the created channel. 
+    [para]
+Note that there is a limitation in replacing callbacks with -> command: only a single- or zero- argument callbacks can be replaced. In case of zero-argument callbacks an empty string is sent to the channel.
 
 [call [cmd ::csp::forward] [arg fromChannel] [arg toChannel]]
+    Receive messages from [arg fromChannel] and send them to [arg toChannel].
 
 [para]
 
@@ -613,7 +624,8 @@ Such code organization promotes local reasoning - it helps writing linear code w
 [para]
 Note that there is a limitation in replacing callbacks with [cmd ->] command: only a single- or zero- argument callbacks can be replaced.
 In case of zero-argument callbacks an empty string is sent to the channel.
-
+[para]
+Note that there is no symmetry in <- <-! -> ->> commands. Every one of them has a different purpose.
 
 
 [subsection {Example 11}]
@@ -837,7 +849,8 @@ It returns a coroutine that may be called many times in place of the callback. C
 In this example similar functionality could be achieved in a simpler way using [arg -textvariable] on [cmd label] but it would require a global variable instead of local [arg number].
 [para]
 The same limitations regarding callback arguments arity apply as for the [cmd ->] command.
-
+[para]
+Note that there is no symmetry in <- <-! -> ->> commands. Every one of them has a different purpose.
 
 
 
@@ -905,7 +918,7 @@ A more complex example using the already discussed constructs.
 
 [example {
     # A simple web crawler/scraper demonstrating the csp style programming in Tcl
-    # In this example we have 2 coroutines: a crawler and a parser "connected" with 2 channels.
+    # In this example we have 2 coroutines: a crawler and a parser communicating over 2 channels.
     # The crawler receives the url to process from the urls channel and spawns a http request
     # Immediately sends the pair: (url, callback channel from http request) 
     # into a pending requests channel for further processing by the parser.
@@ -1004,7 +1017,7 @@ A more complex example using the already discussed constructs.
 
 In particular it is worth noting:
 [list_begin itemized]
-[item] it is allowed to pass a channel object over the channel
+[item] it is possible to pass a channel object over another channel
 [item] use of [arg quit] synchronization channel to communicate end of coroutine
 [item] closing channels as a way to terminate [cmd range] iteration
 [list_end]
