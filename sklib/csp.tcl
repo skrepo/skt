@@ -50,6 +50,7 @@ proc ::csp::ChannelProxy {ch operator val} {
             Wait$operator
         }
     }
+    return
 }
 
 
@@ -235,7 +236,6 @@ proc ::csp::SetResume {} {
 }
 
 # notify routines to reevaluate resume conditions
-# this is a naive implementation that tries all started routines
 # it may be improved by keeping track of the yielding routines (yield [info coroutine])
 proc ::csp::Resume {} {
     variable Routine
@@ -390,7 +390,11 @@ proc ::csp::forward {froms to} {
     }
 }
 
-
+# The select command provides a way to handle multiple channels. 
+# It is a switch like statement where channels are evaluated for readiness.
+# The select command makes the coroutine wait until at least one channel is ready.
+# If multiple can proceed, select chooses pseudo-randomly.
+# A default clause, if present, executes immediately if no channel is ready.
 proc ::csp::select {a} {
     set ready 0
     # ensure that operator and channel are substituted only once
