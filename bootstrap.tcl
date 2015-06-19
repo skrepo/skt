@@ -6,6 +6,7 @@ if {![catch {package require starkit}]} {
 }
 
 set builddate [clock format [clock seconds] -gmt 1]
+array set github_repos {}
 
 proc ex {args} {
     return [exec -- {*}$args >&@ stdout]
@@ -127,7 +128,7 @@ proc get-fetchnames {os arch pkgname ver} {
       return $res
     }
     default {
-      return [list "package-$pkgname-$ver-tcl.tm" "package-$pkgname-$ver-[oscompiler $os]-$arch.zip" "package-$pkgname-$ver-tcl.zip"]
+      return [list "package-$pkgname-$ver-tcl.tm" "package-$pkgname-$ver-[oscompiler $os]-$arch.zip" "package-$pkgname-$ver-tcl.zip" "$pkgname-$ver.zip"]
     }
   }
 }
@@ -147,6 +148,32 @@ proc wget {url filepath} {
   }
   http::cleanup $tok
   return $retcode
+}
+
+proc github-repo {repo github_user} {
+    global github_repos
+    set github_repos($repo) $github_user
+}
+
+proc fetch-github {pkgname ver} {
+    global github_repos
+    if {![info exists github_repos($pkgname)]} {
+        return 0
+    }
+    set github_user $github_repos($pkgname)
+    # The original link is: https://github.com/$github_user/$pkgname/archive/$ver
+    # but it gets redirected to:
+    set url https://codeload.github.com/$github_user/$pkgname/zip/$ver
+
+    puts -nonewline "Trying to download $url...     "
+    flush stdout
+    if {[wget $url [file join downloads $pkgname-$ver.zip]] == 200} {
+      puts "DONE"
+      return 1
+    } else {
+      puts "FAIL"
+      return 0
+    }
 }
 
 
@@ -203,6 +230,10 @@ proc prepare-pkg {os arch pkgname ver} {
           unzip $cand_path $target_path_depend
           return
         }
+        *.zip {
+          unzip $cand_path [file join lib generic]
+          return
+        }
         package-*-tcl.tm {
           file mkdir $target_path_indep
           file copy $cand_path [file join $target_path_indep $pkgname-$ver.tcl]
@@ -220,6 +251,11 @@ proc prepare-pkg {os arch pkgname ver} {
 
 proc fetch-pkg {os arch pkgname ver} {
   file mkdir downloads
+  if {[fetch-github $pkgname $ver]} {
+      # Successfully fetched the package from an individual github repo so return
+      return
+  }
+
   set candidates [get-fetchnames $os $arch $pkgname $ver]
   # return if at least one candidate exists in downloads
   foreach cand $candidates {

@@ -42,7 +42,8 @@ proc copy-flags {countries {sizes {16 24 64}}} {
 proc build-sku {os arch} {
     spit sku/builddate.txt $::builddate
     copy-flags {PL GB UK DE FR US}
-    build $os $arch sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 snit-2.3.2 doctools-1.4.19 textutil::expander-1.3.1}
+    github-repo csp securitykiss-com  ;#https://github.com/securitykiss-com/csp/archive/0.1.0.zip
+    build $os $arch sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 snit-2.3.2 doctools-1.4.19 textutil::expander-1.3.1 csp-0.1.0}
     ex sudo cp build/sku/linux-x86_64/sku.bin /usr/local/bin/sku.bin
 }
 
@@ -97,8 +98,6 @@ proc release {} {
 
 prepare-lib sklib 0.0.0
 
-doc ./sklib/csp.man
-ex xdg-open ./sklib/csp.html
 
 #build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
 #build linux x86_64 sandbox base-tk-8.6.3.1 {sklib-0.0.0 tls-1.6.4}
@@ -109,11 +108,15 @@ ex xdg-open ./sklib/csp.html
 #i18n code2msg ./sku/main.tcl {es pl} ./sku/messages.txt 
 build-sku linux x86_64
 
+doc ./lib/generic/csp-0.1.0/csp.man
+ex xdg-open ./lib/generic/csp-0.1.0/csp.html
+
 #build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 sklib-0.0.0 Tclx-8.4}
 #ex ./build/sample/linux-ix86/sample.bin
 
 package require tcltest
 tcltest::configure -testdir [file normalize ./sklib]
+tcltest::configure -testdir [file normalize ./lib/generic/csp-0.1.0]
 #tcltest::configure -outfile [file normalize tcltest.out]
 tcltest::runAllTests
 
