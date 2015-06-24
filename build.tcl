@@ -96,6 +96,13 @@ proc release {} {
     #TODO /home/sk/seckiss/distskt
 }
 
+proc test {} {
+    package require tcltest
+    tcltest::configure -testdir [file normalize ./sklib]
+    tcltest::runAllTests
+}
+
+
 prepare-lib sklib 0.0.0
 
 
@@ -108,17 +115,12 @@ prepare-lib sklib 0.0.0
 #i18n code2msg ./sku/main.tcl {es pl} ./sku/messages.txt 
 build-sku linux x86_64
 
-doc ./lib/generic/csp-0.1.0/csp.man
-ex xdg-open ./lib/generic/csp-0.1.0/csp.html
 
 #build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 sklib-0.0.0 Tclx-8.4}
 #ex ./build/sample/linux-ix86/sample.bin
 
-package require tcltest
-tcltest::configure -testdir [file normalize ./sklib]
-tcltest::configure -testdir [file normalize ./lib/generic/csp-0.1.0]
-#tcltest::configure -outfile [file normalize tcltest.out]
-tcltest::runAllTests
+#doc ./lib/generic/csp-0.1.0/csp.man
+#ex xdg-open ./lib/generic/csp-0.1.0/csp.html
 
 exit
 

@@ -118,17 +118,17 @@ exit
 
 
 
-package require asyncdns
-
-proc dns-resolve {token} {
-    upvar 0 $token state
-    puts "parray state:"
-    parray state
-    puts "resolved ip: $state(ip)"
-    asyncdns cleanup $token
-}
-
-set token [asyncdns resolve -command dns-resolve securitykiss.com]
+#package require asyncdns
+#
+#proc dns-resolve {token} {
+#    upvar 0 $token state
+#    puts "parray state:"
+#    parray state
+#    puts "resolved ip: $state(ip)"
+#    asyncdns cleanup $token
+#}
+#
+#set token [asyncdns resolve -command dns-resolve securitykiss.com]
 
 
 puts "Entering event loop"
