@@ -26,6 +26,8 @@ package require inicfg
 package require i18n
 package require csp
 namespace import csp::*
+package require Tk 
+package require Tkhtml
 
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
@@ -45,7 +47,7 @@ proc background-error {msg err} {
 interp bgerror "" background-error
 #after 4000 {error "This is my bg error"}
 
-
+# Redirect stdout to a file $::LOGFILE
 namespace eval tolog {
     variable fh
     proc initialize {args} {
@@ -118,6 +120,7 @@ proc update-provider-list {} {
     }
 }
 
+# Global Config properties for display
 proc update-default-properties {} {
     dict-put ::Config layout bg1 white
     dict-put ::Config layout bg2 grey95
@@ -274,7 +277,7 @@ proc main {} {
 
 
     skd-connect 7777
-    after idle main-start
+    in-ui main
 }
 
 
@@ -306,30 +309,6 @@ proc main-exit {} {
 }
 
 
-# it may be called many times by events retrying to start after lib install
-proc main-start {} {
-
-    set retries [state sku start_retries]
-    state sku {start_retries [incr retries]}
-    log start_retries: [state sku start_retries]
-    # give up after a number of retries
-    if {$retries > 5} {
-        in-ui error "Could not main-start after a number of retries"
-        return
-    }
-
-    # Ignore result of openvpn install - it may be handled later, when GUI is running
-    check-openvpn-deps
-
-    if {[state sku ui] eq "gui"} {
-        log Running check-tk-deps
-        # if no missing libs start UI
-        if {![check-tk-deps]} {
-            in-ui main
-        }
-    }
-}
-
 # Combine $fun and $ui to run proper procedure in gui or cli
 proc in-ui {fun args} {
     set ui [state sku ui]
@@ -352,34 +331,6 @@ proc error-gui {msg} {
 proc error-cli {msg} {
     log $msg
     puts stderr $msg
-}
-
-
-# Check if openvpn is installed. 
-# If not send pkg-install request to SKD
-# Return 1 if request sent, 0 otherwise
-proc check-openvpn-deps {} {
-    if {![linuxdeps is-openvpn-installed]} {
-        skd-write "pkg-install openvpn"
-        return 1
-    } else {
-        return 0
-    }
-}
-
-# Check if there is a missing lib that Tk depends on
-# If so send lib-install request to SKD
-# Return 1 if request sent, 0 otherwise
-proc check-tk-deps {} {
-    set missing_lib [linuxdeps tk-missing-lib]
-    if {[llength $missing_lib] != 0} {
-        skd-write "lib-install $missing_lib"
-        return 1
-    } else {
-        # hide toplevel window. Use wm deiconify to restore later
-        wm withdraw .
-        return 0
-    }
 }
 
 
@@ -461,10 +412,6 @@ proc hsep {parent height} {
 
 proc main-gui {} {
     log Running GUI
-
-    package require Tk 
-    package require Tkhtml
-
     wm deiconify .
     wm protocol . WM_DELETE_WINDOW {
         #TODO improve the message
@@ -1035,21 +982,11 @@ proc skd-read {} {
                 {^Config loaded} {
                     skd-write start
                 }
-                {^pkg-install ended with result} {
-                    after idle main-start
-                }
-
             }
         }
         {^ovpn: (.*)$} {
             set ::status [lindex $tokens 0]
         }
-        {^pkg: (.*)$} {
-            #TODO can we parse pkg-mgr output to see success/failure? Aren't messages i18ned?
-
-
-        }
-
     }
     log SKD>> $line
 }

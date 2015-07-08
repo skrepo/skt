@@ -209,6 +209,7 @@ proc ::ovconf::parse {config_file} {
     return $config
 }
 
+# Check if cert file paths exist
 proc ::ovconf::check-paths-exist {conf} {
     ::set keys {dh extra-certs pkcs12 secret tls-auth ca cert key}
     foreach k $keys {

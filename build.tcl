@@ -8,6 +8,7 @@
 # Build command syntax:
 # build <os> <arch> <project_name> <basekit> <list_of_packages>
 # where basekit may be: base-tcl-<ver> or base-tk-<ver> or base-tcl-thread-<ver> or base-tk-thread-<ver>
+#
 
 
 # Examples
@@ -51,7 +52,7 @@ proc build-skd {os arch} {
     spit skd/builddate.txt $::builddate
     # use the sku version as skd version
     spit skd/buildver.txt [slurp sku/buildver.txt]
-    build $os $arch skd base-tcl-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
+    build $os $arch skd base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
     ex sudo service skd stop
     ex sudo cp build/skd/linux-x86_64/skd.bin /usr/local/sbin/skd
     ex sudo cp skd/exclude/etc/init.d/skd /etc/init.d/skd
@@ -114,6 +115,7 @@ prepare-lib sklib 0.0.0
 
 #i18n code2msg ./sku/main.tcl {es pl} ./sku/messages.txt 
 build-sku linux x86_64
+build-skd linux x86_64
 
 
 #build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 sklib-0.0.0 Tclx-8.4}

@@ -8,15 +8,21 @@ if {![catch {package require starkit}]} {
   starkit::startup
 }
 
-
 # package vs source principle: sourced file may have back/circular references to the caller (to be avoided)
 package require cmd
 package require ovconf
+# Tclx for signal trap
 package require Tclx
+# Tclx litters global namespace. Need to clean up to avoid conflict with csp
+rename ::select ""
 package require linuxdeps
 # skutil must be last required package in order to overwrite the log proc from Tclx
+# using skutil log to stdout
 package require skutil
 source [file join $starkit::topdir skmgmt.tcl]
+
+
+
 
 proc background-error {msg e} {
     set pref [lindex [info level 0] 0]
@@ -65,6 +71,14 @@ proc main {} {
         # OpenVPN config as double-dashed one-line string
         ovpnconfig ""
     }
+
+    #TODO check if openvpn installed, install otherwise, retry if needed
+    #TODO check if X11 running, if so try Tk. If a problem install deps, retry if needed
+    linuxdeps openvpn-install
+    linuxdeps tkdeps-install
+
+
+
     reset-ovpn-state
     socket -server SkdNewConnection -myaddr 127.0.0.1 7777
 }
@@ -120,7 +134,7 @@ proc SkdNewConnection {sock peerhost peerport} {
         catch {puts $sock "ctrl: Welcome to SKD"}
     } else {
         fconfigure $sock -blocking 0 -buffering line
-        catch {puts $sock "ctrl: Only single connection allowed"}
+        catch {puts $sock "ctrl: Only a single connection allowed"}
         catch {close $sock}
     }
 }
@@ -171,6 +185,7 @@ proc adjust-config {conf} {
     return $conf
 }
 
+# validate config paths and store config in state
 proc load-config {conf} {
     set patherror [::ovconf::check-paths-exist $conf]
     if {$patherror ne ""} {
@@ -191,6 +206,8 @@ proc SkdRead {} {
         }
         return
     }
+    
+    log SkdRead: $line
     switch -regexp -matchvar tokens $line {
         {^stop$} {
             set pid [state ovpn pid]
@@ -234,22 +251,6 @@ proc SkdRead {} {
             }
             return
         }
-        {^pkg-install (.+)$} {
-            log $line
-            #TODO list of allowed packages - for security
-            set pkgname [lindex $tokens 1]
-            pkg-install $pkgname
-        }
-        {^lib-install (.+)$} {
-            log $line
-            set lib [lindex $tokens 1]
-            set pkgname [linuxdeps::lib-to-pkg $lib]
-            if {[llength $pkgname] > 0} {
-                pkg-install $pkgname
-            } else {
-                log Could not locate package for lib $lib
-            }
-        }
         {^upgrade (.+)$} {
             log $line
             set pkg [lindex $tokens 1]
@@ -259,59 +260,12 @@ proc SkdRead {} {
                 SkdWrite ctrl "Could not upgrade $pkg"
             }
         }
+        default {
+            SkdWrite ctrl "Unknown command"
+        }
 
     }
 }
-
-# Queue pkg-install requests and trigger event for processing the queue
-proc pkg-install {pkgname} {
-    set q [state skd pkg_install_q]
-    lappend q $pkgname
-    state skd {pkg_install_q $q}
-    log INSTALL_QUEUE: [state skd pkg_install_q]
-    # Trigger package processing with delay
-    after 2000 PkgMgrQProcess
-}
-
-
-# Process the pkg-install queue
-proc PkgMgrQProcess {} {
-    if {[state skd pkg_lock]} {
-        return
-    }
-    set q [state skd pkg_install_q]
-    if {[llength $q] == 0} {
-        return
-    }
-    # take pkgname from the queue and lock pkg manager
-    set pkgname [lindex $q 0]
-    set q [lrange $q 1 end]
-    state skd {pkg_install_q $q}
-    state skd {pkg_lock 1}
-    set pkgcmd [linuxdeps find-pkg-mgr-cmd]
-    if {[llength $pkgcmd] > 0} {
-        set pkgcmd "$pkgcmd $pkgname"
-        set chan [cmd invoke $pkgcmd PkgMgrExit PkgMgrRead PkgMgrErrRead]
-        SkdWrite ctrl "pkg-install started"
-        SkdWrite ctrl "pkg-install installing: $pkgname"
-    } else {
-        #TODO handle missing pkg mgr
-    }
-}
-
-proc PkgMgrExit {code} {
-    state skd {pkg_lock 0}
-    SkdWrite ctrl "pkg-install ended with result $code"
-    # go for the next pkg in the queue after some delay
-    after 2000 PkgMgrQProcess
-}
-proc PkgMgrRead {line} {
-    SkdWrite pkg $line
-}
-proc PkgMgrErrRead {line} {
-    SkdWrite pkg $line
-}
-
 
 proc replace-dns {} {
     set dns_ip [state ovpn dns_ip]
