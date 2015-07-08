@@ -30,6 +30,7 @@ package require Tk
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
 
+source [file join [file dir [info script]] model.tcl]
 
 
 proc fatal {msg {err ""}} {
@@ -136,7 +137,8 @@ proc read-vigos {} {
             lappend vigos $v
         }
     }
-    state sku {vigos $vigos}
+    set ::model::vigos $vigos
+    #state sku {vigos $vigos}
     puts stderr "vigos: $vigos"
     #TODO use vigos to get current time - why do we need it before welcome?.
     #TODO isn't certificate signing start date a problem in case of vigos in different timezones? Consider signing with golang crypto libraries
@@ -192,9 +194,6 @@ proc main {} {
         providers "securitykiss cyberghost"
     }
 
-
-
-
     # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one
     set options {
             {cli            "Run command line interface (CLI) instead of GUI"}
@@ -220,9 +219,11 @@ proc main {} {
     }
 
     if {$params(cli) || ![unix is-x-running]} {
-        state sku {ui cli}
+        set ::model::ui cli
+        #state sku {ui cli}
     } else {
-        state sku {ui gui}
+        set ::model::ui gui
+        #state sku {ui gui}
     }
 
 
@@ -271,6 +272,9 @@ proc main {} {
         fatal "Could not retrieve client id. Try to reinstall the program." 
     }
 
+    model print
+
+
     skd-connect 7777
     in-ui main
 }
@@ -306,8 +310,8 @@ proc main-exit {} {
 
 # Combine $fun and $ui to run proper procedure in gui or cli
 proc in-ui {fun args} {
-    set ui [state sku ui]
-    [join [list $fun $ui] -] {*}$args
+    #set ui [state sku ui]
+    [join [list $fun $::model::ui] -] {*}$args
 }
 
 
@@ -354,8 +358,9 @@ proc main-generate-keys {} {
 
 
     # POST csr and save cert
-    puts stderr "vigos: [state sku vigos]"
-    for {set i 0} {$i<[llength [state sku vigos]]} {incr i} {
+    #puts stderr "vigos: [state sku vigos]"
+    #for {set i 0} {$i<[llength [state sku vigos]]} {incr i} 
+    for {set i 0} {$i<[llength $::model::vigos]} {incr i} {
         if {[catch {open $csr r} fd err] == 1} {
             log "Failed to open $csr for reading"
             log $err
@@ -494,7 +499,8 @@ proc get-welcome {cn} {
 
 
 proc vigo-curl {chout cherr urlpath} {
-    go curl-hosts $chout $cherr -hosts [state sku vigos] -hindex [state sku vigo_lastok] -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
+    #go curl-hosts $chout $cherr -hosts [state sku vigos] -hindex [state sku vigo_lastok] -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
+    go curl-hosts $chout $cherr -hosts $::model::vigos -hindex [state sku vigo_lastok] -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
 }
 
 # save main window position and size changes in Config
@@ -885,7 +891,8 @@ proc get-next-host {hosts host_lastok attempt} {
 proc get-next-vigo {vigo_lastok attempt} {
     #TODO if connected use vigo internal IP regardless of attempt
     #else use vigo list
-    return [get-next-host [state sku vigos] $vigo_lastok $attempt]
+    #return [get-next-host [state sku vigos] $vigo_lastok $attempt]
+    return [get-next-host $::model::vigos $vigo_lastok $attempt]
 }
 
 
