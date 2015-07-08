@@ -1,4 +1,4 @@
-#
+
 # sku.tcl
 #
 # This should be the preamble to every application
@@ -27,9 +27,9 @@ package require i18n
 package require csp
 namespace import csp::*
 package require Tk 
-
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
+
 
 
 proc fatal {msg {err ""}} {
@@ -247,7 +247,6 @@ proc main {} {
         fatal $piderr
     } 
 
-
     read-config
 
     read-vigos
@@ -265,15 +264,12 @@ proc main {} {
     set cadir [file normalize ~/.sku/certs]
     copy-merge [file join $::starkit::topdir certs] $cadir
     https init -cadir $cadir
- 
-
 
     set cn [cn-from-cert [file join $::KEYSDIR client.crt]]
     state sku {cn $cn}
     if {$cn eq ""} {
         fatal "Could not retrieve client id. Try to reinstall the program." 
     }
-
 
     skd-connect 7777
     in-ui main
@@ -435,15 +431,17 @@ proc main-gui {} {
     bind . <Control-w> main-exit
     bind . <Control-q> main-exit
 
+    grid [ttk::label .statusline -textvariable ::status]
+    # sizegrip - bottom-right corner for resize
+    grid [ttk::sizegrip .grip] -sticky se
+
+    setDialogSize .
     grid columnconfigure .c 0 -weight 1
     # this will allocate spare space to the first row in container .c
     grid rowconfigure .c 0 -weight 1
-    # sizegrip - bottom-right corner for resize
-    grid [ttk::sizegrip .grip] -sticky se
-    setDialogSize .
     bind . <Configure> [list MovedResized %W %x %y %w %h]
-    set ::conf [::ovconf::parse config.ovpn]
 
+    set ::conf [::ovconf::parse config.ovpn]
     set cn [state sku cn]
     go check-for-updates
     go get-welcome $cn
@@ -663,19 +661,28 @@ proc get-selected-sitem {provider} {
 
 
 proc ServerListClicked {} {
+    # sample slist
+    # {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city Newcastle ip 31.24.33.221 ovses {{proto udp port 5353} {proto tcp port 443}}}}
     set slist [state sku slist]
-    set ssel 2
+    set ssel 1
     #TODO validate ssel is in slist, otherwise select first one
     #TODO sorting by country
     set newsel [slistDialog $slist $ssel]
     #TODO in the meantime slist could have changed (by welcome msg). Build entire configuration info here from the old slist
     puts stderr "New selected server: $newsel"
+    if {$newsel > 0} {
+        set ::sitem [lindex $slist $newsel]
+    }
+    puts stderr "selected sitem: $::sitem"
 }
 
 
-# Return new sitem id if selection made or empty string if canceled
+# Return index of selected item if selection made or empty string if canceled
 # This is really selecting entire configuration than the server IP
 proc slistDialog {slist ssel} {
+    # Treeview is 1-based so increment here
+    incr ssel
+
     set w .slist_dialog
     catch { destroy $w }
     toplevel $w
@@ -730,12 +737,13 @@ proc slistDialog {slist ssel} {
     $wt focus $ssel
     set modal [ShowModal $w]
     puts stderr "modal: $modal"
-    set newsel ""
+    set newsel 0
     if {$modal eq "ok"} {
         set newsel [$wt selection]
     }
     destroy $w
-    return $newsel
+    # Treeview is 1-based so decrement here
+    return [incr newsel -1]
 }
 
 
@@ -917,16 +925,7 @@ proc skd-read {} {
         {^ctrl: (.*)$} {
             switch -regexp -matchvar details [lindex $tokens 1] {
                 {^Welcome to SKD} {
-                    if {$::tcl_platform(platform) eq "windows"} {
-                        #set conf [::ovconf::parse {c:\temp\Warsaw_195_162_24_220_tcp_443.ovpn}]
-                        #set conf [::ovconf::parse {c:\temp\securitykiss_winopenvpn_client00000001\openvpn.conf}]
-                        #set conf [::ovconf::parse config.ovpn]
-                    } else {
-                        #set conf [::ovconf::parse /home/sk/openvpn/Lodz_193_107_90_205_tcp_443.ovpn]
-                        #set conf [::ovconf::parse /home/sk/openvpn/securitykiss_winopenvpn_client00000001/openvpn.conf]
-                        #set conf [::ovconf::parse config.ovpn]
-                    }
-                    #skd-write "config $conf"
+                    # TODO display in SKU that connected to SKD, take care of updating this status
                 }
                 {^Config loaded} {
                     skd-write start
@@ -997,22 +996,12 @@ proc get-client-no {crtpath} {
 
     
 
-
-#proc curl {url data_var} {
-#    upvar $data_var data
-#    set tok [http::geturl $url]
-#    set ncode [http::ncode $tok]
-#    set data [http::data $tok]
-#    http::cleanup $tok
-#    return $ncode
-#}
- 
-
 proc ClickConnect {} {
     set localconf $::conf
-    set ip [lindex $::serverdesc 1]
-    set proto [lindex $::serverdesc 2]
-    set port [lindex $::serverdesc 3]
+    set ip [dict get $::sitem ip]
+    set ovs [lindex [dict get $::sitem ovses] 0]
+    set proto [dict get $ovs proto]
+    set port [dict get $ovs port]
     append localconf "--proto $proto --remote $ip $port"
     skd-write "config $localconf"
 }
