@@ -27,7 +27,6 @@ package require i18n
 package require csp
 namespace import csp::*
 package require Tk 
-package require Tkhtml
 
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
@@ -412,6 +411,7 @@ proc hsep {parent height} {
 
 proc main-gui {} {
     log Running GUI
+    wm title . "SecurityKISS Tunnel"
     wm deiconify .
     wm protocol . WM_DELETE_WINDOW {
         #TODO improve the message
@@ -421,60 +421,12 @@ proc main-gui {} {
         }
     }
 
-    set clientNo [get-client-no OpenVPN/config/client.crt]
-
-    #TODO remove caching
-    if 0 {
-    set url "https://www.securitykiss.com/sk/app/display.php?c=$clientNo&v=0.3.0"
-    set welcome [https curl $url -expected-hostname www.securitykiss.com]
-    spit display.htm $welcome
-    } else {
-        set welcome [slurp display.htm]
-    }
-    
-    #TODO remove caching
-    if 0 {
-    set url "https://www.securitykiss.com/sk/app/usage.php?c=$clientNo"
-    set usage [https curl $url -expected-hostname www.securitykiss.com]
-    spit usage.htm $usage
-    } else {
-        set usage [slurp usage.htm]
-    }
-    set serverlist [get-server-list $welcome]
-    set ::serverdesc [lindex $serverlist 0]
-    set ::status "Not connected"
-    
-    set config [get-ovpn-config $welcome]
-    spit config.ovpn $config
- 
-if 0 {    
-    ttk::label .p1 -text $clientNo
-    grid .p1 -pady 5
-    html .p2 -shrink 1
-    .p2 parse -final $usage
-    grid .p2
-    frame .p3
-    ttk::button .p3.connect -text Connect -command ClickConnect
-    ttk::button .p3.disconnect -text Disconnect -command ClickDisconnect
-    ttk::combobox .p3.combo -width 35 -textvariable ::serverdesc
-    .p3.combo configure -values $serverlist
-    .p3.combo state readonly
-    grid .p3.connect .p3.disconnect .p3.combo -padx 10 -pady 10
-    grid .p3
-    ttk::label .p4 -textvariable ::status
-    grid .p4 -sticky w -padx 5 -pady 5
-} else {
-
     frame .c
     grid .c -sticky news
     grid columnconfigure . .c -weight 1
     grid rowconfigure . .c -weight 1
 
-
     set tabset [tabset-providers .c]
-
-
-
 
     # If the tag is the name of a class of widgets, such as Button, the binding applies to all widgets in that class;
     bind Button <Return> InvokeFocusedWithEnter
@@ -482,18 +434,14 @@ if 0 {
     #TODO coordinate with shutdown hook and provide warning/confirmation request
     bind . <Control-w> main-exit
     bind . <Control-q> main-exit
-    wm title . "SecurityKISS Tunnel"
 
     grid columnconfigure .c 0 -weight 1
     # this will allocate spare space to the first row in container .c
     grid rowconfigure .c 0 -weight 1
+    # sizegrip - bottom-right corner for resize
     grid [ttk::sizegrip .grip] -sticky se
     setDialogSize .
     bind . <Configure> [list MovedResized %W %x %y %w %h]
-    # sizegrip - bottom-right corner for resize
-    
-
-}
     set ::conf [::ovconf::parse config.ovpn]
 
     set cn [state sku cn]
@@ -551,6 +499,7 @@ proc vigo-curl {chout cherr urlpath} {
     go curl-hosts $chout $cherr -hosts [state sku vigos] -hindex [state sku vigo_lastok] -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
 }
 
+# save main window position and size changes in Config
 proc MovedResized {window x y w h} {
     if {$window eq "."} {
         dict set ::Config layout x $x
