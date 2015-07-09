@@ -11,6 +11,8 @@ proc strip-blank-lines {s} {
 }
 
 
+#TODO clean up SKD from state and remove this
+
 # Keep application state in global nested dictionary called ::State
 # If the last argument is a list, the list should be key value pairs 
 # to set in ::State under the path described by previous arguments

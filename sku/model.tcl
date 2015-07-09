@@ -5,6 +5,11 @@ namespace eval model {
     namespace export *
     namespace ensemble create
 
+    variable INIFILE [file normalize ~/.sku/sku.ini]
+    variable LOGFILE [file normalize ~/.sku/sku.log]
+    variable PROVIDERDIR [file normalize ~/.sku/provider]
+    variable KEYSDIR [file join $::model::PROVIDERDIR securitykiss ovpnconf default]
+
     # currently selected provider tab
     variable current_provider securitykiss
 
@@ -31,6 +36,9 @@ namespace eval model {
     variable vigos {}
 
     variable vigo_lastok 0
+
+    # temporary slist
+    variable slist {}
 }
 
 proc ::model::print {} {

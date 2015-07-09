@@ -1,4 +1,4 @@
-
+#
 # sku.tcl
 #
 # This should be the preamble to every application
@@ -47,13 +47,13 @@ proc background-error {msg err} {
 interp bgerror "" background-error
 #after 4000 {error "This is my bg error"}
 
-# Redirect stdout to a file $::LOGFILE
+# Redirect stdout to a file $::model::LOGFILE
 namespace eval tolog {
     variable fh
     proc initialize {args} {
         variable fh
         # if for some reason cannot log to file, log to stderr
-        if {[catch {mk-head-dir $::LOGFILE} out err] == 1 || [catch {set fh [open $::LOGFILE w]} out err] == 1} {
+        if {[catch {mk-head-dir $::model::LOGFILE} out err] == 1 || [catch {set fh [open $::model::LOGFILE w]} out err] == 1} {
             set fh stderr
             puts stderr $err
         }
@@ -97,12 +97,12 @@ proc update-provider-list {} {
     # providers by config
     set cproviders [dict-pop $::Config providers {}]
     # providers by filesystem
-    set fproviders [lmap d [glob -directory $::PROVIDERDIR -nocomplain -type d *] {file tail $d}]
+    set fproviders [lmap d [glob -directory $::model::PROVIDERDIR -nocomplain -type d *] {file tail $d}]
 
     # sanitize directory names
     foreach p $fproviders {
         if {![regexp {^[\w\d_]+$} $p]} {
-            fatal "Provider directory name should be alphanumeric string in $::PROVIDERDIR"
+            fatal "Provider directory name should be alphanumeric string in $::model::PROVIDERDIR"
         }
     }
 
@@ -113,7 +113,7 @@ proc update-provider-list {} {
     dict set ::Config providers $providers
 
     foreach p $providers {
-        set inifile [file join $::PROVIDERDIR $p config.ini]
+        set inifile [file join $::model::PROVIDERDIR $p config.ini]
         touch $inifile
         set ::Config_$p [inicfg load $inifile]
         dict-put ::Config_$p tabname $p
@@ -138,7 +138,6 @@ proc read-vigos {} {
         }
     }
     set ::model::vigos $vigos
-    #state sku {vigos $vigos}
     puts stderr "vigos: $vigos"
     #TODO use vigos to get current time - why do we need it before welcome?.
     #TODO isn't certificate signing start date a problem in case of vigos in different timezones? Consider signing with golang crypto libraries
@@ -147,8 +146,8 @@ proc read-vigos {} {
 
 proc read-config {} {
     if {[catch {
-        touch $::INIFILE
-        set ::Config [inicfg load $::INIFILE]
+        touch $::model::INIFILE
+        set ::Config [inicfg load $::model::INIFILE]
         # provider list from Config but compare against dir
         # update the provider list in Config
         update-provider-list
@@ -169,30 +168,7 @@ proc read-config {} {
 # It may set global variables
 proc main {} {
     set user [unix relinquish-root]
-    set ::INIFILE [file normalize ~/.sku/sku.ini]
-    set ::LOGFILE [file normalize ~/.sku/sku.log]
-    set ::PROVIDERDIR [file normalize ~/.sku/provider]
-    set ::KEYSDIR [file join $::PROVIDERDIR securitykiss ovpnconf default]
     redirect-stdout
-
-    state sku {
-        # SKD connection socket 
-        skd_sock ""
-        # User Interface (gui or cli)
-        ui ""
-        # Start retries
-        start_retries 0
-        # Embedded bootstrap vigo list
-        vigos ""
-        #
-        vigo_lastok 0
-        # temporary
-        slist ""
-        # new client id
-        cn ""
-        # providers
-        providers "securitykiss cyberghost"
-    }
 
     # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one
     set options {
@@ -220,10 +196,8 @@ proc main {} {
 
     if {$params(cli) || ![unix is-x-running]} {
         set ::model::ui cli
-        #state sku {ui cli}
     } else {
         set ::model::ui gui
-        #state sku {ui gui}
     }
 
 
@@ -233,7 +207,7 @@ proc main {} {
     }
 
     if {$params(id)} {
-        set cn [cn-from-cert [file join $::KEYSDIR client.crt]]
+        set cn [cn-from-cert [file join $::model::KEYSDIR client.crt]]
         if {$cn eq ""} {
             error-cli "Could not retrieve client id. Try to reinstall the program." 
         } else {
@@ -266,8 +240,8 @@ proc main {} {
     copy-merge [file join $::starkit::topdir certs] $cadir
     https init -cadir $cadir
 
-    set cn [cn-from-cert [file join $::KEYSDIR client.crt]]
-    state sku {cn $cn}
+    set cn [cn-from-cert [file join $::model::KEYSDIR client.crt]]
+    set ::model::cn $cn
     if {$cn eq ""} {
         fatal "Could not retrieve client id. Try to reinstall the program." 
     }
@@ -282,13 +256,13 @@ proc main {} {
 
 proc main-exit {} {
     if {[info exists ::Config]} {
-        if {[catch {log Config save report: \n[inicfg save $::INIFILE $::Config]} out err]} {
+        if {[catch {log Config save report: \n[inicfg save $::model::INIFILE $::Config]} out err]} {
             log $out
             log $err
             puts stderr $out
         }
         foreach p [dict-pop $::Config providers {}] {
-            set inifile [file join $::PROVIDERDIR $p config.ini]
+            set inifile [file join $::model::PROVIDERDIR $p config.ini]
             if {[catch {log Config_$p save report: \n[inicfg save $inifile [set ::Config_$p]]} out err]} {
                 log $out
                 log $err
@@ -302,7 +276,7 @@ proc main-exit {} {
     delete-pidfile ~/.sku/sku.pid
     set ::until_exit 1
     #TODO Disconnect and clean up
-    catch {close [state sku skd_sock]}
+    catch {close [$::model::skd_sock}
     catch {destroy .}
     exit
 }
@@ -310,7 +284,6 @@ proc main-exit {} {
 
 # Combine $fun and $ui to run proper procedure in gui or cli
 proc in-ui {fun args} {
-    #set ui [state sku ui]
     [join [list $fun $::model::ui] -] {*}$args
 }
 
@@ -321,7 +294,7 @@ proc error-gui {msg} {
         # hide toplevel window. Use wm deiconify to restore later
         catch {wm withdraw .}
         log $msg
-        tk_messageBox -title "SKU error" -type ok -icon error -message ERROR -detail "$msg\n\nPlease check $::LOGFILE for details"
+        tk_messageBox -title "SKU error" -type ok -icon error -message ERROR -detail "$msg\n\nPlease check $::model::LOGFILE for details"
     } else {
         error-cli $msg
     }
@@ -338,7 +311,7 @@ proc error-cli {msg} {
 # Print to stderr for user-visible messages. Use log for detailed info written to log file
 proc main-generate-keys {} {
     log Generating RSA keys
-    set privkey [file join $::KEYSDIR client.key]
+    set privkey [file join $::model::KEYSDIR client.key]
     if {[file exists $privkey]} {
         log RSA key $privkey already exists
     } else {
@@ -346,7 +319,7 @@ proc main-generate-keys {} {
             return 0
         }
     }
-    set csr [file join $::KEYSDIR client.csr]
+    set csr [file join $::model::KEYSDIR client.csr]
     if {[file exists $csr]} {
         log CSR $csr already exists
     } else {
@@ -358,8 +331,6 @@ proc main-generate-keys {} {
 
 
     # POST csr and save cert
-    #puts stderr "vigos: [state sku vigos]"
-    #for {set i 0} {$i<[llength [state sku vigos]]} {incr i} 
     for {set i 0} {$i<[llength $::model::vigos]} {incr i} {
         if {[catch {open $csr r} fd err] == 1} {
             log "Failed to open $csr for reading"
@@ -376,7 +347,7 @@ proc main-generate-keys {} {
             puts stderr OK
             puts stderr "Received the signed certificate"
             log crtdata: $crtdata
-            spit [file join $::KEYSDIR client.crt] $crtdata
+            spit [file join $::model::KEYSDIR client.crt] $crtdata
             close $fd
             break
         }
@@ -447,9 +418,8 @@ proc main-gui {} {
     bind . <Configure> [list MovedResized %W %x %y %w %h]
 
     set ::conf [::ovconf::parse config.ovpn]
-    set cn [state sku cn]
     go check-for-updates
-    go get-welcome $cn
+    go get-welcome $::model::cn
 
 }
 
@@ -483,7 +453,7 @@ proc get-welcome {cn} {
             puts stderr "dict: $d"
             puts stderr ""
             set slist [dict get $d serverLists JADEITE]
-            state sku {slist $slist}
+            set ::model::slist $slist
             tk_messageBox -message "Welcome message received" -type ok
         }
         <- $cherr {
@@ -499,8 +469,7 @@ proc get-welcome {cn} {
 
 
 proc vigo-curl {chout cherr urlpath} {
-    #go curl-hosts $chout $cherr -hosts [state sku vigos] -hindex [state sku vigo_lastok] -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
-    go curl-hosts $chout $cherr -hosts $::model::vigos -hindex [state sku vigo_lastok] -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
+    go curl-hosts $chout $cherr -hosts $::model::vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
 }
 
 # save main window position and size changes in Config
@@ -669,7 +638,7 @@ proc get-selected-sitem {provider} {
 proc ServerListClicked {} {
     # sample slist
     # {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city Newcastle ip 31.24.33.221 ovses {{proto udp port 5353} {proto tcp port 443}}}}
-    set slist [state sku slist]
+    set slist $::model::slist
     set ssel 1
     #TODO validate ssel is in slist, otherwise select first one
     #TODO sorting by country
@@ -857,7 +826,7 @@ proc curl-hosts {tryout tryerr args} {
             set status [http::status $tok]
             if {$status eq "ok" && $ncode == 200} {
                 set data [http::data $tok]
-                state sku {vigo_lastok $host_index}
+                set ::model::vigo_lastok $host_index
                 log "curl-hosts $url success. data: $data"
                 $tryout <- $data
                 return
@@ -891,7 +860,6 @@ proc get-next-host {hosts host_lastok attempt} {
 proc get-next-vigo {vigo_lastok attempt} {
     #TODO if connected use vigo internal IP regardless of attempt
     #else use vigo list
-    #return [get-next-host [state sku vigos] $vigo_lastok $attempt]
     return [get-next-host $::model::vigos $vigo_lastok $attempt]
 }
 
@@ -901,27 +869,27 @@ proc skd-connect {port} {
     if {[catch {set sock [socket 127.0.0.1 $port]} out err] == 1} {
         skd-close $err
     }
-    state sku {skd_sock $sock}
+    set ::model::skd_sock $sock
     chan configure $sock -blocking 0 -buffering line
     chan event $sock readable skd-read
 }
 
 
 proc skd-write {msg} {
-    if {[catch {puts [state sku skd_sock] $msg} out err] == 1} {
+    if {[catch {puts $::model::skd_sock $msg} out err] == 1} {
         skd-close $err
     }
 }
 
 proc skd-close {err} {
-    catch {close [state sku skd_sock]}
+    catch {close $::model::skd_sock}
     fatal "Could not communicate with SKD. Please check if skd service is running and check logs in /var/log/skd.log" $err
 }
 
 
 #TODO detect disconnecting from SKD - sock monitoring?
 proc skd-read {} {
-    set sock [state sku skd_sock]
+    set sock $::model::skd_sock
     if {[gets $sock line] < 0} {
         if {[eof $sock]} {
             skd-close "skd_sock EOF. Connection terminated"
