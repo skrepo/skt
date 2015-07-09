@@ -22,7 +22,6 @@ package require linuxdeps
 package require https
 package require anigif
 package require json
-package require inicfg
 package require i18n
 package require csp
 namespace import csp::*
@@ -90,80 +89,6 @@ proc redirect-stdout {} {
     chan push stdout tolog
 }
 
-
-# When adding/removing provider, just create/delete folder in ~/.sku/provider
-# and call this proc - it will take care of updating Config and Config_$provider
-proc update-provider-list {} {
-    # providers by config
-    set cproviders [dict-pop $::Config providers {}]
-    # providers by filesystem
-    set fproviders [lmap d [glob -directory $::model::PROVIDERDIR -nocomplain -type d *] {file tail $d}]
-
-    # sanitize directory names
-    foreach p $fproviders {
-        if {![regexp {^[\w\d_]+$} $p]} {
-            fatal "Provider directory name should be alphanumeric string in $::model::PROVIDERDIR"
-        }
-    }
-
-    # all this shuffling below in order to preserve providers order as per Config
-    set providers [lunique [concat [lintersection $cproviders $fproviders] $fproviders]]
-    
-    # Provider list must be kept in main Config to preserve order
-    dict set ::Config providers $providers
-
-    foreach p $providers {
-        set inifile [file join $::model::PROVIDERDIR $p config.ini]
-        touch $inifile
-        set ::Config_$p [inicfg load $inifile]
-        dict-put ::Config_$p tabname $p
-    }
-}
-
-# Global Config properties for display
-proc update-default-properties {} {
-    dict-put ::Config layout bg1 white
-    dict-put ::Config layout bg2 grey95
-    dict-put ::Config layout bg3 "light grey"
-}
-
-proc read-vigos {} {
-    # embedded bootstrap vigo list
-    set lst [slurp [file join $starkit::topdir bootstrap_ips.lst]]
-    set vigos ""
-    foreach v $lst {
-        set v [string trim $v]
-        if {[is-valid-ip $v]} {
-            lappend vigos $v
-        }
-    }
-    set ::model::vigos $vigos
-    puts stderr "vigos: $vigos"
-    #TODO use vigos to get current time - why do we need it before welcome?.
-    #TODO isn't certificate signing start date a problem in case of vigos in different timezones? Consider signing with golang crypto libraries
-}
-
-
-proc read-config {} {
-    if {[catch {
-        touch $::model::INIFILE
-        set ::Config [inicfg load $::model::INIFILE]
-        # provider list from Config but compare against dir
-        # update the provider list in Config
-        update-provider-list
-        update-default-properties
-    } out err]} {
-        puts stderr $out
-        log $out
-        log $err
-        main-exit
-    }
-
-    puts stderr "READ CONFIG:"
-    puts stderr "[inicfg dict-pretty $::Config]"
-
-}
-
 # Parse command line options and launch proper task
 # It may set global variables
 proc main {} {
@@ -189,15 +114,15 @@ proc main {} {
     parray params
 
 
-    if {[catch {i18n load pl [file join $starkit::topdir messages.txt]} out err]} {
+    if {[catch {i18n load pl [file join [file dir [info script]] messages.txt]} out err]} {
         log $out
         log $err
     }
 
     if {$params(cli) || ![unix is-x-running]} {
-        set ::model::ui cli
+        set ::model::Ui cli
     } else {
-        set ::model::ui gui
+        set ::model::Ui gui
     }
 
 
@@ -222,9 +147,7 @@ proc main {} {
         fatal $piderr
     } 
 
-    read-config
-
-    read-vigos
+    model load
 
     puts stderr [build-date]
     puts stderr [build-version]
@@ -234,49 +157,31 @@ proc main {} {
         main-exit
     }
     
-    # Copy cadir because it  must be accessible from outside of starkit
+    # Copy cadir because it  must be accessible from outside of the starkit
     # Overwrites certs on every run
     set cadir [file normalize ~/.sku/certs]
-    copy-merge [file join $::starkit::topdir certs] $cadir
+    copy-merge [file join [file dir [info script]] certs] $cadir
     https init -cadir $cadir
 
     set cn [cn-from-cert [file join $::model::KEYSDIR client.crt]]
-    set ::model::cn $cn
+    set ::model::Cn $cn
     if {$cn eq ""} {
         fatal "Could not retrieve client id. Try to reinstall the program." 
     }
 
-    model print
-
-
     skd-connect 7777
+    model print
     in-ui main
 }
 
 
 proc main-exit {} {
-    if {[info exists ::Config]} {
-        if {[catch {log Config save report: \n[inicfg save $::model::INIFILE $::Config]} out err]} {
-            log $out
-            log $err
-            puts stderr $out
-        }
-        foreach p [dict-pop $::Config providers {}] {
-            set inifile [file join $::model::PROVIDERDIR $p config.ini]
-            if {[catch {log Config_$p save report: \n[inicfg save $inifile [set ::Config_$p]]} out err]} {
-                log $out
-                log $err
-                puts stderr $out
-            }
-        }
-    }
-
-
+    model save
     # ignore if problems occurred in deleting pidfile
     delete-pidfile ~/.sku/sku.pid
     set ::until_exit 1
     #TODO Disconnect and clean up
-    catch {close [$::model::skd_sock}
+    catch {close [$::model::Skd_sock}
     catch {destroy .}
     exit
 }
@@ -284,7 +189,7 @@ proc main-exit {} {
 
 # Combine $fun and $ui to run proper procedure in gui or cli
 proc in-ui {fun args} {
-    [join [list $fun $::model::ui] -] {*}$args
+    [join [list $fun $::model::Ui] -] {*}$args
 }
 
 
@@ -331,7 +236,7 @@ proc main-generate-keys {} {
 
 
     # POST csr and save cert
-    for {set i 0} {$i<[llength $::model::vigos]} {incr i} {
+    for {set i 0} {$i<[llength $::model::Vigos]} {incr i} {
         if {[catch {open $csr r} fd err] == 1} {
             log "Failed to open $csr for reading"
             log $err
@@ -419,7 +324,7 @@ proc main-gui {} {
 
     set ::conf [::ovconf::parse config.ovpn]
     go check-for-updates
-    go get-welcome $::model::cn
+    go get-welcome $::model::Cn
 
 }
 
@@ -469,24 +374,24 @@ proc get-welcome {cn} {
 
 
 proc vigo-curl {chout cherr urlpath} {
-    go curl-hosts $chout $cherr -hosts $::model::vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
+    go curl-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
 }
 
 # save main window position and size changes in Config
 proc MovedResized {window x y w h} {
     if {$window eq "."} {
-        dict set ::Config layout x $x
-        dict set ::Config layout y $y
-        dict set ::Config layout width $w
-        dict set ::Config layout height $h
+        set ::model::layout_x $x
+        set ::model::layout_y $y
+        set ::model::layout_w $w
+        set ::model::layout_h $h
         #puts stderr "$window\tx=$x\ty=$y\tw=$w\th=$h"
     }
 }
 
 # create usage meter in parent p
 proc frame-usage-meter {p} {
-    set bg1 [dict get $::Config layout bg1]
-    set bg3 [dict get $::Config layout bg3]
+    set bg1 $::model::layout_bg1
+    set bg3 $::model::layout_bg3
     set um [frame $p.um -background $bg1]
     ttk::label $um.plan -text "Plan JADEITE valid until 2015 Sep 14" -background $bg1
     ttk::label $um.usedlabel -text "This month used" -background $bg1
@@ -509,7 +414,7 @@ proc frame-usage-meter {p} {
 
 # create ip info panel in parent p
 proc frame-ipinfo {p} {
-    set bg2 [dict get $::Config layout bg2]
+    set bg2 $::model::layout_bg2
     set inf [frame $p.inf -background $bg2]
     ttk::label $inf.externalip -text "External IP: 123.123.123.123" -background $bg2
     ttk::label $inf.geocheck -text "Geo check" -background $bg2
@@ -520,7 +425,7 @@ proc frame-ipinfo {p} {
 }
 
 proc frame-status {p} {
-    set bg2 [dict get $::Config layout bg2]
+    set bg2 $::model::layout_bg2
     set stat [frame $p.stat -background $bg2]
     label $stat.imagestatus -background $bg2
     place-image status/disconnected.png $p.stat.imagestatus
@@ -551,7 +456,7 @@ proc frame-buttons {p pname} {
 
 
 proc tabset-providers {p} {
-    set providers [dict get $::Config providers]
+    set providers $::model::provider_list
     set nop [llength $providers]
     #set nop 1
 
@@ -559,7 +464,7 @@ proc tabset-providers {p} {
         set nb [ttk::notebook $p.nb]
         foreach pname $providers {
             set tab [frame-provider $nb $pname]
-            set tabname [dict get [set ::Config_$pname] tabname]
+            set tabname [dict get $::model::Providers $pname tabname]
             $nb add $tab -text $tabname
         }
         grid $nb -sticky news -padx 10 -pady 10
@@ -621,10 +526,16 @@ proc setDialogSize {window} {
     set h [expr {[winfo height $window] + 10}]
     # set it as the minimum size
     wm minsize $window $w $h
-    set cw [dict-put ::Config layout width $w]
-    set ch [dict-put ::Config layout height $h]
-    set cx [dict-put ::Config layout x 300]
-    set cy [dict-put ::Config layout y 300]
+    if {$::model::layout_w == 0} {
+        set ::model::layout_w $w
+    }
+    if {$::model::layout_h == 0} {
+        set ::model::layout_h $h
+    }
+    set cw $::model::layout_w
+    set ch $::model::layout_h
+    set cx $::model::layout_x
+    set cy $::model::layout_y
 
     wm geometry $window ${cw}x${ch}+${cx}+${cy}
 }
@@ -775,14 +686,14 @@ proc ShowModal {win args} {
 proc load-image {path} {
     set imgobj [string map {/ _} [file rootname $path]]
     #TODO check if replacing / with \ is necessary on windows
-    uplevel [list image create photo $imgobj -file [file join $::starkit::topdir images $path]]
+    uplevel [list image create photo $imgobj -file [file join [file dir [info script]] images $path]]
     return $imgobj
 }
 
 proc place-image {path lbl} {
     if {[file extension $path] eq ".gif"} {
         anigif::stop $lbl
-        anigif::anigif [file join $::starkit::topdir images $path] $lbl
+        anigif::anigif [file join [file dir [info script]] images $path] $lbl
     } else {
         anigif::stop $lbl
         set imgobj [load-image $path]
@@ -860,7 +771,7 @@ proc get-next-host {hosts host_lastok attempt} {
 proc get-next-vigo {vigo_lastok attempt} {
     #TODO if connected use vigo internal IP regardless of attempt
     #else use vigo list
-    return [get-next-host $::model::vigos $vigo_lastok $attempt]
+    return [get-next-host $::model::Vigos $vigo_lastok $attempt]
 }
 
 
@@ -869,27 +780,27 @@ proc skd-connect {port} {
     if {[catch {set sock [socket 127.0.0.1 $port]} out err] == 1} {
         skd-close $err
     }
-    set ::model::skd_sock $sock
+    set ::model::Skd_sock $sock
     chan configure $sock -blocking 0 -buffering line
     chan event $sock readable skd-read
 }
 
 
 proc skd-write {msg} {
-    if {[catch {puts $::model::skd_sock $msg} out err] == 1} {
+    if {[catch {puts $::model::Skd_sock $msg} out err] == 1} {
         skd-close $err
     }
 }
 
 proc skd-close {err} {
-    catch {close $::model::skd_sock}
+    catch {close $::model::Skd_sock}
     fatal "Could not communicate with SKD. Please check if skd service is running and check logs in /var/log/skd.log" $err
 }
 
 
 #TODO detect disconnecting from SKD - sock monitoring?
 proc skd-read {} {
-    set sock $::model::skd_sock
+    set sock $::model::Skd_sock
     if {[gets $sock line] < 0} {
         if {[eof $sock]} {
             skd-close "skd_sock EOF. Connection terminated"
@@ -990,12 +901,12 @@ proc ClickDisconnect {} {
 
 proc build-version {} {
     memoize
-    return [slurp [file join $starkit::topdir buildver.txt]]
+    return [slurp [file join [file dir [info script]] buildver.txt]]
 }
 
 proc build-date {} {
     memoize
-    return [slurp [file join $starkit::topdir builddate.txt]]
+    return [slurp [file join [file dir [info script]] builddate.txt]]
 }
 
 
