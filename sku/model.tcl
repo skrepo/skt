@@ -35,6 +35,10 @@ namespace eval model {
     # User Interface (gui or cli)
     variable Ui ""
 
+    # OpenVPN connection status
+    variable Conn_status disconnected
+
+
     # other providers dict
     variable Providers [dict create]
 

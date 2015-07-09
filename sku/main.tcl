@@ -303,7 +303,8 @@ proc main-gui {} {
     grid columnconfigure . .c -weight 1
     grid rowconfigure . .c -weight 1
 
-    set tabset [tabset-providers .c]
+    tabset-providers
+    conn-status-update disconnected
 
     # If the tag is the name of a class of widgets, such as Button, the binding applies to all widgets in that class;
     bind Button <Return> InvokeFocusedWithEnter
@@ -386,7 +387,16 @@ proc MovedResized {window x y w h} {
         set ::model::layout_h $h
         #puts stderr "$window\tx=$x\ty=$y\tw=$w\th=$h"
     }
+    #puts stderr [current-tab-frame]
 }
+
+
+proc conn-status-update {status} {
+    set ::model::Conn_status $status
+    set imgname [dict get {disconnected disconnected.png connected connected.png connecting connecting.gif} $status]
+    place-image status/$imgname [current-tab-frame].stat.imagestatus
+}
+
 
 # create usage meter in parent p
 proc frame-usage-meter {p} {
@@ -428,9 +438,8 @@ proc frame-status {p} {
     set bg2 $::model::layout_bg2
     set stat [frame $p.stat -background $bg2]
     label $stat.imagestatus -background $bg2
-    place-image status/disconnected.png $p.stat.imagestatus
-    after 2000 [list place-image status/connecting.gif $stat.imagestatus]
-    after 4000 [list place-image status/connected.png $stat.imagestatus]
+    # TODO move to conn-status-update
+    #place-image status/disconnected.png $stat.imagestatus
     ttk::label $stat.status -text "Connected to ..." -background $bg2
     load-image flag/64/PL.png
     ttk::label $stat.flag -image flag_64_PL -background $bg2
@@ -455,13 +464,13 @@ proc frame-buttons {p pname} {
 }
 
 
-proc tabset-providers {p} {
+proc tabset-providers {} {
+    set parent .c
     set providers $::model::provider_list
     set nop [llength $providers]
-    #set nop 1
 
     if {$nop > 1} {
-        set nb [ttk::notebook $p.nb]
+        set nb [ttk::notebook $parent.nb]
         foreach pname $providers {
             set tab [frame-provider $nb $pname]
             set tabname [dict get $::model::Providers $pname tabname]
@@ -469,7 +478,7 @@ proc tabset-providers {p} {
         }
         grid $nb -sticky news -padx 10 -pady 10
     } elseif {$nop == 1} {
-        set nb [ttk::frame $p.single]
+        set nb [ttk::frame $parent.single]
         set pname [lindex $providers 0]
         set tab [frame-provider $nb $pname]
         grid $tab -sticky news
@@ -479,6 +488,18 @@ proc tabset-providers {p} {
     }
     return $nb
 }
+
+proc current-tab-frame {} {
+    set providers $::model::provider_list
+    set nop [llength $providers]
+    if {$nop > 1} {
+        return [.c.nb select]
+    } else {
+        set pname [lindex $providers 0]
+        return .c.single.$pname
+    }
+}
+
 
 # return provider frame window
 proc frame-provider {p pname} {
@@ -816,10 +837,21 @@ proc skd-read {} {
                 {^Config loaded} {
                     skd-write start
                 }
+                {^OpenVPN with pid .* started} {
+                    conn-status-update connecting
+                }
+                {^OpenVPN with pid .* stopped} {
+                    conn-status-update disconnected
+                }
             }
         }
         {^ovpn: (.*)$} {
-            set ::status [lindex $tokens 0]
+            set ::status [lindex $tokens 1]
+            switch -regexp -matchvar details [lindex $tokens 1] {
+                {^Initialization Sequence Completed} {
+                    conn-status-update connected
+                }
+            }
         }
     }
     log SKD>> $line
