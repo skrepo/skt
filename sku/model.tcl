@@ -7,7 +7,7 @@
 package require inicfg
 package require skutil
 
-namespace eval model {
+namespace eval ::model {
     
     namespace export *
     namespace ensemble create
@@ -40,9 +40,9 @@ namespace eval model {
 
 
     # other providers dict
-    variable Providers [dict create]
-
-    variable provider_list {}
+    variable Providers [dict create securitykiss {tabname SecurityKISS}]
+ 
+    variable provider_list {securitykiss}
 
     variable layout_bg1 white
     variable layout_bg2 grey95
@@ -88,8 +88,14 @@ proc ::model::vars {} {
 # When adding/removing provider, just create/delete folder in ~/.sku/provider
 # and call this proc - it will take care of updating the model
 proc ::model::update-provider-list {} {
+    # ensure there is at least one provider
+    if {[llength $::model::provider_list] == 0} {
+        lappend ::model::provider_list securitykiss
+    }
+
     # providers by config/model
     set cproviders $::model::provider_list
+
     # providers by filesystem
     set fproviders [lmap d [glob -directory $::model::PROVIDERDIR -nocomplain -type d *] {file tail $d}]
 

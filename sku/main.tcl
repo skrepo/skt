@@ -20,12 +20,12 @@ rename ::select ""
 package require linuxdeps
 #http::register https 443 [list tls::socket]
 package require https
-package require anigif
 package require json
 package require i18n
 package require csp
 namespace import csp::*
 package require Tk 
+package require img
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
 
@@ -393,8 +393,9 @@ proc MovedResized {window x y w h} {
 
 proc conn-status-update {status} {
     set ::model::Conn_status $status
-    set imgname [dict get {disconnected disconnected.png connected connected.png connecting connecting.gif} $status]
-    place-image status/$imgname [current-tab-frame].stat.imagestatus
+    img place status/$status [current-tab-frame].stat.imagestatus
+    #TODO disable other tabs
+    #if {} { }
 }
 
 
@@ -440,9 +441,9 @@ proc frame-status {p} {
     label $stat.imagestatus -background $bg2
     # TODO move to conn-status-update
     #place-image status/disconnected.png $stat.imagestatus
+
     ttk::label $stat.status -text "Connected to ..." -background $bg2
-    load-image flag/64/PL.png
-    ttk::label $stat.flag -image flag_64_PL -background $bg2
+    ttk::label $stat.flag -image [img load flag/64/PL] -background $bg2
     grid $stat.imagestatus -row 5 -column 0 -padx 10 -pady 5
     grid $stat.status -row 5 -column 1 -padx 10 -pady 5 -sticky w
     grid $stat.flag -row 5 -column 2 -padx 10 -pady 5 -sticky e
@@ -467,37 +468,18 @@ proc frame-buttons {p pname} {
 proc tabset-providers {} {
     set parent .c
     set providers $::model::provider_list
-    set nop [llength $providers]
-
-    if {$nop > 1} {
-        set nb [ttk::notebook $parent.nb]
-        foreach pname $providers {
-            set tab [frame-provider $nb $pname]
-            set tabname [dict get $::model::Providers $pname tabname]
-            $nb add $tab -text $tabname
-        }
-        grid $nb -sticky news -padx 10 -pady 10
-    } elseif {$nop == 1} {
-        set nb [ttk::frame $parent.single]
-        set pname [lindex $providers 0]
+    set nb [ttk::notebook $parent.nb]
+    foreach pname $providers {
         set tab [frame-provider $nb $pname]
-        grid $tab -sticky news
-        grid $nb -sticky news
-    } else {
-        fatal "No providers found"
+        set tabname [dict get $::model::Providers $pname tabname]
+        $nb add $tab -text $tabname
     }
+    grid $nb -sticky news -padx 10 -pady 10
     return $nb
 }
 
 proc current-tab-frame {} {
-    set providers $::model::provider_list
-    set nop [llength $providers]
-    if {$nop > 1} {
-        return [.c.nb select]
-    } else {
-        set pname [lindex $providers 0]
-        return .c.single.$pname
-    }
+    return [.c.nb select]
 }
 
 
@@ -613,7 +595,7 @@ proc slistDialog {slist ssel} {
         set country [dict get $sitem country]
         set city [dict get $sitem city]
         set ip [dict get $sitem ip]
-        load-image flag/24/$ccode.png
+        img load flag/24/$ccode
         $wt insert {} end -id $id -image flag_24_$ccode -values [list $country $city $ip]
     }
     $wt selection set $ssel
@@ -701,26 +683,6 @@ proc ShowModal {win args} {
 
 
 # tablelist vs TkTable vs treectrl vs treeview vs BWidget::Tree
-
-
-# e.g. load-image flag/pl.png - it should load image under the name flag_pl and return that name
-proc load-image {path} {
-    set imgobj [string map {/ _} [file rootname $path]]
-    #TODO check if replacing / with \ is necessary on windows
-    uplevel [list image create photo $imgobj -file [file join [file dir [info script]] images $path]]
-    return $imgobj
-}
-
-proc place-image {path lbl} {
-    if {[file extension $path] eq ".gif"} {
-        anigif::stop $lbl
-        anigif::anigif [file join [file dir [info script]] images $path] $lbl
-    } else {
-        anigif::stop $lbl
-        set imgobj [load-image $path]
-        $lbl configure -image $imgobj
-    }
-}
 
 proc curl-hosts {tryout tryerr args} {
     fromargs {-urlpath -indiv_timeout -hosts -hindex -proto -port -expected_hostname} \
