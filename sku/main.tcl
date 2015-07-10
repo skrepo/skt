@@ -398,8 +398,6 @@ proc MovedResized {window x y w h} {
 # state should be normal or disabled
 proc tabset-state {state} {
     set all_tabs [.c.nb tabs]
-    set current_tab [.c.nb select]
-    #puts stderr "current_tab: $current_tab"
     foreach tab $all_tabs {
         if {$tab eq [current-tab-frame]} {
             .c.nb tab $tab -state normal
@@ -418,17 +416,32 @@ proc conn-status-update {status} {
     set ::model::Conn_status $status
     img place status/$status [current-tab-frame].stat.imagestatus
 
-    set state1 normal
-    set state2 disabled
+    set state1 disabled
+    set state2 normal
+    set ip [dict-pop $::model::Current_sitem ip {}]
+
+    switch $status {
+        disconnected {
+            # swap 2 variables
+            lassign [list $state1 $state2] state2 state1 
+            set msg [_ "Disconnected"] ;# _afd638922a7655ae
+        }
+        connecting {
+            set msg [_ "Connecting to {0}" $ip] ;# _a9e00a1f366a7a19
+        }
+        connected {
+            set msg [_ "Connected to {0}" $ip] ;# _540ebc2e02c2c88e
+        }
+    }
 
     if {$status ne "disconnected"} {
-        # swap 2 variables
-        lassign [list $state1 $state2] state2 state1 
     }
     
     tabset-state $state1
     [current-tab-frame].bs.connect configure -state $state1
     [current-tab-frame].bs.disconnect configure -state $state2
+
+    [current-tab-frame].stat.status configure -text $msg
 }
 
 
@@ -898,8 +911,10 @@ proc get-client-no {crtpath} {
 
 proc ClickConnect {} {
     set localconf $::conf
-    set ip [dict get $::sitem ip]
-    set ovs [lindex [dict get $::sitem ovses] 0]
+    set ::model::Current_sitem [model selected-sitem [current-provider]]
+    set ip [dict get $::model::Current_sitem ip]
+    # TODO set ovs according to ovs preferences
+    set ovs [lindex [dict get $::model::Current_sitem ovses] 0]
     set proto [dict get $ovs proto]
     set port [dict get $ovs port]
     append localconf "--proto $proto --remote $ip $port"
