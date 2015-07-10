@@ -318,9 +318,13 @@ proc mk-head-dir {filepath} {
     }
 }
 
+# return random 0 <= x < $n
+proc rand-int {n} {
+    return [expr {round(rand()*$n)}]
+}
 
 proc rand-byte {} {
-    return [expr {round(rand()*256)}]
+    return [rand-int 256]
 }
 
 proc rand-byte-hex {} {

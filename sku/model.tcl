@@ -40,9 +40,18 @@ namespace eval ::model {
 
 
     # other providers dict
-    variable Providers [dict create securitykiss {tabname SecurityKISS}]
+    variable Providers [dict create securitykiss {
+        tabname SecurityKISS
+        slist {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city Newcastle ip 31.24.33.221 ovses {{proto udp port 5353} {proto tcp port 443}}}}
+        selected_sitem_id {}
+    }]
+
+    # sample slist
+    # {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city Newcastle ip 31.24.33.221 ovses {{proto udp port 5353} {proto tcp port 443}}}}
  
     variable provider_list {securitykiss}
+
+    variable Current_sitem {}
 
     variable layout_bg1 white
     variable layout_bg2 grey95
@@ -191,4 +200,63 @@ proc ::model::save {} {
         ::model::dict2ini $d $inifile
     }
 }
+
+
+proc ::model::slist {provider args} {
+    if {[llength $args] == 0} {
+        return [dict-pop $::model::Providers $provider slist {}]
+    } elseif {[llength $args] == 1} {
+        set slist [lindex $args 0]
+        dict set ::model::Providers $provider slist $slist
+    }
+}
+
+
+# ... so there is no guarantee that what you put in is what you get out
+# If only $provider argument given return selected sitem dict or empty dict/string if no provider. If selected was not present return random from the slist
+#
+# With additional argument:
+# selected-sitem $provider ?sitem_id?
+# selected-sitem $provider ?sitem?
+# saves selected sitem id. Given sitem may be empty
+proc ::model::selected-sitem {provider args} {
+    if {[llength $args] == 0} {
+        set slist [::model::slist $provider]
+        set ssid [dict-pop $::model::Providers $provider selected_sitem_id {}]
+        if {$ssid eq "" || [::model::sitem-by-id $provider $ssid] eq ""} {
+            # pick random sitem
+            set sitem [lindex $slist [rand-int [llength $slist]]]
+            # save its id in model
+            dict set ::model::Providers $provider selected_sitem_id [dict get $sitem id]
+            return $sitem
+        } else {
+            return [::model::sitem-by-id $provider $ssid]
+        }
+    } elseif {[llength $args] == 1} {
+        set sitem [lindex $args 0]
+        if {$sitem eq ""} {
+            set sitem_id ""
+        } elseif {[string is integer -strict $sitem]} {
+            set sitem_id $sitem
+        } else {
+            set sitem_id [dict-pop $sitem id {}]
+        }
+        dict set ::model::Providers $provider selected_sitem_id $sitem_id
+        return [::model::selected-sitem $provider]
+    } else {
+        log ERROR: wrong number of arguments in selected-sitem $provider $args
+    }
+}
+
+# return sitem dict by id or empty if no such sitem
+proc ::model::sitem-by-id {provider sitem_id} {
+    foreach sitem [::model::slist $provider] {
+        set id [dict get $sitem id]
+        if {$id eq $sitem_id} {
+            return $sitem
+        }
+    }
+    return {}
+}
+
 

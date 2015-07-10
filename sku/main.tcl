@@ -362,8 +362,9 @@ proc get-welcome {cn} {
             set d [json::json2dict $data]
             puts stderr "dict: $d"
             puts stderr ""
-            set slist [dict get $d serverLists JADEITE]
-            set ::model::slist $slist
+            ::model::slist securitykiss [dict get $d serverLists JADEITE]
+            #set slist [dict get $d serverLists JADEITE]
+            #set ::model::slist $slist
             tk_messageBox -message "Welcome message received" -type ok
         }
         <- $cherr {
@@ -398,8 +399,9 @@ proc MovedResized {window x y w h} {
 proc tabset-state {state} {
     set all_tabs [.c.nb tabs]
     set current_tab [.c.nb select]
+    #puts stderr "current_tab: $current_tab"
     foreach tab $all_tabs {
-        if {$tab eq $current_tab} {
+        if {$tab eq [current-tab-frame]} {
             .c.nb tab $tab -state normal
         } else {
             .c.nb tab $tab -state $state
@@ -409,11 +411,12 @@ proc tabset-state {state} {
 
 
 
+
+
 proc conn-status-update {status} {
     puts stderr "conn-status-update called: $status"
     set ::model::Conn_status $status
-    set current_tab [.c.nb select]
-    img place status/$status $current_tab.stat.imagestatus
+    img place status/$status [current-tab-frame].stat.imagestatus
 
     set state1 normal
     set state2 disabled
@@ -424,8 +427,8 @@ proc conn-status-update {status} {
     }
     
     tabset-state $state1
-    $current_tab.bs.connect configure -state $state1
-    $current_tab.bs.disconnect configure -state $state2
+    [current-tab-frame].bs.connect configure -state $state1
+    [current-tab-frame].bs.disconnect configure -state $state2
 }
 
 
@@ -508,10 +511,15 @@ proc tabset-providers {} {
     return $nb
 }
 
+# For example: .c.nb.securitykiss
 proc current-tab-frame {} {
     return [.c.nb select]
 }
 
+# For example: securitykiss
+proc current-provider {} {
+    return [lindex [split [current-tab-frame] .] end]
+}
 
 # return provider frame window
 proc frame-provider {p pname} {
@@ -574,38 +582,17 @@ proc setDialogSize {window} {
 }
 
 
-proc get-selected-sitem {provider} {
-    
-}
 
-
+#TODO sorting by country
 proc ServerListClicked {} {
-    # sample slist
-    # {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city Newcastle ip 31.24.33.221 ovses {{proto udp port 5353} {proto tcp port 443}}}}
-    set slist $::model::slist
-    set ssel 1
-    #TODO validate ssel is in slist, otherwise select first one
-    #TODO sorting by country
-    set newsel [slistDialog $slist $ssel]
-    #TODO in the meantime slist could have changed (by welcome msg). Build entire configuration info here from the old slist
-    puts stderr "New selected server: $newsel"
-    if {$newsel > 0} {
-        set ::sitem [lindex $slist $newsel]
-    }
-    puts stderr "selected sitem: $::sitem"
-}
+    set slist [model slist [current-provider]]
+    set ssitem [model selected-sitem [current-provider]]
+    set ssid [dict get $ssitem id]
 
-
-# Return index of selected item if selection made or empty string if canceled
-# This is really selecting entire configuration than the server IP
-proc slistDialog {slist ssel} {
-    # Treeview is 1-based so increment here
-    incr ssel
 
     set w .slist_dialog
     catch { destroy $w }
     toplevel $w
-    puts stderr $slist
     set wt $w.tree
 
     ttk::treeview $wt -columns "country city ip" -selectmode browse
@@ -628,7 +615,7 @@ proc slistDialog {slist ssel} {
         img load flag/24/$ccode
         $wt insert {} end -id $id -image flag_24_$ccode -values [list $country $city $ip]
     }
-    $wt selection set $ssel
+    $wt selection set $ssid
     grid columnconfigure $w 0 -weight 1
     grid rowconfigure $w 0 -weight 1
     grid $wt -sticky news
@@ -653,16 +640,14 @@ proc slistDialog {slist ssel} {
 
 
     focus $wt
-    $wt focus $ssel
+    $wt focus $ssid
     set modal [ShowModal $w]
-    puts stderr "modal: $modal"
-    set newsel 0
     if {$modal eq "ok"} {
-        set newsel [$wt selection]
+        model selected-sitem [current-provider] [$wt selection]
     }
+    model print
     destroy $w
-    # Treeview is 1-based so decrement here
-    return [incr newsel -1]
+
 }
 
 
