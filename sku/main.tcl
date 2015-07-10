@@ -39,6 +39,7 @@ proc fatal {msg {err ""}} {
     main-exit
 }
 
+
 proc background-error {msg err} {
     fatal $msg [dict get $err -errorinfo]
 }
@@ -172,6 +173,10 @@ proc main {} {
     skd-connect 7777
     model print
     in-ui main
+    # first set connection status to disconnected...
+    conn-status-update disconnected
+    # ...and then update connection status from SKD
+    skd-write status
 }
 
 
@@ -304,7 +309,6 @@ proc main-gui {} {
     grid rowconfigure . .c -weight 1
 
     tabset-providers
-    conn-status-update disconnected
 
     # If the tag is the name of a class of widgets, such as Button, the binding applies to all widgets in that class;
     bind Button <Return> InvokeFocusedWithEnter
@@ -390,12 +394,38 @@ proc MovedResized {window x y w h} {
     #puts stderr [current-tab-frame]
 }
 
+# state should be normal or disabled
+proc tabset-state {state} {
+    set all_tabs [.c.nb tabs]
+    set current_tab [.c.nb select]
+    foreach tab $all_tabs {
+        if {$tab eq $current_tab} {
+            .c.nb tab $tab -state normal
+        } else {
+            .c.nb tab $tab -state $state
+        }
+    }
+}
+
+
 
 proc conn-status-update {status} {
+    puts stderr "conn-status-update called: $status"
     set ::model::Conn_status $status
-    img place status/$status [current-tab-frame].stat.imagestatus
-    #TODO disable other tabs
-    #if {} { }
+    set current_tab [.c.nb select]
+    img place status/$status $current_tab.stat.imagestatus
+
+    set state1 normal
+    set state2 disabled
+
+    if {$status ne "disconnected"} {
+        # swap 2 variables
+        lassign [list $state1 $state2] state2 state1 
+    }
+    
+    tabset-state $state1
+    $current_tab.bs.connect configure -state $state1
+    $current_tab.bs.disconnect configure -state $state2
 }
 
 
@@ -467,9 +497,9 @@ proc frame-buttons {p pname} {
 
 proc tabset-providers {} {
     set parent .c
-    set providers $::model::provider_list
     set nb [ttk::notebook $parent.nb]
-    foreach pname $providers {
+    ttk::notebook::enableTraversal $nb
+    foreach pname $::model::provider_list {
         set tab [frame-provider $nb $pname]
         set tabname [dict get $::model::Providers $pname tabname]
         $nb add $tab -text $tabname
@@ -805,6 +835,12 @@ proc skd-read {} {
                 {^OpenVPN with pid .* stopped} {
                     conn-status-update disconnected
                 }
+                {^OpenVPN already running with pid .*} {
+                    conn-status-update connected
+                }
+                {^OpenVPN status (.*)$} {
+                    conn-status-update [lindex $details 1]
+                }
             }
         }
         {^ovpn: (.*)$} {
@@ -874,7 +910,6 @@ proc get-client-no {crtpath} {
     return $cn
 }
 
-    
 
 proc ClickConnect {} {
     set localconf $::conf

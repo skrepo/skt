@@ -589,8 +589,9 @@ proc dict-put {dictVar args} {
     }
 }
 
-
-
+proc chan-is-open {chan} {
+    expr {[catch {tell $chan}] == 0}
+}
 
 
 

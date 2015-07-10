@@ -22,8 +22,6 @@ package require skutil
 source [file join $starkit::topdir skmgmt.tcl]
 
 
-
-
 proc background-error {msg e} {
     set pref [lindex [info level 0] 0]
     log $pref: $msg
@@ -34,9 +32,6 @@ proc background-error {msg e} {
 
 interp bgerror "" background-error
 #after 2000 {error "This is my bg error"}
-
-
-
 
 
 #TODO
@@ -104,7 +99,7 @@ proc reset-ovpn-state {} {
         rread 0
         # TCP/UDP write bytes
         rwrite 0
-        # connection state
+        # connection state from mgmt console: AUTH,GET_CONFIG,ASSIGN_IP,CONNECTED
         connstatus ""
         # virtual IP
         vip ""
@@ -127,7 +122,12 @@ proc SkdReportState {} {
 } 
 
 proc SkdNewConnection {sock peerhost peerport} {
-    if {[state skd sock] eq ""} {
+    set prev_client [state skd sock]
+    # if previous saved socked is not open do cleanup
+    if {$prev_client ne "" && ![chan-is-open $prev_client]} {
+        SkdConnectionClosed
+    }
+    if {$prev_client eq ""} {
         state skd {sock $sock}
         fconfigure $sock -blocking 0 -buffering line
         fileevent $sock readable SkdRead
@@ -138,7 +138,8 @@ proc SkdNewConnection {sock peerhost peerport} {
         catch {close $sock}
     }
 }
- 
+
+
 proc SkdConnectionClosed {} {
     set sock [state skd sock]
     if {$sock eq ""} {
@@ -234,12 +235,18 @@ proc SkdRead {} {
                 set chan [cmd invoke $ovpncmd OvpnExit OvpnRead OvpnErrRead]
                 set pid [pid $chan]
                 state ovpn {pid $pid}
+                state ovpn {connstatus connecting}
                 SkdWrite ctrl "OpenVPN with pid $pid started"
                 SkdReportState
                 return
             }
         }
+        {^status$} {
+            # TODO there is redundant information in pid (started,stopped) and connstatus (disconnected,connecting,connected)- make sure they are in sync
+            SkdWrite ctrl "OpenVPN status [state ovpn connstatus]"
+        }
         {^config (.+)$} {
+            # TODO pass meta info in config (city, country, etc) for sending info back to SKU. Also to have a first hand info about connection to display
             set config [lindex $tokens 1]
             set config [adjust-config $config]
             set configerror [load-config $config]
@@ -347,7 +354,7 @@ proc OvpnRead {line} {
         }
         {MANAGEMENT: Client disconnected} {
             #OvpnExit 1
-            log Client disconnected
+            log Management client disconnected
         }
         {MANAGEMENT: CMD 'state'} {
             set ignoreline 1
@@ -420,6 +427,7 @@ proc OvpnErrRead {line} {
 
 # should be idempotent, as may be called many times on openvpn shutdown
 proc OvpnExit {code} {
+    state ovpn {connstatus disconnected}
     set pid [state ovpn pid]
     if {$pid != 0} {
         SkdWrite ctrl "OpenVPN with pid $pid stopped"

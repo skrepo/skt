@@ -12,6 +12,7 @@ proc MgmtConnect {port} {
 
 proc MgmtRead {sock} {
     if {[gets $sock line] >= 0} {
+        log "MGMT: $line"
         switch -regexp -matchvar tokens $line {
             {^TUN/TAP read bytes,(\d+)$} {
                 state mgmt {vread [lindex $tokens 1]}
@@ -25,7 +26,13 @@ proc MgmtRead {sock} {
             {^TCP/UDP write bytes,(\d+)$} {
                 state mgmt {rwrite [lindex $tokens 1]}
             }
+
             {(\d+),(.+),(.*),(.*),(.*)} {
+                # For example:
+                # 1436527709,AUTH,,,
+                # 1436527711,GET_CONFIG,,,
+                # 1436527712,ASSIGN_IP,,10.13.0.6,
+                # 1436527715,CONNECTED,SUCCESS,10.13.0.6,78.129.174.84
                 set connstatus [lindex $tokens 2]
                 set vip [lindex $tokens 4]
                 set rip [lindex $tokens 5]
