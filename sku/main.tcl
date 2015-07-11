@@ -432,14 +432,19 @@ proc conn-status-update {status} {
             # swap 2 variables
             lassign [list $state1 $state2] state2 state1 
             set msg [_ "Disconnected"] ;# _afd638922a7655ae
+            set flag EMPTY
         }
         connecting {
             set msg [_ "Connecting to {0}" $ip] ;# _a9e00a1f366a7a19
+            set flag EMPTY
         }
         connected {
             set msg [_ "Connected to {0}" $ip] ;# _540ebc2e02c2c88e
+            set flag [dict get $::model::Current_sitem ccode]
         }
     }
+    
+    img place flag/64/$flag .c.stat.flag
 
     if {$status ne "disconnected"} {
     }
@@ -495,8 +500,9 @@ proc frame-status {p} {
     # TODO move to conn-status-update
     #place-image status/disconnected.png $stat.imagestatus
 
-    ttk::label $stat.status -text "Connected to ..." -background $bg2
-    ttk::label $stat.flag -image [img load flag/64/PL] -background $bg2
+    ttk::label $stat.status -text "" -background $bg2
+    ttk::label $stat.flag -background $bg2
+    img place flag/64/EMPTY $stat.flag
     grid $stat.imagestatus -row 5 -column 0 -padx 10 -pady 5
     grid $stat.status -row 5 -column 1 -padx 10 -pady 5 -sticky w
     grid $stat.flag -row 5 -column 2 -padx 10 -pady 5 -sticky e

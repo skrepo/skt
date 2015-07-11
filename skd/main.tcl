@@ -108,8 +108,15 @@ proc reset-ovpn-state {} {
     }
     state ovpn {
         # pid also determines openvpn status: started, stopped
+        # TODO make retrieving OpenVPN pid more robust: ovpn mgmt pid command
+        # > pid
+        # > SUCCESS: pid=3422
         pid 0
         # current openvpn status: connected, disconnected
+        # TODO
+        # > state
+        # > 1436650174,CONNECTED,SUCCESS,10.13.0.26,78.129.174.84
+        # > END
         connstatus disconnected
         # DNS pushed from the server
         dns_ip ""
@@ -243,6 +250,7 @@ proc SkdRead {} {
         }
         {^status$} {
             # TODO there is redundant information in pid (started,stopped) and connstatus (disconnected,connecting,connected)- make sure they are in sync
+            # TODO get that information in real time: check mgmt connection, run state command
             SkdWrite ctrl "OpenVPN status [state ovpn connstatus]"
         }
         {^config (.+)$} {
