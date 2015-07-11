@@ -310,6 +310,13 @@ proc main-gui {} {
 
     tabset-providers
 
+    frame-ipinfo .c
+    #hsep .c 5
+    frame-status .c
+    hsep .c 15
+    frame-buttons .c
+    hsep .c 5
+
     # If the tag is the name of a class of widgets, such as Button, the binding applies to all widgets in that class;
     bind Button <Return> InvokeFocusedWithEnter
     bind TButton <Return> InvokeFocusedWithEnter
@@ -414,7 +421,7 @@ proc tabset-state {state} {
 proc conn-status-update {status} {
     puts stderr "conn-status-update called: $status"
     set ::model::Conn_status $status
-    img place status/$status [current-tab-frame].stat.imagestatus
+    img place status/$status .c.stat.imagestatus
 
     set state1 disabled
     set state2 normal
@@ -438,10 +445,10 @@ proc conn-status-update {status} {
     }
     
     tabset-state $state1
-    [current-tab-frame].bs.connect configure -state $state1
-    [current-tab-frame].bs.disconnect configure -state $state2
+    .c.bs.connect configure -state $state1
+    .c.bs.disconnect configure -state $state2
 
-    [current-tab-frame].stat.status configure -text $msg
+    .c.stat.status configure -text $msg
 }
 
 
@@ -498,11 +505,11 @@ proc frame-status {p} {
     return $stat
 }
 
-proc frame-buttons {p pname} {
+proc frame-buttons {p} {
     set bs [frame $p.bs]
     ttk::button $bs.connect -text [_ "Connect"] -command ClickConnect ;# _2eaf8d491417924c
     ttk::button $bs.disconnect -text [_ "Disconnect"] -command ClickDisconnect ;# _87fff3af45753920
-    ttk::button $bs.slist -text [_ "Servers {0}" $pname] -command ServerListClicked ;# _bf9c42ec59d68714
+    ttk::button $bs.slist -text [_ "Servers"] -command ServerListClicked ;# _bf9c42ec59d68714
     grid $bs.connect $bs.disconnect $bs.slist -padx 10
     grid columnconfigure $bs $bs.slist -weight 1
     grid $bs -sticky news
@@ -539,12 +546,6 @@ proc frame-provider {p pname} {
     set f [ttk::frame $p.$pname]
     hsep $f 15
     frame-usage-meter $f
-    hsep $f 5
-    frame-ipinfo $f
-    #hsep $f 5
-    frame-status $f
-    hsep $f 15
-    frame-buttons $f $pname
     hsep $f 5
     return $f
 }

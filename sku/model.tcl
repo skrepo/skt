@@ -73,9 +73,6 @@ namespace eval ::model {
     variable Vigos {}
 
     variable vigo_lastok 0
-
-    # temporary slist
-    variable slist {}
 }
 
 # Display all model variables to stderr
