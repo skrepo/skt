@@ -48,10 +48,12 @@ namespace eval ::model {
 
     # sample slist
     # {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city Newcastle ip 31.24.33.221 ovses {{proto udp port 5353} {proto tcp port 443}}}}
+    # There is a single slist and selected_sitem_id (ssid) per provider
+    # On Click Connect the current provider's selected_sitem is copied to Current_sitem which stores currently connecting/connected sitem
  
-    variable provider_list {securitykiss}
-
     variable Current_sitem {}
+
+    variable provider_list {securitykiss}
 
     variable layout_bg1 white
     variable layout_bg2 grey95
@@ -199,6 +201,13 @@ proc ::model::save {} {
 }
 
 
+######################################## 
+# Slist and Sitem logic
+######################################## 
+
+# Examples:
+# model slist $provider - get slist for $provider
+# model slist $provider $slist - save $slist for $provider
 proc ::model::slist {provider args} {
     if {[llength $args] == 0} {
         return [dict-pop $::model::Providers $provider slist {}]
@@ -208,14 +217,15 @@ proc ::model::slist {provider args} {
     }
 }
 
-
-# ... so there is no guarantee that what you put in is what you get out
-# If only $provider argument given return selected sitem dict or empty dict/string if no provider. If selected was not present return random from the slist
+# Get or store selected sitem/site_id. Since slist is dynamic the selected sitem may get obsolete. 
+# This function should prevent returning obsolete selected sitem by taking random in that case
+# so there is no guarantee that what you put in is what you get out
 #
 # With additional argument:
+# selected-sitem $provider - get selected sitem (dict) for provider or draw random from slist
 # selected-sitem $provider ?sitem_id?
 # selected-sitem $provider ?sitem?
-# saves selected sitem id. Given sitem may be empty
+# - saves selected sitem id. Given sitem may be empty
 proc ::model::selected-sitem {provider args} {
     if {[llength $args] == 0} {
         set slist [::model::slist $provider]
