@@ -15,16 +15,16 @@ proc MgmtRead {sock} {
         log "MGMT: $line"
         switch -regexp -matchvar tokens $line {
             {^TUN/TAP read bytes,(\d+)$} {
-                state mgmt {vread [lindex $tokens 1]}
+                set ::model::mgmt_vread [lindex $tokens 1]
             }
             {^TUN/TAP write bytes,(\d+)$} {
-                state mgmt {vwrite [lindex $tokens 1]}
+                set ::model::mgmt_vwrite [lindex $tokens 1]
             }
             {^TCP/UDP read bytes,(\d+)$} {
-                state mgmt {rread [lindex $tokens 1]}
+                set ::model::mgmt_rread [lindex $tokens 1]
             }
             {^TCP/UDP write bytes,(\d+)$} {
-                state mgmt {rwrite [lindex $tokens 1]}
+                set ::model::mgmt_rwrite [lindex $tokens 1]
             }
 
             {(\d+),(.+),(.*),(.*),(.*)} {
@@ -36,11 +36,11 @@ proc MgmtRead {sock} {
                 set connstatus [lindex $tokens 2]
                 set vip [lindex $tokens 4]
                 set rip [lindex $tokens 5]
-                # it's a state cmd update only if vip and rip are IPs or empty
+                # it's a model update only if vip and rip are IPs or empty
                 if {([is-valid-ip $vip] || $vip eq "") && ([is-valid-ip $rip] || $rip eq "")} {
-                    state mgmt {connstatus [lindex $tokens 2]}
-                    state mgmt {vip [lindex $tokens 4]}
-                    state mgmt {rip [lindex $tokens 5]}
+                    set ::model::mgmt_connstatus [lindex $tokens 2]
+                    set ::model::mgmt_vip [lindex $tokens 4]
+                    set ::model::mgmt_rip [lindex $tokens 5]
                 }
             }
             {FATAL:ERROR:.*Operation not permitted} {

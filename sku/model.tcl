@@ -135,13 +135,13 @@ proc ::model::model2ini {inifile} {
     foreach key [::model::vars] {
         dict set d $key [set ::model::$key]
     }
-    # save property if starts with lowercase
+    # save fields starting with lowercase
     set smd [dict filter $d key \[a-z\]*]
     inicfg save $inifile $smd
 }
 
 proc ::model::dict2ini {d inifile} {
-    # save property if starts with lowercase
+    # save field if starts with lowercase
     set smd [dict filter $d key \[a-z\]*]
     inicfg save $inifile $smd
 }

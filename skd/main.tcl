@@ -82,12 +82,11 @@ proc SkdReportState {} {
 } 
 
 proc SkdNewConnection {sock peerhost peerport} {
-    set prev_client $::model::skd_sock
     # if previous saved socked is not open do cleanup
-    if {$prev_client ne "" && ![chan-is-open $prev_client]} {
+    if {$::model::skd_sock ne "" && ![chan-is-open $::model::skd_sock]} {
         SkdConnectionClosed
     }
-    if {$prev_client eq ""} {
+    if {$::model::skd_sock eq ""} {
         set ::model::skd_sock $sock
         fconfigure $sock -blocking 0 -buffering line
         fileevent $sock readable SkdRead
@@ -307,6 +306,9 @@ proc OvpnRead {line} {
             #
         }
         {MANAGEMENT: Socket bind failed on local address \[AF_INET\]127\.0\.0\.1:(\d+) Address already in use} {
+            # TODO what to do? 
+            # busy mgmt port most likely means that openvpn is already running
+            # on rare occasions it may be occupied by other application
             #retry/alter port
             MgmtCantStart [lindex $tokens 1]
         }

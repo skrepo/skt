@@ -14,7 +14,7 @@ namespace eval ::model {
     # TODO make retrieving OpenVPN pid more robust: ovpn mgmt pid command
     # > pid
     # > SUCCESS: pid=3422
-    variable ovpn_pid ""
+    variable ovpn_pid 0
     # current openvpn status: connected, disconnected
     # TODO
     # > state
@@ -72,5 +72,14 @@ proc ::model::vars {} {
 }
 
 
-# TODO model2dict
-
+# return part of the model (fields staring with lowercase) as a dict
+proc ::model::model2dict {} {
+    # load entire model namespace to a dict
+    set d [dict create]
+    foreach key [::model::vars] {
+        dict set d $key [set ::model::$key]
+    }
+    # filter fields starting with lowercase
+    set d [dict filter $d key \[a-z\]*]
+    return $d
+}
