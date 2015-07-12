@@ -19,8 +19,9 @@ package require linuxdeps
 # skutil must be last required package in order to overwrite the log proc from Tclx
 # using skutil log to stdout
 package require skutil
-source [file join $starkit::topdir skmgmt.tcl]
 
+source [file join [file dir [info script]] model.tcl]
+source [file join [file dir [info script]] skmgmt.tcl]
 
 proc background-error {msg e} {
     set pref [lindex [info level 0] 0]
@@ -56,25 +57,12 @@ proc main {} {
     
     create-pidfile /var/run/skd.pid
 
-    state skd {
-        # skd client socket, also indicates if skd client connected
-        sock ""
-        # pkg manager lock - the internal SKD one, not the OS one
-        pkg_lock 0
-        # pkg install queue - store pkg-install requests in queue
-        pkg_install_q {}
-        # OpenVPN config as double-dashed one-line string
-        ovpnconfig ""
-    }
-
     #TODO check if openvpn installed, install otherwise, retry if needed
     #TODO check if X11 running, if so try Tk. If a problem install deps, retry if needed
     linuxdeps openvpn-install
     linuxdeps tkdeps-install
 
-
-
-    reset-ovpn-state
+    model reset-ovpn-state
     socket -server SkdNewConnection -myaddr 127.0.0.1 7777
 }
 
@@ -87,55 +75,20 @@ proc main-exit {} {
     exit 0
 }
 
-proc reset-ovpn-state {} {
-    state mgmt {
-        # mgmt port
-        port 0
-        # TUN/TAP read bytes
-        vread 0
-        # TUN/TAP write bytes
-        vwrite 0
-        # TCP/UDP read bytes
-        rread 0
-        # TCP/UDP write bytes
-        rwrite 0
-        # connection state from mgmt console: AUTH,GET_CONFIG,ASSIGN_IP,CONNECTED
-        connstatus ""
-        # virtual IP
-        vip ""
-        # real IP
-        rip ""
-    }
-    state ovpn {
-        # pid also determines openvpn status: started, stopped
-        # TODO make retrieving OpenVPN pid more robust: ovpn mgmt pid command
-        # > pid
-        # > SUCCESS: pid=3422
-        pid 0
-        # current openvpn status: connected, disconnected
-        # TODO
-        # > state
-        # > 1436650174,CONNECTED,SUCCESS,10.13.0.26,78.129.174.84
-        # > END
-        connstatus disconnected
-        # DNS pushed from the server
-        dns_ip ""
-    }
-}
 
 proc SkdReportState {} {
-    SkdWrite stat [state]
+    SkdWrite stat [model model2dict]
     after 2000 SkdReportState
 } 
 
 proc SkdNewConnection {sock peerhost peerport} {
-    set prev_client [state skd sock]
+    set prev_client $::model::skd_sock
     # if previous saved socked is not open do cleanup
     if {$prev_client ne "" && ![chan-is-open $prev_client]} {
         SkdConnectionClosed
     }
     if {$prev_client eq ""} {
-        state skd {sock $sock}
+        set ::model::skd_sock $sock
         fconfigure $sock -blocking 0 -buffering line
         fileevent $sock readable SkdRead
         catch {puts $sock "ctrl: Welcome to SKD"}
@@ -148,17 +101,17 @@ proc SkdNewConnection {sock peerhost peerport} {
 
 
 proc SkdConnectionClosed {} {
-    set sock [state skd sock]
+    set sock $::model::skd_sock
     if {$sock eq ""} {
         return
     }
     log SkdConnectionClosed 
     catch {close $sock}
-    state skd {sock ""}
+    set ::model::skd_sock ""
 }
 
 proc SkdWrite {prefix msg} {
-    set sock [state skd sock]
+    set sock $::model::skd_sock
     if {$sock eq ""} {
         log Because of empty sock could not SkdWrite: $prefix: $msg
         return
@@ -199,12 +152,12 @@ proc load-config {conf} {
     if {$patherror ne ""} {
         return $patherror
     }
-    state skd {ovpnconfig $conf}
+    set ::model::ovpn_config $conf
     return ""
 }
 
 proc SkdRead {} {
-    set sock [state skd sock]
+    set sock $::model::skd_sock
     if {$sock eq ""} {
         return
     }
@@ -218,7 +171,7 @@ proc SkdRead {} {
     log SkdRead: $line
     switch -regexp -matchvar tokens $line {
         {^stop$} {
-            set pid [state ovpn pid]
+            set pid $::model::ovpn_pid
             if {$pid != 0} {
                 exec kill $pid
                 OvpnExit 0
@@ -228,21 +181,21 @@ proc SkdRead {} {
             }
         }
         {^start$} {
-            if {[state skd ovpnconfig] eq ""} {
+            if {$::model::ovpn_config eq ""} {
                 SkdWrite ctrl "No OpenVPN config loaded"
                 return
             }
-            set pid [state ovpn pid]
+            set pid $::model::ovpn_pid
             if {$pid != 0} {
                 SkdWrite ctrl "OpenVPN already running with pid $pid"
                 return
             } else {
-                reset-ovpn-state
-                set ovpncmd "openvpn [state skd ovpnconfig]"
+                model reset-ovpn-state
+                set ovpncmd "openvpn $::model::ovpn_config"
                 set chan [cmd invoke $ovpncmd OvpnExit OvpnRead OvpnErrRead]
                 set pid [pid $chan]
-                state ovpn {pid $pid}
-                state ovpn {connstatus connecting}
+                set ::model::ovpn_pid $pid
+                set ::model::ovpn_connstatus connecting
                 SkdWrite ctrl "OpenVPN with pid $pid started"
                 SkdReportState
                 return
@@ -251,7 +204,7 @@ proc SkdRead {} {
         {^status$} {
             # TODO there is redundant information in pid (started,stopped) and connstatus (disconnected,connecting,connected)- make sure they are in sync
             # TODO get that information in real time: check mgmt connection, run state command
-            SkdWrite ctrl "OpenVPN status [state ovpn connstatus]"
+            SkdWrite ctrl "OpenVPN status $::model::ovpn_connstatus"
         }
         {^config (.+)$} {
             # TODO pass meta info in config (city, country, etc) for sending info back to SKU. Also to have a first hand info about connection to display
@@ -283,9 +236,9 @@ proc SkdRead {} {
 }
 
 proc replace-dns {} {
-    set dns_ip [state ovpn dns_ip]
+    set dnsip $::model::ovpn_dnsip
     # Do nothing if DNS was not pushed by the server
-    if {$dns_ip eq ""} {
+    if {$dnsip eq ""} {
         return
     }
     # Read existing resolv.conf
@@ -302,7 +255,7 @@ proc replace-dns {} {
             return
         }
     }
-    spit /etc/resolv.conf "#DO NOT MODIFY - SKD generated\nnameserver $dns_ip"
+    spit /etc/resolv.conf "#DO NOT MODIFY - SKD generated\nnameserver $dnsip"
 }
 
 proc restore-dns {} {
@@ -346,7 +299,7 @@ proc OvpnRead {line} {
     set ignoreline 0
     switch -regexp -matchvar tokens $line {
         {MANAGEMENT: TCP Socket listening on \[AF_INET\]127\.0\.0\.1:(\d+)} {
-            state mgmt {port [lindex $tokens 1]}
+            set ::model::mgmt_port [lindex $tokens 1]
             #we should call MgmtStarted here, but it was moved after "TCP connection established" 
             #because connecting to mgmt interface too early caused OpenVPN to hang
         }
@@ -374,12 +327,12 @@ proc OvpnRead {line} {
             # this only occurs for TCP tunnels = useless for general use
         }
         {TLS: Initial packet from \[AF_INET\](\d+\.\d+\.\d+\.\d+):(\d+)} {
-            after idle MgmtStarted [state mgmt port]
+            after idle MgmtStarted $::model::mgmt_port
         }
         {TUN/TAP device (tun\d+) opened} {
         }
         {Initialization Sequence Completed} {
-            state ovpn {connstatus connected}
+            set ::model::ovpn_connstatus connected
             replace-dns
         }
         {Network is unreachable} {
@@ -393,8 +346,8 @@ proc OvpnRead {line} {
         {PUSH: Received control message} {
             # We need to handle PUSH commands from the openvpn server. Primarily DNS because we need to change resolv.conf
             #PUSH: Received control message: 'PUSH_REPLY,redirect-gateway def1 bypass-dhcp,dhcp-option DNS 10.10.0.1,route 10.10.0.1,topology net30,ping 5,ping-restart 28,ifconfig 10.10.0.66 10.10.0.65'
-            if {[regexp {dhcp-option DNS (\d+\.\d+\.\d+\.\d+)} $line _ dns_ip]} {
-                state ovpn {dns_ip $dns_ip}
+            if {[regexp {dhcp-option DNS (\d+\.\d+\.\d+\.\d+)} $line _ dnsip]} {
+                set ::model::ovpn_dnsip $dnsip
             }
         }
         default {
@@ -435,14 +388,14 @@ proc OvpnErrRead {line} {
 
 # should be idempotent, as may be called many times on openvpn shutdown
 proc OvpnExit {code} {
-    state ovpn {connstatus disconnected}
-    set pid [state ovpn pid]
+    set ::model::ovpn_connstatus disconnected
+    set pid $::model::ovpn_pid
     if {$pid != 0} {
         SkdWrite ctrl "OpenVPN with pid $pid stopped"
         after cancel SkdReportState
     }
     restore-dns
-    reset-ovpn-state
+    model reset-ovpn-state
 }
 
 

@@ -86,6 +86,7 @@ proc ::model::print {} {
     puts stderr ""
 }
 
+# get the list of ::model namespace variables
 proc ::model::vars {} {
     lmap v [info vars ::model::*] {
         string range $v [string length ::model::] end
@@ -129,6 +130,7 @@ proc ::model::ini2model {inifile} {
 }
 
 proc ::model::model2ini {inifile} {
+    # load entire model namespace to a dict
     set d [dict create]
     foreach key [::model::vars] {
         dict set d $key [set ::model::$key]
