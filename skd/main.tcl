@@ -98,6 +98,7 @@ proc SkdNewConnection {sock peerhost peerport} {
     set ::model::skd_sock $sock
     fconfigure $sock -blocking 0 -buffering line
     fileevent $sock readable SkdRead
+    SkdReportState
 }
 
 

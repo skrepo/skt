@@ -4,6 +4,29 @@ package provide inicfg 0.0.0
 # inicfg load $path - return dict
 # inicfg save $path $config - save $config dict
 
+# Sample ini file
+# first=1111111 aaaaaa
+#
+# second=22222222 bbbbbbb
+#
+# add1=dodane
+#
+# [HOST]
+# #keyvalue
+# third=33333 cccc ccc
+#
+# [PORT]
+# forth=4444444 dddddd
+#
+# add2=ddddoodda
+#
+# [PORT.FIRST.SECOND]
+# fifth=55555
+#
+# [PORT.FIRST]
+# add3=duuuddd
+#
+
 
 # for simplicity assume that disk I/O is immediate so provide only blocking command version
 # -nocache option for load

@@ -370,7 +370,7 @@ proc get-welcome {cn} {
             ::model::slist securitykiss [dict get $d serverLists JADEITE]
             #set slist [dict get $d serverLists JADEITE]
             #set ::model::slist $slist
-            tk_messageBox -message "Welcome message received" -type ok
+            #tk_messageBox -message "Welcome message received" -type ok
         }
         <- $cherr {
             set err [<- $cherr]
