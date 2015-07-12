@@ -81,31 +81,28 @@ proc SkdReportState {} {
     after 2000 SkdReportState
 } 
 
+
+
+# On new connection to SKD, close the previous one
 proc SkdNewConnection {sock peerhost peerport} {
-    # if previous saved socked is not open do cleanup
-    if {$::model::skd_sock ne "" && ![chan-is-open $::model::skd_sock]} {
-        SkdConnectionClosed
+    model print 
+    if {$::model::skd_sock ne ""} {
+        SkdWrite ctrl "Closing SKD connection $::model::skd_sock. Superseded by $sock $peerhost $peerport"
+        skd-conn-close
     }
-    if {$::model::skd_sock eq ""} {
-        set ::model::skd_sock $sock
-        fconfigure $sock -blocking 0 -buffering line
-        fileevent $sock readable SkdRead
-        catch {puts $sock "ctrl: Welcome to SKD"}
-    } else {
-        fconfigure $sock -blocking 0 -buffering line
-        catch {puts $sock "ctrl: Only a single connection allowed"}
-        catch {close $sock}
-    }
+    set ::model::skd_sock $sock
+    fconfigure $sock -blocking 0 -buffering line
+    fileevent $sock readable SkdRead
+    SkdWrite ctrl "Welcome to SKD"
 }
 
 
-proc SkdConnectionClosed {} {
-    set sock $::model::skd_sock
-    if {$sock eq ""} {
+proc skd-conn-close {} {
+    if {$::model::skd_sock eq ""} {
         return
     }
-    log SkdConnectionClosed 
-    catch {close $sock}
+    log skd-conn-close $::model::skd_sock
+    catch {close $::model::skd_sock}
     set ::model::skd_sock ""
 }
 
@@ -115,10 +112,10 @@ proc SkdWrite {prefix msg} {
         log Because of empty sock could not SkdWrite: $prefix: $msg
         return
     }
-    if {[catch {puts $sock "$prefix: $msg"} out err]} {
+    if {[catch {puts $sock "$prefix: $msg"; flush $sock;} out err]} {
         log $err
         log Because of error could not SkdWrite: $prefix: $msg
-        SkdConnectionClosed
+        skd-conn-close
     } else {
         log SkdWrite: $prefix: $msg
     }
@@ -162,7 +159,7 @@ proc SkdRead {} {
     }
     if {[gets $sock line] < 0} {
         if {[eof $sock]} {
-            SkdConnectionClosed
+            skd-conn-close
         }
         return
     }
@@ -172,7 +169,10 @@ proc SkdRead {} {
         {^stop$} {
             set pid $::model::ovpn_pid
             if {$pid != 0} {
-                exec kill $pid
+                if {[catch {exec kill $pid} out err]} {
+                    log "kill $pid failed"
+                    log $out \n $err
+                }
                 OvpnExit 0
             } else {
                 SkdWrite ctrl "Nothing to be stopped"

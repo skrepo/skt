@@ -10,50 +10,6 @@ proc strip-blank-lines {s} {
     return $s
 }
 
-
-#TODO clean up SKD from state and remove this
-
-# Keep application state in global nested dictionary called ::State
-# If the last argument is a list, the list should be key value pairs 
-# to set in ::State under the path described by previous arguments
-# If the last argument is a word, return value in ::State under the path
-# described by all arguments
-proc state {args} {
-    # all-but-last args describe the path in nested dictionary
-    set path [lrange $args 0 end-1]
-    # last arg is key-value list
-    set kv [lindex $args end]
-    # remove comments and before-comment semicolons
-    regsub -all {;*#[^\n]*\n} $kv "\n" kv
-
-    # variable, command and backslash substitution
-    # upleveled - must be done in caller context
-
-    set kv [strip-blank-lines $kv]
-    if {[llength $kv] == 1} {
-        # now we know that kv is a single key
-        set kv [uplevel [list subst $kv]]
-        return [dict get $::State {*}$path $kv]
-    }
-
-    # key-value list
-    set kvl {}
-    foreach u [split $kv "\n"] {
-        # first single word always the key, separate substitution
-        lappend kvl [uplevel [list subst [lindex $u 0]]]
-        # the rest of line (may be multiword) is the value, separate substitution
-        lappend kvl [uplevel [list subst [join [lrange $u 1 end]]]]
-    }
-
-    if {[llength $kvl] % 2 == 1} {
-        error "Missing value for key '[lindex $kvl end]' in state definition"
-    }
-    foreach {k v} $kvl {
-        dict set ::State {*}$path $k $v
-    }
-    return $::State
-}
-
 proc parse-ip {s} {
     if {[regexp {^\d+\.\d+\.\d+\.\d+$} $s]
         && [scan $s %d.%d.%d.%d a b c d] == 4
@@ -592,10 +548,5 @@ proc dict-put {dictVar args} {
         return $default
     }
 }
-
-proc chan-is-open {chan} {
-    expr {[catch {tell $chan}] == 0}
-}
-
 
 

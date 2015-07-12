@@ -53,6 +53,9 @@ proc ::model::reset-ovpn-state {} {
     set ::model::mgmt_connstatus ""
     set ::model::mgmt_vip ""
     set ::model::mgmt_rip ""
+    set ::model::ovpn_pid 0
+    set ::model::ovpn_connstatus disconnected
+    set ::model::ovpn_dnsip ""
 }
 
 # Display all model variables to stderr

@@ -440,7 +440,7 @@ proc conn-status-update {status} {
         }
         connected {
             set msg [_ "Connected to {0}" $ip] ;# _540ebc2e02c2c88e
-            set flag [dict get $::model::Current_sitem ccode]
+            set flag [dict-pop $::model::Current_sitem ccode EMPTY]
         }
     }
     
