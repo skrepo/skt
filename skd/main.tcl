@@ -64,6 +64,7 @@ proc main {} {
 
     model reset-ovpn-state
     socket -server SkdNewConnection -myaddr 127.0.0.1 7777
+    CyclicSkdReportState
 }
 
 
@@ -78,7 +79,11 @@ proc main-exit {} {
 
 proc SkdReportState {} {
     SkdWrite stat [model model2dict]
-    after 2000 SkdReportState
+} 
+
+proc CyclicSkdReportState {} {
+    SkdReportState
+    after 2000 CyclicSkdReportState
 } 
 
 
@@ -93,7 +98,6 @@ proc SkdNewConnection {sock peerhost peerport} {
     set ::model::skd_sock $sock
     fconfigure $sock -blocking 0 -buffering line
     fileevent $sock readable SkdRead
-    SkdWrite ctrl "Welcome to SKD"
 }
 
 
@@ -109,7 +113,6 @@ proc skd-conn-close {} {
 proc SkdWrite {prefix msg} {
     set sock $::model::skd_sock
     if {$sock eq ""} {
-        log Because of empty sock could not SkdWrite: $prefix: $msg
         return
     }
     if {[catch {puts $sock "$prefix: $msg"; flush $sock;} out err]} {
@@ -174,6 +177,7 @@ proc SkdRead {} {
                     log $out \n $err
                 }
                 OvpnExit 0
+                SkdReportState
             } else {
                 SkdWrite ctrl "Nothing to be stopped"
                 return
@@ -199,11 +203,6 @@ proc SkdRead {} {
                 SkdReportState
                 return
             }
-        }
-        {^status$} {
-            # TODO there is redundant information in pid (started,stopped) and connstatus (disconnected,connecting,connected)- make sure they are in sync
-            # TODO get that information in real time: check mgmt connection, run state command
-            SkdWrite ctrl "OpenVPN status $::model::ovpn_connstatus"
         }
         {^config (.+)$} {
             # TODO pass meta info in config (city, country, etc) for sending info back to SKU. Also to have a first hand info about connection to display
@@ -335,6 +334,7 @@ proc OvpnRead {line} {
         }
         {Initialization Sequence Completed} {
             set ::model::ovpn_connstatus connected
+
             replace-dns
         }
         {Network is unreachable} {
@@ -394,7 +394,6 @@ proc OvpnExit {code} {
     set pid $::model::ovpn_pid
     if {$pid != 0} {
         SkdWrite ctrl "OpenVPN with pid $pid stopped"
-        after cancel SkdReportState
     }
     restore-dns
     model reset-ovpn-state

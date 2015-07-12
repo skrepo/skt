@@ -34,13 +34,14 @@ proc MgmtRead {sock} {
                 # 1436527712,ASSIGN_IP,,10.13.0.6,
                 # 1436527715,CONNECTED,SUCCESS,10.13.0.6,78.129.174.84
                 set connstatus [lindex $tokens 2]
-                set vip [lindex $tokens 4]
-                set rip [lindex $tokens 5]
-                # it's a model update only if vip and rip are IPs or empty
-                if {([is-valid-ip $vip] || $vip eq "") && ([is-valid-ip $rip] || $rip eq "")} {
-                    set ::model::mgmt_connstatus [lindex $tokens 2]
-                    set ::model::mgmt_vip [lindex $tokens 4]
-                    set ::model::mgmt_rip [lindex $tokens 5]
+                set ::model::mgmt_vip [lindex $tokens 4]
+                set ::model::mgmt_rip [lindex $tokens 5]
+                # immediately report the change to CONNECTED status to a client by calling SkdReportState
+                if {$connstatus eq "CONNECTED" && $::model::mgmt_connstatus ne "CONNECTED"} {
+                    set ::model::mgmt_connstatus $connstatus
+                    SkdReportState
+                } else {
+                    set ::model::mgmt_connstatus $connstatus
                 }
             }
             {FATAL:ERROR:.*Operation not permitted} {

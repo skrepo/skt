@@ -170,13 +170,11 @@ proc main {} {
         fatal "Could not retrieve client id. Try to reinstall the program." 
     }
 
-    skd-connect 7777
+    #skd-connect 7777
     model print
     in-ui main
-    # first set connection status to disconnected...
-    conn-status-update disconnected
-    # ...and then update connection status from SKD
-    skd-write status
+    skd-monitor
+    conn-status-display
 }
 
 
@@ -415,28 +413,55 @@ proc tabset-state {state} {
 }
 
 
+# Extract new OpenVPN connstatus from SKD stat report
+# update the model and refresh display if needed
+proc conn-status-update {stat} {
+    set newstatus [conn-status-reported $stat]
+    if {$newstatus ne $::model::Connstatus} {
+        set ::model::Connstatus $newstatus
+        conn-status-display
+    }
+}
 
 
+# Extract new OpenVPN connstatus from SKD stat report
+proc conn-status-reported {stat} {
+    if {$stat eq ""} {
+        set connstatus unknown
+    } elseif {[dict get $stat ovpn_pid] == 0} {
+        set connstatus disconnected
+    } elseif {[dict get $stat mgmt_connstatus] eq "CONNECTED"} {
+        set connstatus connected
+    } else {
+        set connstatus connecting
+    }
+    return $connstatus
+}
 
-proc conn-status-update {status} {
-    puts stderr "conn-status-update called: $status"
-    set ::model::Conn_status $status
+
+proc conn-status-display {} {
+    set status $::model::Connstatus
+    #TODO prepare unknown.png
     img place status/$status .c.stat.imagestatus
 
     set state1 disabled
     set state2 normal
     set ip [dict-pop $::model::Current_sitem ip {}]
+    set flag EMPTY
 
     switch $status {
+        unknown {
+            set state1 disabled
+            set state2 disabled
+            set msg [_ "Unknown"] ;# _a297104e26a168e6
+        }
         disconnected {
-            # swap 2 variables
+            # swap
             lassign [list $state1 $state2] state2 state1 
             set msg [_ "Disconnected"] ;# _afd638922a7655ae
-            set flag EMPTY
         }
         connecting {
             set msg [_ "Connecting to {0}" $ip] ;# _a9e00a1f366a7a19
-            set flag EMPTY
         }
         connected {
             set msg [_ "Connected to {0}" $ip] ;# _540ebc2e02c2c88e
@@ -497,8 +522,6 @@ proc frame-status {p} {
     set bg2 $::model::layout_bg2
     set stat [frame $p.stat -background $bg2]
     label $stat.imagestatus -background $bg2
-    # TODO move to conn-status-update
-    #place-image status/disconnected.png $stat.imagestatus
 
     ttk::label $stat.status -text "" -background $bg2
     ttk::label $stat.flag -background $bg2
@@ -793,10 +816,25 @@ proc get-next-vigo {vigo_lastok attempt} {
 }
 
 
+
+proc skd-monitor {} {
+    set ms [clock milliseconds]
+    if {$ms - $::model::Skd_beat > 3000} {
+        log "Heartbeat not received within last 3 seconds. Restarting connection."
+        set ::model::Connstatus unknown
+        conn-status-display
+        skd-close
+        skd-connect 7777
+    }
+    after 1000 skd-monitor
+}
+
+
 proc skd-connect {port} {
     #TODO handle error
     if {[catch {set sock [socket 127.0.0.1 $port]} out err] == 1} {
-        skd-close $err
+        skd-close
+        return
     }
     set ::model::Skd_sock $sock
     chan configure $sock -blocking 0 -buffering line
@@ -806,13 +844,13 @@ proc skd-connect {port} {
 
 proc skd-write {msg} {
     if {[catch {puts $::model::Skd_sock $msg} out err] == 1} {
-        skd-close $err
+        log "skd-write problem writing $msg to $::model::Skd_sock"
+        skd-close
     }
 }
 
-proc skd-close {err} {
+proc skd-close {} {
     catch {close $::model::Skd_sock}
-    fatal "Could not communicate with SKD. Please check if skd service is running and check logs in /var/log/skd.log" $err
 }
 
 
@@ -821,30 +859,16 @@ proc skd-read {} {
     set sock $::model::Skd_sock
     if {[gets $sock line] < 0} {
         if {[eof $sock]} {
-            skd-close "skd_sock EOF. Connection terminated"
+            log "skd-read_sock EOF. Connection terminated"
+            skd-close
         }
         return
     }
     switch -regexp -matchvar tokens $line {
         {^ctrl: (.*)$} {
             switch -regexp -matchvar details [lindex $tokens 1] {
-                {^Welcome to SKD} {
-                    # TODO display in SKU that connected to SKD, take care of updating this status
-                }
                 {^Config loaded} {
                     skd-write start
-                }
-                {^OpenVPN with pid .* started} {
-                    conn-status-update connecting
-                }
-                {^OpenVPN with pid .* stopped} {
-                    conn-status-update disconnected
-                }
-                {^OpenVPN already running with pid .*} {
-                    conn-status-update connected
-                }
-                {^OpenVPN status (.*)$} {
-                    conn-status-update [lindex $details 1]
                 }
             }
         }
@@ -852,9 +876,18 @@ proc skd-read {} {
             set ::status [lindex $tokens 1]
             switch -regexp -matchvar details [lindex $tokens 1] {
                 {^Initialization Sequence Completed} {
-                    conn-status-update connected
+                    #conn-status-display connected
                 }
             }
+        }
+        {^stat: (.*)$} {
+            set stat [dict create {*}[lindex $tokens 1]]
+            set ::model::Skd_beat [clock milliseconds]
+
+            conn-status-update $stat
+            #TODO heartbeat timeout
+            #connstatus update trigger
+
         }
     }
     log SKD>> $line
@@ -917,6 +950,12 @@ proc get-client-no {crtpath} {
 
 
 proc ClickConnect {} {
+    # we artificially enforce Connstatus and update display 
+    # in order to immediately disable button to prevent double-click
+    # The Connstatus may be corrected by SKD reports
+    set ::model::Connstatus connecting
+    conn-status-display
+
     set localconf $::conf
     set ::model::Current_sitem [model selected-sitem [current-provider]]
     set ip [dict get $::model::Current_sitem ip]
@@ -929,6 +968,12 @@ proc ClickConnect {} {
 }
 
 proc ClickDisconnect {} {
+    # we artificially enforce Connstatus and update display 
+    # in order to immediately disable button to prevent double-click
+    # The Connstatus may be corrected by SKD reports
+    set ::model::Connstatus disconnected
+    conn-status-display
+
     skd-write stop
 }
 

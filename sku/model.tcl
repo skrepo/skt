@@ -32,11 +32,16 @@ namespace eval ::model {
     # SKD connection socket 
     variable Skd_sock ""
 
+    # last SKD stat heartbeat timestamp in millis
+    variable Skd_beat 0
+
     # User Interface (gui or cli)
     variable Ui ""
 
-    # OpenVPN connection status
-    variable Conn_status disconnected
+    # OpenVPN connection status 
+    # Although the source of truth for connstatus is SKD stat reports
+    # we keep local copy to know when to update display
+    variable Connstatus unknown
 
 
     # other providers dict
