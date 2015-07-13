@@ -12,7 +12,7 @@ package provide ovconf 0.0.0
 namespace eval ::ovconf {
     variable win_specific_opts {ip-win32 route-method dhcp-option tap-sleep show-net-up dhcp-renew dhcp-release pause-exit service show-adapters show-valid-subnets show-net}
     variable deprecated_opts {win-sys}
-    namespace export parse get set del index ddash
+    namespace export *
     namespace ensemble create
 }
 
@@ -68,6 +68,8 @@ proc ::ovconf::get {conf key} {
     return $res
 }
 
+# return copy of $conf with given $key/$value deleted
+# If $value not given delete $key/$value regardless of value
 proc ::ovconf::del {conf key {value ""}} {
     ::set key [::ovconf::ddash $key]
     ::set i [::ovconf::index $conf $key $value]
@@ -235,6 +237,11 @@ proc ::ovconf::del-deprecated {conf} {
         ::set conf [::ovconf::del $conf $k]
     }
     return $conf
+}
+
+
+proc ::ovconf::del-meta {conf} {
+    return [::ovconf::del $conf meta]
 }
 
 

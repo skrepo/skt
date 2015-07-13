@@ -128,6 +128,7 @@ proc SkdWrite {prefix msg} {
 proc adjust-config {conf} {
     # adjust management port
     set mgmt [::ovconf::get $conf management]
+    #TODO replace port to specific number
     if {[lindex $mgmt 0] in {localhost 127.0.0.1} && [lindex $mgmt 1]>0 && [lindex $mgmt 1]<65536} {
         # it's OK
     } else {
@@ -143,6 +144,8 @@ proc adjust-config {conf} {
     }
     # adjust deprecated options
     set conf [::ovconf::del-deprecated $conf]
+    # delete meta info
+    set conf [::ovconf::del-meta $conf]
     return $conf
 }
 
@@ -195,7 +198,14 @@ proc SkdRead {} {
                 return
             } else {
                 model reset-ovpn-state
-                set ovpncmd "openvpn $::model::ovpn_config"
+                log "ORIGINAL CONFIG: $::model::ovpn_config"
+                try {
+                    set config [adjust-config $::model::ovpn_config]
+                } on error {e1 e2} {
+                    log $e1 $e2
+                }
+                log "ADJUSTED CONFIG: $config"
+                set ovpncmd "openvpn $config"
                 set chan [cmd invoke $ovpncmd OvpnExit OvpnRead OvpnErrRead]
                 set pid [pid $chan]
                 set ::model::ovpn_pid $pid
@@ -208,7 +218,6 @@ proc SkdRead {} {
         {^config (.+)$} {
             # TODO pass meta info in config (city, country, etc) for sending info back to SKU. Also to have a first hand info about connection to display
             set config [lindex $tokens 1]
-            set config [adjust-config $config]
             set configerror [load-config $config]
             log config $config
             if {$configerror eq ""} {

@@ -893,54 +893,6 @@ proc skd-read {} {
     log SKD>> $line
 }
 
-# Extract server list from welcome message
-# Return multi-line string with each line representing a server like:
-# LosAngeles 23.19.26.250 UDP 123
-proc get-server-list {s} {
-    set res {}
-    set lines [split $s \n]
-    foreach l $lines {
-        if {[string first "<!-- " $l] != 0} {
-            continue
-        }
-        set l [join [lrange $l 1 end-1]]
-        if {[string first "#remote" $l] == 0} {
-            set tokens [split $l ,]
-            set serv [join [lindex $tokens 2] ""]
-            append serv " "
-            append serv [join [lrange $tokens 3 4]]
-            append serv " "
-            append serv [lindex [lindex $tokens 5] 1]
-            lappend res $serv
-        }
-    }
-    return $res
-}
-
-proc get-ovpn-config {s} {
-    set res {}
-    set lines [split $s \n]
-    foreach l $lines {
-        if {[string first "<!-- " $l] != 0} {
-            continue
-        }
-        set l [join [lrange $l 1 end-1]]
-        if {[string first "#" $l] == 0} {
-            continue
-        }
-        if {[string first "SecurityKISS" $l] == 0} {
-            continue
-        }
-        if {[string first "proto" $l] == 0} {
-            continue
-        }
-        if {[string first "remote" $l] == 0} {
-            continue
-        }
-        lappend res $l
-    }
-    return [join $res \n]
-}
 
 proc get-client-no {crtpath} {
     set crt [slurp $crtpath]
@@ -963,7 +915,7 @@ proc ClickConnect {} {
     set ovs [lindex [dict get $::model::Current_sitem ovses] 0]
     set proto [dict get $ovs proto]
     set port [dict get $ovs port]
-    append localconf "--proto $proto --remote $ip $port"
+    append localconf " --proto $proto --remote $ip $port --meta $::model::Current_sitem "
     skd-write "config $localconf"
 }
 
