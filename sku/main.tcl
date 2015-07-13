@@ -377,14 +377,19 @@ proc current-plan {tstamp} {
     return $current
 }
 
-# tstamp - current time given as argument to get multiple values in specific moment
-proc plan-is-active {tstamp plan} {
+proc plan-end {plan} {
     set period [dict-pop $plan period day]
     set start [dict-pop $plan start 0]
     set nop [dict-pop $plan nop 0]
-    set now $tstamp
-    set end [clock add $start $nop $period]
-    return [expr {$start < $now && $now < $end}]
+    return [clock add $start $nop $period]
+}
+
+
+
+# tstamp - current time given as argument to get multiple values in specific moment
+proc plan-is-active {tstamp plan} {
+    set start [dict-pop $plan start 0]
+    return [expr {$start < $tstamp && $tstamp < [plan-end $plan]}]
 }
 
 # sort activePlans:
@@ -541,24 +546,30 @@ proc conn-status-display {} {
 proc usage-meter-update {tstamp} {
     set um .c.nb.[current-provider].um
     set plan [current-plan $tstamp]
-    $um.plan configure -text "Plan [dict-pop $plan name ?]" 
+    set planname [dict-pop $plan name ?]
+    set end [plan-end $plan]
+
+    set planline [_ "Plan {0} valid until {1}" $planname $end]
+    $um.plan configure -text $planline
 }
 
 # create usage meter in parent p
 proc frame-usage-meter {p} {
     set bg1 $::model::layout_bg1
     set bg3 $::model::layout_bg3
+    set fgused $::model::layout_fgused
+    set fgelapsed $::model::layout_fgelapsed
     set um [frame $p.um -background $bg1]
     ttk::label $um.plan -text "Plan JADEITE valid until 2015 Sep 14" -background $bg1
     ttk::label $um.usedlabel -text "This month used" -background $bg1
     frame $um.usedbar -background $bg3 -width 300 -height 8
-    frame $um.usedbar.fill -background red -width 120 -height 8
+    frame $um.usedbar.fill -background $fgused -width 120 -height 8
     place $um.usedbar.fill -x 0 -y 0
     grid columnconfigure $um.usedbar 0 -weight 1
     ttk::label $um.usedsummary -text "12.4 GB / 50 GB" -background $bg1
     ttk::label $um.elapsedlabel -text "This month elapsed" -background $bg1
     frame $um.elapsedbar -background $bg3 -width 300 -height 8
-    frame $um.elapsedbar.fill -background blue -width 180 -height 8
+    frame $um.elapsedbar.fill -background $fgelapsed -width 180 -height 8
     place $um.elapsedbar.fill -x 0 -y 0
     ttk::label $um.elapsedsummary -text "3 days 14 hours / 31 days" -background $bg1
     grid $um.plan -column 0 -row 0 -columnspan 3 -padx 5 -pady 5 -sticky w
