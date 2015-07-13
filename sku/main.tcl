@@ -115,7 +115,7 @@ proc main {} {
     parray params
 
 
-    if {[catch {i18n load pl [file join [file dir [info script]] messages.txt]} out err]} {
+    if {[catch {i18n load en [file join [file dir [info script]] messages.txt]} out err]} {
         log $out
         log $err
     }
@@ -341,7 +341,6 @@ proc main-gui {} {
 proc check-for-updates {} {
     channel {chout cherr} 1
     vigo-curl $chout $cherr /check-for-updates
-    puts stderr "check-for-updates"
     select {
         <- $chout {
             set data [<- $chout]
@@ -397,7 +396,6 @@ proc MovedResized {window x y w h} {
         set ::model::layout_h $h
         #puts stderr "$window\tx=$x\ty=$y\tw=$w\th=$h"
     }
-    #puts stderr [current-tab-frame]
 }
 
 # state should be normal or disabled
@@ -414,7 +412,7 @@ proc tabset-state {state} {
 
 
 # Extract new OpenVPN connstatus from SKD stat report
-# update the model and refresh display if needed
+# update the model and refresh display if status changed
 proc conn-status-update {stat} {
     set newstatus [conn-status-reported $stat]
     if {$newstatus ne $::model::Connstatus} {
@@ -444,39 +442,35 @@ proc conn-status-display {} {
     #TODO prepare unknown.png
     img place status/$status .c.stat.imagestatus
 
-    set state1 disabled
-    set state2 normal
     set ip [dict-pop $::model::Current_sitem ip {}]
+    set city [dict-pop $::model::Current_sitem city {}]
     set flag EMPTY
 
     switch $status {
         unknown {
-            set state1 disabled
-            set state2 disabled
+            lassign {normal disabled disabled} state1 state2 state3
             set msg [_ "Unknown"] ;# _a297104e26a168e6
         }
         disconnected {
-            # swap
-            lassign [list $state1 $state2] state2 state1 
+            lassign {normal normal disabled} state1 state2 state3
             set msg [_ "Disconnected"] ;# _afd638922a7655ae
         }
         connecting {
-            set msg [_ "Connecting to {0}" $ip] ;# _a9e00a1f366a7a19
+            lassign {disabled disabled normal} state1 state2 state3
+            set msg [_ "Connecting to {0} {1}" $city $ip] ;# _a9e00a1f366a7a19
         }
         connected {
-            set msg [_ "Connected to {0}" $ip] ;# _540ebc2e02c2c88e
+            lassign {disabled disabled normal} state1 state2 state3
+            set msg [_ "Connected to {0} {1}" $city $ip] ;# _540ebc2e02c2c88e
             set flag [dict-pop $::model::Current_sitem ccode EMPTY]
         }
     }
     
     img place flag/64/$flag .c.stat.flag
 
-    if {$status ne "disconnected"} {
-    }
-    
     tabset-state $state1
-    .c.bs.connect configure -state $state1
-    .c.bs.disconnect configure -state $state2
+    .c.bs.connect configure -state $state2
+    .c.bs.disconnect configure -state $state3
 
     .c.stat.status configure -text $msg
 }
@@ -883,7 +877,8 @@ proc skd-read {} {
         {^stat: (.*)$} {
             set stat [dict create {*}[lindex $tokens 1]]
             set ::model::Skd_beat [clock milliseconds]
-
+            set ovpn_config [dict-pop $stat ovpn_config {}]
+            set ::model::Current_sitem [lindex [ovconf get $ovpn_config --meta] 0]
             conn-status-update $stat
             #TODO heartbeat timeout
             #connstatus update trigger
@@ -906,10 +901,12 @@ proc ClickConnect {} {
     # in order to immediately disable button to prevent double-click
     # The Connstatus may be corrected by SKD reports
     set ::model::Connstatus connecting
-    conn-status-display
+    # temporary set Current_sitem - it will be overwritten by meta info
+    # received back from SKD
+    set ::model::Current_sitem [model selected-sitem [current-provider]]
 
     set localconf $::conf
-    set ::model::Current_sitem [model selected-sitem [current-provider]]
+    conn-status-display
     set ip [dict get $::model::Current_sitem ip]
     # TODO set ovs according to ovs preferences
     set ovs [lindex [dict get $::model::Current_sitem ovses] 0]

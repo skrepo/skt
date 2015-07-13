@@ -241,7 +241,7 @@ proc ::ovconf::del-deprecated {conf} {
 
 
 proc ::ovconf::del-meta {conf} {
-    return [::ovconf::del $conf meta]
+    return [::ovconf::del $conf --meta]
 }
 
 

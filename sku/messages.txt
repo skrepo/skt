@@ -24,15 +24,15 @@ pl=Rozłączony
 
 # _a9e00a1f366a7a19
 #, {0} $ip
-en=Connecting to {0}
+en=Connecting to {0} {1}
 es=
-pl=Łączenie do {0}
+pl=Łączenie do {0} {1}
 
 # _540ebc2e02c2c88e
 #, {0} $ip
-en=Connected to {0}
+en=Connected to {0} {1}
 es=
-pl=Połączony do {0}
+pl=Połączony do {0} {1}
 
 
 # _a297104e26a168e6
