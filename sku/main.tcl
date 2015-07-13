@@ -355,6 +355,18 @@ proc check-for-updates {} {
     $cherr close
 }
 
+
+# sample welcome message:
+# ip 127.0.0.1
+# now 1436792064
+# latestSkt 1.4.4
+# serverLists
+# {
+#     GREEN {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}}}
+#     JADEITE {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city London ip 78.129.174.84 ovses {{proto udp port 5353} {proto tcp port 443}}}}
+# 
+# }
+# activePlans {{name JADEITE period month limit 50000000000 start 1431090862 used 12345678901 nop 3} {name GREEN period day limit 300000000 start 1431040000 used 15000000 nop 99999}}
 proc get-welcome {cn} {
     channel {chout cherr} 1
     vigo-curl $chout $cherr /welcome?cn=$cn
@@ -364,16 +376,15 @@ proc get-welcome {cn} {
             log Welcome message received:\n$data
             puts stderr "welcome: $data"
             set d [json::json2dict $data]
-            puts stderr "dict: $d"
-            puts stderr ""
+            # TODO this is temporary - save one of the slist
             ::model::slist securitykiss [dict get $d serverLists JADEITE]
-            #set slist [dict get $d serverLists JADEITE]
-            #set ::model::slist $slist
+            # save entire welcome message
+            dict set ::model::Providers securitykiss welcome $d
+            
             #tk_messageBox -message "Welcome message received" -type ok
         }
         <- $cherr {
             set err [<- $cherr]
-            #TODO use cached config
             tk_messageBox -message "Could not receive Welcome message" -type ok
             log get-welcome failed with error: $err
         }
@@ -499,6 +510,12 @@ proc frame-usage-meter {p} {
     grid $um -padx 10 -sticky news
     return $um
 }
+
+proc usage-meter-update {} {
+}
+
+
+
 
 # create ip info panel in parent p
 proc frame-ipinfo {p} {
@@ -812,6 +829,9 @@ proc get-next-vigo {vigo_lastok attempt} {
 
 
 proc skd-monitor {} {
+            puts stderr "########################1"
+            puts stderr [dict-pretty [dict-pop $::model::Providers securitykiss welcome {}]]
+            puts stderr "########################2"
     set ms [clock milliseconds]
     if {$ms - $::model::Skd_beat > 3000} {
         log "Heartbeat not received within last 3 seconds. Restarting connection."

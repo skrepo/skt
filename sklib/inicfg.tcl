@@ -193,6 +193,7 @@ proc ::inicfg::isdict {v} {
 # The output is a valid dict and can be read/used 
 # just like the original dict 
 ############################# 
+# copy of this proc is also in skutil.tcl
 proc ::inicfg::dict-pretty {d {indent ""} {indentstring "    "}} {
    # unpack this dimension 
    dict for {key value} $d { 

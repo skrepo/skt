@@ -401,6 +401,7 @@ proc OvpnExit {code} {
     if {$pid != 0} {
         SkdWrite ctrl "OpenVPN with pid $pid stopped"
     }
+    #TODO ensure restoring resolv.conf also by external process?
     restore-dns
     model reset-ovpn-state
 }

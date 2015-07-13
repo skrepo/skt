@@ -550,3 +550,30 @@ proc dict-put {dictVar args} {
 }
 
 
+######################### 
+# convert dictionary value dict into string 
+# hereby insert newlines and spaces to make 
+# a nicely formatted ascii output 
+# The output is a valid dict and can be read/used 
+# just like the original dict 
+############################# 
+# copy of this proc is also in inicfg.tcl
+proc dict-pretty {d {indent ""} {indentstring "    "}} {
+    set result ""
+    # unpack this dimension 
+    dict for {key value} $d { 
+       if {[isdict $value]} { 
+          append result "$indent[list $key]\n$indent\{\n" 
+          append result "[dict-pretty $value "$indentstring$indent" $indentstring]\n" 
+          append result "$indent\}\n" 
+       } else { 
+          append result "$indent[list $key] [list $value]\n" 
+       }
+    }
+    return $result 
+}
+
+
+proc isdict {v} { 
+   string match "value is a dict *" [::tcl::unsupported::representation $v] 
+} 

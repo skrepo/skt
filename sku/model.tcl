@@ -49,6 +49,7 @@ namespace eval ::model {
         tabname SecurityKISS
         slist {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city Newcastle ip 31.24.33.221 ovses {{proto udp port 5353} {proto tcp port 443}}}}
         selected_sitem_id {}
+        welcome {}
     }]
 
     # sample slist
