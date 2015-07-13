@@ -209,7 +209,6 @@ proc SkdRead {} {
                 set chan [cmd invoke $ovpncmd OvpnExit OvpnRead OvpnErrRead]
                 set pid [pid $chan]
                 set ::model::ovpn_pid $pid
-                set ::model::ovpn_connstatus connecting
                 SkdWrite ctrl "OpenVPN with pid $pid started"
                 SkdReportState
                 return
@@ -343,8 +342,6 @@ proc OvpnRead {line} {
         {TUN/TAP device (tun\d+) opened} {
         }
         {Initialization Sequence Completed} {
-            set ::model::ovpn_connstatus connected
-
             replace-dns
         }
         {Network is unreachable} {
@@ -400,7 +397,6 @@ proc OvpnErrRead {line} {
 
 # should be idempotent, as may be called many times on openvpn shutdown
 proc OvpnExit {code} {
-    set ::model::ovpn_connstatus disconnected
     set pid $::model::ovpn_pid
     if {$pid != 0} {
         SkdWrite ctrl "OpenVPN with pid $pid stopped"

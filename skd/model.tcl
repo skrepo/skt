@@ -15,12 +15,6 @@ namespace eval ::model {
     # > pid
     # > SUCCESS: pid=3422
     variable ovpn_pid 0
-    # current openvpn status: connected, disconnected
-    # TODO
-    # > state
-    # > 1436650174,CONNECTED,SUCCESS,10.13.0.26,78.129.174.84
-    # > END
-    variable ovpn_connstatus disconnected
     # DNS pushed from the server
     variable ovpn_dnsip ""
 
