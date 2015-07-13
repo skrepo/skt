@@ -174,6 +174,7 @@ proc main {} {
     model print
     in-ui main
     skd-monitor
+    plan-monitor
     conn-status-display
 }
 
@@ -355,23 +356,33 @@ proc check-for-updates {} {
     $cherr close
 }
 
+# select current slist from welcome as a function of welcome message and current plan/time
+# tstamp - current time given as argument to get multiple values in specific moment
+proc current-slist {tstamp} {
+    set welcome [dict-pop $::model::Providers [current-provider] welcome {}]
+    set planname [dict-pop [current-plan $tstamp] name {}]
+    return [dict-pop $welcome serverLists $planname {}]
+}
 
 
-proc current-plan {} {
+# select current plan as a function of welcome message and current time
+# tstamp - current time given as argument to get multiple values in specific moment
+proc current-plan {tstamp} {
     set welcome [dict-pop $::model::Providers [current-provider] welcome {}]
     set plans [dict-pop $welcome activePlans {}]
     #puts stderr "plans: $plans"
-    set sorted_plans [lsort -command plan-comparator $plans]
+    set sorted_plans [lsort -command [list plan-comparator $tstamp] $plans]
     #puts stderr "sorted_plans: $sorted_plans"
     set current [lindex $sorted_plans 0]
     return $current
 }
 
-proc plan-is-active {plan} {
+# tstamp - current time given as argument to get multiple values in specific moment
+proc plan-is-active {tstamp plan} {
     set period [dict-pop $plan period day]
     set start [dict-pop $plan start 0]
     set nop [dict-pop $plan nop 0]
-    set now [model now]
+    set now $tstamp
     set end [clock add $start $nop $period]
     return [expr {$start < $now && $now < $end}]
 }
@@ -381,10 +392,11 @@ proc plan-is-active {plan} {
 # - month first over day period
 # - traffic limit descending
 # - empty last
-proc plan-comparator {a b} {
+# tstamp - current time given as argument to get multiple values in specific moment
+proc plan-comparator {tstamp a b} {
     if {$a eq ""} { return -1 }
     if {$b eq ""} { return 1 }
-    set active_diff [expr {[plan-is-active $b] - [plan-is-active $a]}]
+    set active_diff [expr {[plan-is-active $tstamp $b] - [plan-is-active $tstamp $a]}]
     if {$active_diff != 0} {
         return $active_diff
     }
@@ -871,12 +883,19 @@ proc get-next-vigo {vigo_lastok attempt} {
 }
 
 
+proc plan-monitor {} {
+            puts stderr "########################1"
+            puts stderr [dict-pretty [dict-pop $::model::Providers [current-provider] welcome {}]]
+            puts stderr "########################2"
+            set now [model now]
+            puts stderr "current-plan: [current-plan $now]"
+            set slist [current-slist $now]
+            puts stderr "current-slist: $slist"
+            model slist [current-provider] $slist
+    after 5000 plan-monitor
+}
 
 proc skd-monitor {} {
-            puts stderr "########################1"
-            puts stderr [dict-pretty [dict-pop $::model::Providers securitykiss welcome {}]]
-            puts stderr "########################2"
-            puts stderr "current-plan: [current-plan]"
     set ms [clock milliseconds]
     if {$ms - $::model::Skd_beat > 3000} {
         log "Heartbeat not received within last 3 seconds. Restarting connection."
