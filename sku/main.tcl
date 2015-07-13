@@ -356,6 +356,48 @@ proc check-for-updates {} {
 }
 
 
+
+proc current-plan {} {
+    set welcome [dict-pop $::model::Providers [current-provider] welcome {}]
+    set plans [dict-pop $welcome activePlans {}]
+    #puts stderr "plans: $plans"
+    set sorted_plans [lsort -command plan-comparator $plans]
+    #puts stderr "sorted_plans: $sorted_plans"
+    set current [lindex $sorted_plans 0]
+    return $current
+}
+
+proc plan-is-active {plan} {
+    set period [dict-pop $plan period day]
+    set start [dict-pop $plan start 0]
+    set nop [dict-pop $plan nop 0]
+    set now [model now]
+    set end [clock add $start $nop $period]
+    return [expr {$start < $now && $now < $end}]
+}
+
+# sort activePlans:
+# - active first
+# - month first over day period
+# - traffic limit descending
+# - empty last
+proc plan-comparator {a b} {
+    if {$a eq ""} { return -1 }
+    if {$b eq ""} { return 1 }
+    set active_diff [expr {[plan-is-active $b] - [plan-is-active $a]}]
+    if {$active_diff != 0} {
+        return $active_diff
+    }
+    # use direct string compare - lexicographically day sorts before month
+    set period_diff [string compare [dict-pop $b period day] [dict-pop $a period day]]
+    if {$period_diff != 0} {
+        return $period_diff
+    }
+    return [expr {[dict-pop $b limit 0] - [dict-pop $a limit 0]}] 
+}
+
+ 
+
 # sample welcome message:
 # ip 127.0.0.1
 # now 1436792064
@@ -377,9 +419,11 @@ proc get-welcome {cn} {
             puts stderr "welcome: $data"
             set d [json::json2dict $data]
             # TODO this is temporary - save one of the slist
-            ::model::slist securitykiss [dict get $d serverLists JADEITE]
+            model slist securitykiss [dict get $d serverLists JADEITE]
             # save entire welcome message
             dict set ::model::Providers securitykiss welcome $d
+            model now [dict-pop $d now 0]
+           
             
             #tk_messageBox -message "Welcome message received" -type ok
         }
@@ -832,6 +876,7 @@ proc skd-monitor {} {
             puts stderr "########################1"
             puts stderr [dict-pretty [dict-pop $::model::Providers securitykiss welcome {}]]
             puts stderr "########################2"
+            puts stderr "current-plan: [current-plan]"
     set ms [clock milliseconds]
     if {$ms - $::model::Skd_beat > 3000} {
         log "Heartbeat not received within last 3 seconds. Restarting connection."

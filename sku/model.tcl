@@ -38,6 +38,9 @@ namespace eval ::model {
     # User Interface (gui or cli)
     variable Ui ""
 
+    # Time offset relative to the "now" received in welcome message
+    variable now_offset 0
+
     # OpenVPN connection status 
     # Although the source of truth for connstatus is SKD stat reports
     # we keep local copy to know when to update display
@@ -45,6 +48,8 @@ namespace eval ::model {
 
 
     # other providers dict
+    # entire welcome message is stored
+    # while welcome contains multiple slists, we need to store current slist as well since it depends on current time (through active plan selection)
     variable Providers [dict create securitykiss {
         tabname SecurityKISS
         slist {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city Newcastle ip 31.24.33.221 ovses {{proto udp port 5353} {proto tcp port 443}}}}
@@ -273,5 +278,30 @@ proc ::model::sitem-by-id {provider sitem_id} {
     }
     return {}
 }
+
+# [model now]
+# return offset-ed current time, it may use previously saved time offset 
+# it should be server-originated UTC in seconds, if no offset use local time
+# TODO remember to update display and time related derivatives 
+# (for example current plan) after welcome message received
+# in order to get the time with updated time offset
+# TODO what to do if we get "now" from many welcome messages?
+# [model now $now]
+# use $now to calculate time offset that will be saved in the model
+proc ::model::now {args} {
+    if {[llength $args] == 0} {
+        return [expr {[clock seconds] + $::model::now_offset}]
+    } elseif {[llength $args] == 1} {
+        set now [lindex $args 0]
+        if {[string is integer -strict $now]} {
+            set ::model::now_offset [expr {$now - [clock seconds]}]
+        }
+    } else {
+        log ERROR: wrong number of arguments in ::model::now $args
+    }
+}
+
+
+
 
 
