@@ -429,15 +429,11 @@ proc get-welcome {cn} {
             set data [<- $chout]
             log Welcome message received:\n$data
             puts stderr "welcome: $data"
-            set d [json::json2dict $data]
-            # TODO this is temporary - save one of the slist
-            model slist securitykiss [dict get $d serverLists JADEITE]
+            set welcome [json::json2dict $data]
             # save entire welcome message
-            dict set ::model::Providers securitykiss welcome $d
-            model now [dict-pop $d now 0]
-           
-            
-            #tk_messageBox -message "Welcome message received" -type ok
+            dict set ::model::Providers securitykiss welcome $welcome
+            model now [dict-pop $welcome now 0]
+            model slist [current-provider] [current-slist [model now]]
         }
         <- $cherr {
             set err [<- $cherr]
@@ -542,6 +538,11 @@ proc conn-status-display {} {
     .c.stat.status configure -text $msg
 }
 
+proc usage-meter-update {tstamp} {
+    set um .c.nb.[current-provider].um
+    set plan [current-plan $tstamp]
+    $um.plan configure -text "Plan [dict-pop $plan name ?]" 
+}
 
 # create usage meter in parent p
 proc frame-usage-meter {p} {
@@ -567,8 +568,6 @@ proc frame-usage-meter {p} {
     return $um
 }
 
-proc usage-meter-update {} {
-}
 
 
 
@@ -884,14 +883,15 @@ proc get-next-vigo {vigo_lastok attempt} {
 
 
 proc plan-monitor {} {
-            puts stderr "########################1"
-            puts stderr [dict-pretty [dict-pop $::model::Providers [current-provider] welcome {}]]
-            puts stderr "########################2"
-            set now [model now]
-            puts stderr "current-plan: [current-plan $now]"
-            set slist [current-slist $now]
-            puts stderr "current-slist: $slist"
-            model slist [current-provider] $slist
+    puts stderr "########################1"
+    puts stderr [dict-pretty [dict-pop $::model::Providers [current-provider] welcome {}]]
+    puts stderr "########################2"
+    set now [model now]
+    puts stderr "current-plan: [current-plan $now]"
+    set slist [current-slist $now]
+    puts stderr "current-slist: $slist"
+    model slist [current-provider] $slist
+    usage-meter-update $now
     after 5000 plan-monitor
 }
 
