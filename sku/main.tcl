@@ -369,10 +369,14 @@ proc current-slist {tstamp} {
 # tstamp - current time given as argument to get multiple values in specific moment
 proc current-plan {tstamp} {
     set welcome [dict-pop $::model::Providers [current-provider] welcome {}]
+    if {$welcome eq ""} {
+        return ""
+    }
     set plans [dict-pop $welcome activePlans {}]
-    #puts stderr "plans: $plans"
+    if {$plans eq ""} {
+        return ""
+    }
     set sorted_plans [lsort -command [list plan-comparator $tstamp] $plans]
-    #puts stderr "sorted_plans: $sorted_plans"
     set current [lindex $sorted_plans 0]
     return $current
 }
@@ -486,6 +490,7 @@ proc get-welcome {cn} {
             dict set ::model::Providers securitykiss welcome $welcome
             model now [dict-pop $welcome now 0]
             model slist [current-provider] [current-slist [model now]]
+            usage-meter-update
         }
         <- $cherr {
             set err [<- $cherr]
@@ -590,9 +595,25 @@ proc conn-status-display {} {
     .c.stat.status configure -text $msg
 }
 
+proc usage-meter-update-blank {} {
+    set um .c.nb.[current-provider].um
+    set ::model::Gui_planline [_ "Plan ?"]
+    set ::model::Gui_usedlabel [_ "Used"]
+    set ::model::Gui_elapsedlabel [_ "Elapsed"]
+    set ::model::Gui_usedsummary ""
+    set ::model::Gui_elapsedsummary ""
+    $um.usedbar.fill configure -width 0
+    $um.elapsedbar.fill configure -width 0
+}
+
+
 proc usage-meter-update {tstamp} {
     set um .c.nb.[current-provider].um
     set plan [current-plan $tstamp]
+    if {$plan eq ""} {
+        usage-meter-update-blank
+        return
+    }
     set planname [dict-pop $plan name ?]
     set plan_start [plan-start $plan]
     set plan_end [plan-end $plan]
@@ -606,23 +627,42 @@ proc usage-meter-update {tstamp} {
         set ::model::Gui_usedlabel [_ "This day used"]
         set ::model::Gui_elapsedlabel [_ "This day elapsed"]
     } else {
-        set ::model::Gui_usedlabel [_ "Used"]
-        set ::model::Gui_elapsedlabel [_ "Elapsed"]
+        usage-meter-update-blank
+        return
     }
     
     set used [dict-pop $plan used 0]
     set limit [dict-pop $plan limit 0]
+    if {$limit <= 0} {
+        usage-meter-update-blank
+        return
+    }
+    if {$used > $limit} {
+        set used $limit
+    }
+    if {$used < 0} {
+        usage-meter-update-blank
+        return
+    }
     set ::model::Gui_usedsummary "[format-mega $used] / [format-mega $limit 1]"
     set period_start [period-start $plan $tstamp]
     set period_end [period-end $plan $tstamp]
-    #set elapsed []
-    #set thisperiod [expr {$period_end - $start}]
-    #puts stderr "thisperiod: $thisperiod"
     puts stderr "plan_start: [clock format $plan_start]"
     puts stderr "period_start: [clock format $period_start]"
     puts stderr "period_end: [clock format $period_end]"
     set period_elapsed [period-elapsed $plan $tstamp]
     set period_length [period-length $plan $tstamp]
+    if {$period_elapsed <= 0} {
+        usage-meter-update-blank
+        return
+    }
+    if {$period_length <= 0} {
+        usage-meter-update-blank
+        return
+    }
+    if {$period_elapsed > $period_length} {
+        set period_elapsed $period_length
+    }
     set ::model::Gui_elapsedsummary "[format-interval $period_elapsed] / [format-interval $period_length 1]"
 
     ##################################
@@ -630,6 +670,8 @@ proc usage-meter-update {tstamp} {
 
     set barw $::model::layout_barw
     set wu [expr {$barw * $used / $limit}]
+    if {$wu < 0} {
+    }
     $um.usedbar.fill configure -width $wu
     set we [expr {$barw * $period_elapsed / $period_length}]
     $um.elapsedbar.fill configure -width $we
