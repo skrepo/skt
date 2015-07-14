@@ -564,22 +564,29 @@ proc usage-meter-update {tstamp} {
 
 
 # convert big number to the suffixed (K/M/G/T) representation 
-# with one decimal point accuracy (max 3 significant digits plus dot)
+# with max 3 significant digits plus optional dot
 proc mega-format {n} {
-    if {$n > 99900000000} {
-        set divisor 1000000000000.0
+    # number length
+    set l [string length $n]
+    # 3 digits to display
+    set d [string range $n 0 2]
+    if {$l > 12} {
         set suffix T
-    } elseif {$n > 99900000} {
-        set divisor 1000000000.0
+    } elseif {$l > 9} {
         set suffix G
-    } elseif {$n > 99900} {
-        set divisor 1000000.0
+    } elseif {$l > 6} {
         set suffix M
-    } else {
-        set divisor 1000.0
+    } elseif {$l > 3} {
         set suffix K
+    } else {
+        set suffix ""
     }
-    return [format %.1f$suffix [expr {$n/$divisor}]]
+    # position of the dot
+    set p [expr {$l % 3}]
+    if {$suffix ne "" && $p > 0} {
+        set d [string-insert $d $p .]
+    }
+    return $d$suffix
 }
 
 

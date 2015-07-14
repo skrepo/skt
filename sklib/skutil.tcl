@@ -577,3 +577,10 @@ proc dict-pretty {d {indent ""} {indentstring "    "}} {
 proc isdict {v} { 
    string match "value is a dict *" [::tcl::unsupported::representation $v] 
 } 
+
+
+
+proc string-insert {s pos insertion} {
+    append insertion [string index $s $pos]
+    string replace $s $pos $pos $insertion
+}
