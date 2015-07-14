@@ -377,18 +377,55 @@ proc current-plan {tstamp} {
     return $current
 }
 
+proc period-end {plan tstamp} {
+    set period [dict-pop $plan period day]
+    set period_start [period-start $plan $tstamp]
+    return [clock add $period_start 1 $period]
+}
+
+proc period-start {plan tstamp} {
+    set period [dict-pop $plan period day]
+    if {$period eq "day"} {
+        set periodsecs 86400
+    } elseif {$period eq "month"} {
+        # average number of seconds in a month
+        set periodsecs 2629800
+    } else {
+        # just in case set default to day
+        set periodsecs 86400
+    }
+    set plan_start [plan-start $plan]
+    set secs [expr {$tstamp - $plan_start}]
+    # estimated number of periods
+    set est [expr {$secs / $periodsecs - 2}]
+    for {set i $est} {$i<$est+5} {incr i} {
+        set start [clock add $plan_start $i $period]
+        set end [clock add $plan_start [expr {$i+1}] $period]
+        if {$start <= $tstamp && $tstamp < $end} {
+            return $start
+        }
+    }
+    error "Could not determine period-start for plan $plan and tstamp $tstamp"
+}
+
+
+proc plan-start {plan} {
+    return [dict-pop $plan start [model now]]
+}
+
+
 proc plan-end {plan} {
     set period [dict-pop $plan period day]
-    set start [dict-pop $plan start 0]
+    set plan_start [plan-start $plan]
     set nop [dict-pop $plan nop 0]
-    return [clock add $start $nop $period]
+    return [clock add $plan_start $nop $period]
 }
 
 
 
 # tstamp - current time given as argument to get multiple values in specific moment
 proc plan-is-active {tstamp plan} {
-    set start [dict-pop $plan start 0]
+    set start [plan-start $plan]
     return [expr {$start < $tstamp && $tstamp < [plan-end $plan]}]
 }
 
@@ -547,8 +584,9 @@ proc usage-meter-update {tstamp} {
     set um .c.nb.[current-provider].um
     set plan [current-plan $tstamp]
     set planname [dict-pop $plan name ?]
-    set end [plan-end $plan]
-    set ::model::Gui_planline [_ "Plan {0} valid until {1}" $planname $end]
+    set plan_start [plan-start $plan]
+    set plan_end [plan-end $plan]
+    set ::model::Gui_planline [_ "Plan {0} valid until {1}" $planname $plan_end]
     set period [dict-pop $plan period day]
     if {$period eq "month"} {
         set ::model::Gui_usedlabel [_ "This month used"]
@@ -560,6 +598,18 @@ proc usage-meter-update {tstamp} {
         set ::model::Gui_usedlabel [_ "Used"]
         set ::model::Gui_elapsedlabel [_ "Elapsed"]
     }
+    
+    set used [dict-pop $plan used 0]
+    set limit [dict-pop $plan limit 0]
+    set ::model::Gui_usedsummary "[mega-format $used] / [mega-format $limit]"
+    set period_start [period-start $plan $tstamp]
+    set period_end [period-end $plan $tstamp]
+    #set elapsed []
+    #set thisperiod [expr {$period_end - $start}]
+    #puts stderr "thisperiod: $thisperiod"
+    puts stderr "plan_start: [clock format $plan_start]"
+    puts stderr "period_start: [clock format $period_start]"
+    puts stderr "period_end: [clock format $period_end]"
 }
 
 
