@@ -89,6 +89,8 @@ namespace eval ::model {
     variable layout_y 300
     variable layout_w 0
     variable layout_h 0
+    variable layout_barw 350
+    variable layout_barh 6
 
     variable Gui_planline "Plan"
     variable Gui_usedlabel "Used"

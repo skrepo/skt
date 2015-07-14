@@ -377,6 +377,16 @@ proc current-plan {tstamp} {
     return $current
 }
 
+
+proc period-elapsed {plan tstamp} {
+    return [expr {$tstamp - [period-start $plan $tstamp]}]
+}
+
+proc period-length {plan tstamp} {
+    return [expr {[period-end $plan $tstamp] - [period-start $plan $tstamp]}]
+}
+
+
 proc period-end {plan tstamp} {
     set period [dict-pop $plan period day]
     set period_start [period-start $plan $tstamp]
@@ -586,7 +596,8 @@ proc usage-meter-update {tstamp} {
     set planname [dict-pop $plan name ?]
     set plan_start [plan-start $plan]
     set plan_end [plan-end $plan]
-    set ::model::Gui_planline [_ "Plan {0} valid until {1}" $planname $plan_end]
+    set until [format-date $plan_end]
+    set ::model::Gui_planline [_ "Plan {0} valid until {1}" $planname $until]
     set period [dict-pop $plan period day]
     if {$period eq "month"} {
         set ::model::Gui_usedlabel [_ "This month used"]
@@ -601,7 +612,7 @@ proc usage-meter-update {tstamp} {
     
     set used [dict-pop $plan used 0]
     set limit [dict-pop $plan limit 0]
-    set ::model::Gui_usedsummary "[mega-format $used] / [mega-format $limit]"
+    set ::model::Gui_usedsummary "[format-mega $used] / [format-mega $limit 1]"
     set period_start [period-start $plan $tstamp]
     set period_end [period-end $plan $tstamp]
     #set elapsed []
@@ -610,12 +621,27 @@ proc usage-meter-update {tstamp} {
     puts stderr "plan_start: [clock format $plan_start]"
     puts stderr "period_start: [clock format $period_start]"
     puts stderr "period_end: [clock format $period_end]"
+    set period_elapsed [period-elapsed $plan $tstamp]
+    set period_length [period-length $plan $tstamp]
+    set ::model::Gui_elapsedsummary "[format-interval $period_elapsed] / [format-interval $period_length 1]"
+
+    ##################################
+    # update bars
+
+    set barw $::model::layout_barw
+    set wu [expr {$barw * $used / $limit}]
+    $um.usedbar.fill configure -width $wu
+    set we [expr {$barw * $period_elapsed / $period_length}]
+    $um.elapsedbar.fill configure -width $we
+
 }
+
 
 
 # convert big number to the suffixed (K/M/G/T) representation 
 # with max 3 significant digits plus optional dot
-proc mega-format {n} {
+# trim - trim the decimal part if zero
+proc format-mega {n {trim 0}} {
     # number length
     set l [string length $n]
     # 3 digits to display
@@ -635,9 +661,47 @@ proc mega-format {n} {
     set p [expr {$l % 3}]
     if {$suffix ne "" && $p > 0} {
         set d [string-insert $d $p .]
+        if {$trim} {
+            while {[string index $d end] eq "0"} {
+                set d [string range $d 0 end-1]
+            }
+            if {[string index $d end] eq "."} {
+                set d [string range $d 0 end-1]
+            }
+        }
     }
     return $d$suffix
 }
+
+
+# trim - trim the minor unit
+proc format-interval {sec {trim 0}} {
+    set min [expr {$sec/60}]
+    # if more than 24 hour
+    if {$min > 1440} {
+        set days [expr {$min/1440}]
+        set hours [expr {($min-$days*1440)/60}]
+        if {$trim} {
+            return "${days}d"
+        } else {
+            return "${days}d ${hours}h"
+        }
+    } else {
+        set hours [expr {$min/60}]
+        set minutes [expr {$min-($hours*60)}]
+        if {$trim} {
+            return "${hours}h"
+        } else {
+            return "${hours}h ${minutes}m"
+        }
+    }
+}
+
+proc format-date {sec} {
+    return [clock format $sec -format "%Y-%m-%d"]
+}
+
+
 
 
 # create usage meter in parent p
@@ -649,15 +713,17 @@ proc frame-usage-meter {p} {
     set um [frame $p.um -background $bg1]
     ttk::label $um.plan -textvariable ::model::Gui_planline -background $bg1
     ttk::label $um.usedlabel -textvariable ::model::Gui_usedlabel -background $bg1
-    frame $um.usedbar -background $bg3 -width 300 -height 8
-    frame $um.usedbar.fill -background $fgused -width 120 -height 8
+    set barw $::model::layout_barw
+    set barh $::model::layout_barh
+    frame $um.usedbar -background $bg3 -width $barw -height $barh
+    frame $um.usedbar.fill -background $fgused -width 0 -height $barh
     place $um.usedbar.fill -x 0 -y 0
     grid columnconfigure $um.usedbar 0 -weight 1
     #ttk::label $um.usedsummary -text "12.4 GB / 50 GB" -background $bg1
     ttk::label $um.usedsummary -textvariable ::model::Gui_usedsummary -background $bg1
     ttk::label $um.elapsedlabel -textvariable ::model::Gui_elapsedlabel -background $bg1
-    frame $um.elapsedbar -background $bg3 -width 300 -height 8
-    frame $um.elapsedbar.fill -background $fgelapsed -width 180 -height 8
+    frame $um.elapsedbar -background $bg3 -width $barw -height $barh
+    frame $um.elapsedbar.fill -background $fgelapsed -width 0 -height $barh
     place $um.elapsedbar.fill -x 0 -y 0
     #ttk::label $um.elapsedsummary -text "3 days 14 hours / 31 days" -background $bg1
     ttk::label $um.elapsedsummary -textvariable ::model::Gui_elapsedsummary -background $bg1
