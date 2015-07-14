@@ -76,6 +76,12 @@ namespace eval ::model {
     variable layout_w 0
     variable layout_h 0
 
+    variable Gui_planline "Plan"
+    variable Gui_usedlabel "Used"
+    variable Gui_usedsummary "?"
+    variable Gui_elapsedlabel "Elapsed"
+    variable Gui_elapsedsummary "?"
+
 
     ######################################## 
     # securitykiss specific

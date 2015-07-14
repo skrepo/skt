@@ -548,10 +548,40 @@ proc usage-meter-update {tstamp} {
     set plan [current-plan $tstamp]
     set planname [dict-pop $plan name ?]
     set end [plan-end $plan]
-
-    set planline [_ "Plan {0} valid until {1}" $planname $end]
-    $um.plan configure -text $planline
+    set ::model::Gui_planline [_ "Plan {0} valid until {1}" $planname $end]
+    set period [dict-pop $plan period day]
+    if {$period eq "month"} {
+        set ::model::Gui_usedlabel [_ "This month used"]
+        set ::model::Gui_elapsedlabel [_ "This month elapsed"]
+    } elseif {$period eq "day"} {
+        set ::model::Gui_usedlabel [_ "This day used"]
+        set ::model::Gui_elapsedlabel [_ "This day elapsed"]
+    } else {
+        set ::model::Gui_usedlabel [_ "Used"]
+        set ::model::Gui_elapsedlabel [_ "Elapsed"]
+    }
 }
+
+
+# convert big number to the suffixed (K/M/G/T) representation 
+# with one decimal point accuracy (max 3 significant digits plus dot)
+proc mega-format {n} {
+    if {$n > 99900000000} {
+        set divisor 1000000000000.0
+        set suffix T
+    } elseif {$n > 99900000} {
+        set divisor 1000000000.0
+        set suffix G
+    } elseif {$n > 99900} {
+        set divisor 1000000.0
+        set suffix M
+    } else {
+        set divisor 1000.0
+        set suffix K
+    }
+    return [format %.1f$suffix [expr {$n/$divisor}]]
+}
+
 
 # create usage meter in parent p
 proc frame-usage-meter {p} {
@@ -560,18 +590,20 @@ proc frame-usage-meter {p} {
     set fgused $::model::layout_fgused
     set fgelapsed $::model::layout_fgelapsed
     set um [frame $p.um -background $bg1]
-    ttk::label $um.plan -text "Plan JADEITE valid until 2015 Sep 14" -background $bg1
-    ttk::label $um.usedlabel -text "This month used" -background $bg1
+    ttk::label $um.plan -textvariable ::model::Gui_planline -background $bg1
+    ttk::label $um.usedlabel -textvariable ::model::Gui_usedlabel -background $bg1
     frame $um.usedbar -background $bg3 -width 300 -height 8
     frame $um.usedbar.fill -background $fgused -width 120 -height 8
     place $um.usedbar.fill -x 0 -y 0
     grid columnconfigure $um.usedbar 0 -weight 1
-    ttk::label $um.usedsummary -text "12.4 GB / 50 GB" -background $bg1
-    ttk::label $um.elapsedlabel -text "This month elapsed" -background $bg1
+    #ttk::label $um.usedsummary -text "12.4 GB / 50 GB" -background $bg1
+    ttk::label $um.usedsummary -textvariable ::model::Gui_usedsummary -background $bg1
+    ttk::label $um.elapsedlabel -textvariable ::model::Gui_elapsedlabel -background $bg1
     frame $um.elapsedbar -background $bg3 -width 300 -height 8
     frame $um.elapsedbar.fill -background $fgelapsed -width 180 -height 8
     place $um.elapsedbar.fill -x 0 -y 0
-    ttk::label $um.elapsedsummary -text "3 days 14 hours / 31 days" -background $bg1
+    #ttk::label $um.elapsedsummary -text "3 days 14 hours / 31 days" -background $bg1
+    ttk::label $um.elapsedsummary -textvariable ::model::Gui_elapsedsummary -background $bg1
     grid $um.plan -column 0 -row 0 -columnspan 3 -padx 5 -pady 5 -sticky w
     grid $um.usedlabel $p.um.usedbar $p.um.usedsummary -row 1 -padx 5 -pady 5 -sticky w
     grid $um.elapsedlabel $p.um.elapsedbar $p.um.elapsedsummary -row 2 -padx 5 -pady 5 -sticky w
