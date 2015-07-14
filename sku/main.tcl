@@ -307,6 +307,8 @@ proc main-gui {} {
     grid columnconfigure . .c -weight 1
     grid rowconfigure . .c -weight 1
 
+    frame-toolbar .c
+
     tabset-providers
 
     frame-ipinfo .c
@@ -618,14 +620,15 @@ proc usage-meter-update {tstamp} {
     set plan_start [plan-start $plan]
     set plan_end [plan-end $plan]
     set until [format-date $plan_end]
-    set ::model::Gui_planline [_ "Plan {0} valid until {1}" $planname $until]
     set period [dict-pop $plan period day]
     if {$period eq "month"} {
         set ::model::Gui_usedlabel [_ "This month used"]
         set ::model::Gui_elapsedlabel [_ "This month elapsed"]
+        set ::model::Gui_planline [_ "Plan {0} valid until {1}" $planname $until]
     } elseif {$period eq "day"} {
         set ::model::Gui_usedlabel [_ "This day used"]
         set ::model::Gui_elapsedlabel [_ "This day elapsed"]
+        set ::model::Gui_planline [_ "Plan {0}" $planname]
     } else {
         usage-meter-update-blank
         return
@@ -777,6 +780,23 @@ proc frame-usage-meter {p} {
 }
 
 
+proc frame-toolbar {p} {
+    set tb [frame $p.tb -borderwidth 0 -relief raised]
+    #ttk::button $tb.feedback
+    #img place feedback16  $tb.feedback 
+    #grid $tb.feedback -column 0 -row 0 -sticky w
+    label $tb.appealimg
+    img place bang16 $tb.appealimg
+    label $tb.appeal -text "Help improve this program. Provide your feedback. We listen." -padx 5
+    button $tb.options -relief flat
+    img place options24  $tb.options
+    grid $tb.appealimg -column 0 -row 0 -sticky w
+    grid $tb.appeal -column 1 -row 0 -sticky w
+    grid $tb.options -column 2 -row 0 -sticky e
+    grid $tb -padx 10 -sticky news
+    grid columnconfigure $tb $tb.options -weight 1
+    return $tb
+}
 
 
 
@@ -830,7 +850,7 @@ proc tabset-providers {} {
         set tabname [dict get $::model::Providers $pname tabname]
         $nb add $tab -text $tabname
     }
-    grid $nb -sticky news -padx 10 -pady 10
+    grid $nb -sticky news -padx 10 -pady 10 
     return $nb
 }
 
