@@ -491,6 +491,7 @@ proc get-welcome {cn} {
             # save entire welcome message
             dict set ::model::Providers securitykiss welcome $welcome
             model now [dict-pop $welcome now 0]
+            # TODO not really for currently selected provider
             model slist [current-provider] [current-slist [model now]]
             set ::model::Gui_externalip [dict-pop $welcome ip ???]
             usage-meter-update
@@ -760,7 +761,7 @@ proc frame-usage-meter {p} {
     set fgelapsed $::model::layout_fgelapsed
     set um [frame $p.um -background $bg1]
     ttk::label $um.plan -textvariable ::model::Gui_planline -background $bg1
-    ttk::label $um.usedlabel -textvariable ::model::Gui_usedlabel -background $bg1
+    ttk::label $um.usedlabel -textvariable ::model::Gui_usedlabel -background $bg1 -width 15
     set barw $::model::layout_barw
     set barh $::model::layout_barh
     frame $um.usedbar -background $bg3 -width $barw -height $barh
@@ -768,13 +769,13 @@ proc frame-usage-meter {p} {
     place $um.usedbar.fill -x 0 -y 0
     grid columnconfigure $um.usedbar 0 -weight 1
     #ttk::label $um.usedsummary -text "12.4 GB / 50 GB" -background $bg1
-    ttk::label $um.usedsummary -textvariable ::model::Gui_usedsummary -background $bg1
-    ttk::label $um.elapsedlabel -textvariable ::model::Gui_elapsedlabel -background $bg1
+    ttk::label $um.usedsummary -textvariable ::model::Gui_usedsummary -background $bg1 -width 15
+    ttk::label $um.elapsedlabel -textvariable ::model::Gui_elapsedlabel -background $bg1 -width 15
     frame $um.elapsedbar -background $bg3 -width $barw -height $barh
     frame $um.elapsedbar.fill -background $fgelapsed -width 0 -height $barh
     place $um.elapsedbar.fill -x 0 -y 0
     #ttk::label $um.elapsedsummary -text "3 days 14 hours / 31 days" -background $bg1
-    ttk::label $um.elapsedsummary -textvariable ::model::Gui_elapsedsummary -background $bg1
+    ttk::label $um.elapsedsummary -textvariable ::model::Gui_elapsedsummary -background $bg1 -width 15
     grid $um.plan -column 0 -row 0 -columnspan 3 -padx 5 -pady 5 -sticky w
     grid $um.usedlabel $p.um.usedbar $p.um.usedsummary -row 1 -padx 5 -pady 5 -sticky w
     grid $um.elapsedlabel $p.um.elapsedbar $p.um.elapsedsummary -row 2 -padx 5 -pady 5 -sticky w
@@ -856,6 +857,7 @@ proc tabset-providers {} {
     set parent .c
     set nb [ttk::notebook $parent.nb]
     ttk::notebook::enableTraversal $nb
+    bind $nb <<NotebookTabChanged>> {usage-meter-update [model now]}
     foreach pname $::model::provider_list {
         set tab [frame-provider $nb $pname]
         set tabname [dict get $::model::Providers $pname tabname]
