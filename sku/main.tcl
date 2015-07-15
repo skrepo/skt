@@ -654,9 +654,9 @@ proc usage-meter-update {tstamp} {
     set ::model::Gui_usedsummary "[format-mega $used] / [format-mega $limit 1]"
     set period_start [period-start $plan $tstamp]
     set period_end [period-end $plan $tstamp]
-    puts stderr "plan_start: [clock format $plan_start]"
-    puts stderr "period_start: [clock format $period_start]"
-    puts stderr "period_end: [clock format $period_end]"
+    #puts stderr "plan_start: [clock format $plan_start]"
+    #puts stderr "period_start: [clock format $period_start]"
+    #puts stderr "period_end: [clock format $period_end]"
     set period_elapsed [period-elapsed $plan $tstamp]
     set period_length [period-length $plan $tstamp]
     if {$period_elapsed <= 0} {
@@ -842,14 +842,26 @@ proc frame-status {p} {
 
 proc frame-buttons {p} {
     set bs [frame $p.bs]
-    ttk::button $bs.connect -text [_ "Connect"] -command ClickConnect ;# _2eaf8d491417924c
-    ttk::button $bs.disconnect -text [_ "Disconnect"] -command ClickDisconnect ;# _87fff3af45753920
-    ttk::button $bs.slist -text [_ "Servers"] -command ServerListClicked ;# _bf9c42ec59d68714
-    grid $bs.connect $bs.disconnect $bs.slist -padx 10
+    button $bs.connect -font [dynafont -size 12] -compound left -image [img load connect24] -text [_ "Connect"] -command ClickConnect ;# _2eaf8d491417924c
+    button $bs.disconnect -font [dynafont -size 12] -compound left -image [img load disconnect24] -text [_ "Disconnect"] -command ClickDisconnect ;# _87fff3af45753920
+    button $bs.slist -font [dynafont -size 12] -compound left -image [img load servers24] -text [_ "Servers"] -command ServerListClicked ;# _bf9c42ec59d68714
+    grid $bs.connect -row 0 -column 0 -padx 10 -sticky w
+    grid $bs.disconnect -row 0 -column 1 -padx 10 -sticky w
+    grid $bs.slist -row 0 -column 2 -padx 10 -sticky e
     grid columnconfigure $bs $bs.slist -weight 1
     grid $bs -sticky news
     focus $bs.slist
     return $bs
+}
+
+proc dynafont {args} {
+    memoize
+    set name font[join $args]
+    if {$name ni [font names]} {
+        font create $name {*}[font actual TkDefaultFont]
+        font configure $name {*}$args
+    }
+    return $name
 }
 
 
@@ -1124,13 +1136,13 @@ proc get-next-vigo {vigo_lastok attempt} {
 
 
 proc plan-monitor {} {
-    puts stderr "########################1"
-    puts stderr [dict-pretty [dict-pop $::model::Providers [current-provider] welcome {}]]
-    puts stderr "########################2"
+    #puts stderr "########################1"
+    #puts stderr [dict-pretty [dict-pop $::model::Providers [current-provider] welcome {}]]
+    #puts stderr "########################2"
     set now [model now]
-    puts stderr "current-plan: [current-plan $now]"
+    #puts stderr "current-plan: [current-plan $now]"
     set slist [current-slist $now]
-    puts stderr "current-slist: $slist"
+    #puts stderr "current-slist: $slist"
     model slist [current-provider] $slist
     usage-meter-update $now
     after 5000 plan-monitor
