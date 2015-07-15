@@ -492,6 +492,7 @@ proc get-welcome {cn} {
             dict set ::model::Providers securitykiss welcome $welcome
             model now [dict-pop $welcome now 0]
             model slist [current-provider] [current-slist [model now]]
+            set ::model::Gui_externalip [dict-pop $welcome ip ???]
             usage-meter-update
         }
         <- $cherr {
@@ -561,11 +562,11 @@ proc conn-status-reported {stat} {
 
 proc conn-status-display {} {
     set status $::model::Connstatus
-    #TODO prepare unknown.png
     img place status/$status .c.stat.imagestatus
 
     set ip [dict-pop $::model::Current_sitem ip {}]
     set city [dict-pop $::model::Current_sitem city {}]
+    set ccode [dict-pop $::model::Current_sitem ccode EMPTY]
     set flag EMPTY
 
     switch $status {
@@ -579,12 +580,14 @@ proc conn-status-display {} {
         }
         connecting {
             lassign {disabled disabled normal} state1 state2 state3
-            set msg [_ "Connecting to {0} {1}" $city $ip] ;# _a9e00a1f366a7a19
+            set msg [_ "Connecting to {0}, {1}" $city $ccode] ;# _a9e00a1f366a7a19
         }
         connected {
             lassign {disabled disabled normal} state1 state2 state3
-            set msg [_ "Connected to {0} {1}" $city $ip] ;# _540ebc2e02c2c88e
-            set flag [dict-pop $::model::Current_sitem ccode EMPTY]
+            set msg [_ "Connected to {0}, {1}" $city $ccode] ;# _540ebc2e02c2c88e
+            # TODO make it more robust - for now we assume external ip after get connected. Check externally.
+            set ::model::Gui_externalip $ip
+            set flag $ccode
         }
     }
     
@@ -809,10 +812,13 @@ proc frame-toolbar {p} {
 proc frame-ipinfo {p} {
     set bg2 $::model::layout_bg2
     set inf [frame $p.inf -background $bg2]
-    ttk::label $inf.externalip -text "External IP: 123.123.123.123" -background $bg2
-    ttk::label $inf.geocheck -text "Geo check" -background $bg2
-    grid $inf.externalip -column 0 -row 2 -padx 10 -pady 5 -sticky w
-    grid $inf.geocheck -column 1 -row 2 -padx 10 -pady 5 -sticky w
+    ttk::label $inf.externaliplabel -text [_ "External IP:"] -background $bg2
+    ttk::label $inf.externalip -textvariable ::model::Gui_externalip -background $bg2
+    #hyperlink $inf.geocheck -text "Geo" -background $bg2 -command [list launchBrowser "https://securitykiss.com/locate/"]
+    hyperlink $inf.geocheck -image [img load external16] -background $bg2 -command [list launchBrowser "https://securitykiss.com/locate/"]
+    grid $inf.externaliplabel -column 0 -row 2 -padx 10 -pady 5 -sticky w
+    grid $inf.externalip -column 1 -row 2 -padx 0 -pady 5 -sticky w
+    grid $inf.geocheck -column 2 -row 2 -padx 0 -pady 5 -sticky w
     grid $inf -padx 10 -sticky news
     return $inf
 }

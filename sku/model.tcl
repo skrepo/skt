@@ -97,6 +97,7 @@ namespace eval ::model {
     variable Gui_usedsummary "?"
     variable Gui_elapsedlabel "Elapsed"
     variable Gui_elapsedsummary "?"
+    variable Gui_externalip "?"
 
 
     ######################################## 

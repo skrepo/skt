@@ -78,7 +78,7 @@ proc main-exit {} {
 
 
 proc SkdReportState {} {
-    SkdWrite stat [model model2dict]
+    catch {SkdWrite stat [model model2dict]}
 } 
 
 proc CyclicSkdReportState {} {

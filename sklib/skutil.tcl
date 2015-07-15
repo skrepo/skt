@@ -622,7 +622,8 @@ proc launchBrowser {url} {
         }
         exec {*}$command $url &
     } on error {e1 e2} {
-        log ERROR: could not launchBrowser: $command $url
+        log $e1 $e2
+        log ERROR: could not launchBrowser: $url
     }
 }
 
