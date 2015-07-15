@@ -584,3 +584,45 @@ proc string-insert {s pos insertion} {
     append insertion [string index $s $pos]
     string replace $s $pos $pos $insertion
 }
+
+
+proc hyperlink {name args} {
+    if { "UnderlineFont" ni [ font names ] } {
+        font create UnderlineFont {*}[ font actual TkDefaultFont ]
+        font configure UnderlineFont -underline true
+    }
+    if { [ dict exists $args -command ] } {
+        set command [ dict get $args -command ]
+        dict unset args -command
+    }
+    # note - this forcibly overrides foreground and font options
+    label $name {*}$args -foreground blue -cursor hand1
+    bind $name <Enter> {%W configure -font UnderlineFont}
+    bind $name <Leave> {%W configure -font TkDefaultFont}
+    if { [ info exists command ] } {
+        bind $name <Button-1> $command
+    }
+    return $name
+}
+
+
+proc launchBrowser {url} {
+    try {
+        if {$::tcl_platform(platform) eq "windows"} {
+            set command [list {*}[auto_execok start] {}]
+            # Windows shell would start a new command after &, so shell escape it with ^
+            set url [string map {& ^&} $url]
+        } elseif {$::tcl_platform(os) eq "Darwin"} {
+            # It *is* generally a mistake to use $tcl_platform(os) to select functionality,
+            # particularly in comparison to $tcl_platform(platform).  For now, let's just
+            # regard it as a stylistic variation subject to debate.
+            set command [list open]
+        } else {
+            set command [list xdg-open]
+        }
+        exec {*}$command $url &
+    } on error {e1 e2} {
+        log ERROR: could not launchBrowser: $command $url
+    }
+}
+

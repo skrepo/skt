@@ -787,13 +787,18 @@ proc frame-toolbar {p} {
     #grid $tb.feedback -column 0 -row 0 -sticky w
     label $tb.appealimg
     img place bang16 $tb.appealimg
-    label $tb.appeal -text "Help improve this program. Provide your feedback. We listen." -padx 5
+    label $tb.appeal1 -text "Help improve this program. Provide your"
+    hyperlink $tb.appeal2 -command [list launchBrowser "https://securitykiss.com/locate/"] -text "feedback."
+    label $tb.appeal3 -text "We listen."
+
     button $tb.options -relief flat
     img place options24  $tb.options
     grid $tb.appealimg -column 0 -row 0 -sticky w
-    grid $tb.appeal -column 1 -row 0 -sticky w
-    grid $tb.options -column 2 -row 0 -sticky e
-    grid $tb -padx 10 -sticky news
+    grid $tb.appeal1 -column 1 -row 0 -sticky w
+    grid $tb.appeal2 -column 2 -row 0 -sticky w
+    grid $tb.appeal3 -column 3 -row 0 -sticky w
+    grid $tb.options -column 4 -row 0 -sticky e
+    grid $tb -padx 5 -sticky news
     grid columnconfigure $tb $tb.options -weight 1
     return $tb
 }
