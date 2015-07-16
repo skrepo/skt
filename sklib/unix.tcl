@@ -2,9 +2,18 @@ package provide unix 0.0.0
 package require Tclx
 
 namespace eval ::unix {
-    namespace export relinquish-root is-x-running
+    namespace export *
     namespace ensemble create
 }
+
+
+# Note: 
+# Does the superuser account always have uid/gid 0/0 on Linux?
+# Yes. There's code in the kernel which explicitly checks for uid 0 when needing to check for the root user, which means that root always has at least uid 0.
+
+# Is the name of the user account with uid 0 always root?
+# No. root is just a name, listed in /etc/passwd or some other authentication store. You could just as well call the account admin, and the OS itself won't care, but some applications might not quite like it because they expect there to exist a privileged account named root. Calling the uid 0 account on a *nix root is a very strongly held convention, but it isn't required by the system.
+
 
 
 # Best effort drop superuser rights
@@ -13,10 +22,12 @@ namespace eval ::unix {
 # Do nothing if root from the ground up, return "root" then
 # Also do nothing if currently non-root
 proc ::unix::relinquish-root {} {
+    # First check the current privileges (has-root as opposed to is-root)
     # id command from Tclx package
-    if {[id user] ne "root"} {
+    if {![::unix::has-root]} {
         return [id user]
     }
+    # Next, if currently root, check how the user logged in (from logname or sudo variables)
     # When running starpack in background (with &) logname may error with "logname: no login name"
     if {[catch {exec logname} user]} {
         # Fall back to checking SUDO_USER
@@ -26,6 +37,7 @@ proc ::unix::relinquish-root {} {
             set user root
         }
     }
+    # user not only has root now but also logged as a root (is-root as opposed to has-root) so we can't relinquish root
     if {$user eq "root"} {
         return root
     }
@@ -35,6 +47,14 @@ proc ::unix::relinquish-root {} {
     id user $user
     return $user
 }
+
+
+# Check if current user has root privileges
+proc ::unix::has-root {} {
+    # check uid instead of [id user] ne "root" 
+    return [expr {[id userid] == 0}]
+}
+
 
 
 # Check if X11 server is running

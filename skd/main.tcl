@@ -36,7 +36,6 @@ interp bgerror "" background-error
 
 
 #TODO
-# run as daemon with sudo, do initial check to report missing privileges early
 # document API for SKU: config, start, stop
 # config API - how to pass config with cert files? SKU to provide absolute paths, and split single ovpn file to config and certs/keys if necessary
 # periodic health check
@@ -49,6 +48,10 @@ interp bgerror "" background-error
  
  
 proc main {} {
+    if {![unix has-root]} {
+        puts stderr "You need to be root. Try again with sudo."
+        exit 0
+    }
     log Starting SKD server
     # intercept termination signals
     signal trap {SIGTERM SIGINT SIGQUIT} main-exit

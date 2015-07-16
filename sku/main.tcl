@@ -93,7 +93,7 @@ proc redirect-stdout {} {
 # Parse command line options and launch proper task
 # It may set global variables
 proc main {} {
-    set user [unix relinquish-root]
+    unix relinquish-root
     redirect-stdout
 
     # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one
