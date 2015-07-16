@@ -73,6 +73,12 @@ proc create-pidfile {path} {
             # Some heuristics to give meaningful error message
             set pid [string trim [slurp $path]]
             if {$pid ne ""} {
+                puts stderr "pid=$pid, thispid=[pid]"
+                if {$pid == [pid]} {
+                    # restarting with the same pid - upgrade/execl scenario - do nothing and return success
+                    log "Pidfile is matching current process. Restart/upgrade detected. Pidfile not created this time."
+                    return ""
+                }   
                 set process [ofpid $pid]
                 if {$process eq ""} {
                     log "No process for PID $pid so the creator probably abruptly ended. Proceeding to create-pidfile."
@@ -88,7 +94,7 @@ proc create-pidfile {path} {
                 }
             } else {
                 log "$path exists but is empty. Previous program run did not close correctly. Proceeding to create-pidfile."
-                    catch {exec pkill [file tail $path]}
+                catch {exec pkill [file tail $path]}
                 #proceed to create pid file
             }
         } else {
@@ -629,3 +635,12 @@ proc launchBrowser {url} {
     }
 }
 
+# Convert version string like "11.22.0333.4" to large integer for further comparison
+# Empty string parses to 0 without error
+proc int-ver {v} {
+    set result ""
+    foreach i {0 1 2 3} {
+        append result [format "%04s" [lindex [split $v .] $i]]
+    }
+    return [string trimleft $result 0]
+}

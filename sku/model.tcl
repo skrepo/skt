@@ -41,6 +41,8 @@ namespace eval ::model {
     # Time offset relative to the "now" received in welcome message
     variable now_offset 0
 
+    variable sku_last_upgraded 0
+
     # OpenVPN connection status 
     # Although the source of truth for connstatus is SKD stat reports
     # we keep local copy to know when to update display

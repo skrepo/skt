@@ -486,30 +486,35 @@ proc plan-comparator {tstamp a b} {
 # }
 # activePlans {{name JADEITE period month limit 50000000000 start 1431090862 used 12345678901 nop 3} {name GREEN period day limit 300000000 start 1431040000 used 15000000 nop 99999}}
 proc get-welcome {cn} {
-    channel {chout cherr} 1
-    vigo-curl $chout $cherr /welcome?cn=$cn
-    select {
-        <- $chout {
-            set data [<- $chout]
-            log Welcome message received:\n$data
-            puts stderr "welcome: $data"
-            set welcome [json::json2dict $data]
-            # save entire welcome message
-            dict set ::model::Providers securitykiss welcome $welcome
-            model now [dict-pop $welcome now 0]
-            # TODO not really for currently selected provider
-            model slist [current-provider] [current-slist [model now]]
-            set ::model::Gui_externalip [dict-pop $welcome ip ???]
-            usage-meter-update
+    try {
+        channel {chout cherr} 1
+        vigo-curl $chout $cherr /welcome?cn=$cn
+        select {
+            <- $chout {
+                set data [<- $chout]
+                log Welcome message received:\n$data
+                puts stderr "welcome: $data"
+                set welcome [json::json2dict $data]
+                # save entire welcome message
+                dict set ::model::Providers securitykiss welcome $welcome
+                model now [dict-pop $welcome now 0]
+                # TODO not really for currently selected provider
+                model slist [current-provider] [current-slist [model now]]
+                set ::model::Gui_externalip [dict-pop $welcome ip ???]
+                usage-meter-update [model now]
+                #upgrade
+            }
+            <- $cherr {
+                set err [<- $cherr]
+                tk_messageBox -message "Could not receive Welcome message" -type ok
+                log get-welcome failed with error: $err
+            }
         }
-        <- $cherr {
-            set err [<- $cherr]
-            tk_messageBox -message "Could not receive Welcome message" -type ok
-            log get-welcome failed with error: $err
-        }
+        $chout close
+        $cherr close
+    } on error {e1 e2} {
+        log $e1 $e2
     }
-    $chout close
-    $cherr close
 }
 
 
@@ -620,75 +625,78 @@ proc usage-meter-update-blank {} {
 
 
 proc usage-meter-update {tstamp} {
-    set um .c.nb.[current-provider].um
-    set plan [current-plan $tstamp]
-    if {$plan eq ""} {
-        usage-meter-update-blank
-        return
-    }
-    set planname [dict-pop $plan name ?]
-    set plan_start [plan-start $plan]
-    set plan_end [plan-end $plan]
-    set until [format-date $plan_end]
-    set period [dict-pop $plan period day]
-    if {$period eq "month"} {
-        set ::model::Gui_usedlabel [_ "This month used"]
-        set ::model::Gui_elapsedlabel [_ "This month elapsed"]
-        set ::model::Gui_planline [_ "Plan {0} valid until {1}" $planname $until]
-    } elseif {$period eq "day"} {
-        set ::model::Gui_usedlabel [_ "This day used"]
-        set ::model::Gui_elapsedlabel [_ "This day elapsed"]
-        set ::model::Gui_planline [_ "Plan {0}" $planname]
-    } else {
-        usage-meter-update-blank
-        return
-    }
+    try {
+        set um .c.nb.[current-provider].um
+        set plan [current-plan $tstamp]
+        if {$plan eq ""} {
+            usage-meter-update-blank
+            return
+        }
+        set planname [dict-pop $plan name ?]
+        set plan_start [plan-start $plan]
+        set plan_end [plan-end $plan]
+        set until [format-date $plan_end]
+        set period [dict-pop $plan period day]
+        if {$period eq "month"} {
+            set ::model::Gui_usedlabel [_ "This month used"]
+            set ::model::Gui_elapsedlabel [_ "This month elapsed"]
+            set ::model::Gui_planline [_ "Plan {0} valid until {1}" $planname $until]
+        } elseif {$period eq "day"} {
+            set ::model::Gui_usedlabel [_ "This day used"]
+            set ::model::Gui_elapsedlabel [_ "This day elapsed"]
+            set ::model::Gui_planline [_ "Plan {0}" $planname]
+        } else {
+            usage-meter-update-blank
+            return
+        }
+        
+        set used [dict-pop $plan used 0]
+        set limit [dict-pop $plan limit 0]
+        if {$limit <= 0} {
+            usage-meter-update-blank
+            return
+        }
+        if {$used > $limit} {
+            set used $limit
+        }
+        if {$used < 0} {
+            usage-meter-update-blank
+            return
+        }
+        set ::model::Gui_usedsummary "[format-mega $used] / [format-mega $limit 1]"
+        set period_start [period-start $plan $tstamp]
+        set period_end [period-end $plan $tstamp]
+        #puts stderr "plan_start: [clock format $plan_start]"
+        #puts stderr "period_start: [clock format $period_start]"
+        #puts stderr "period_end: [clock format $period_end]"
+        set period_elapsed [period-elapsed $plan $tstamp]
+        set period_length [period-length $plan $tstamp]
+        if {$period_elapsed <= 0} {
+            usage-meter-update-blank
+            return
+        }
+        if {$period_length <= 0} {
+            usage-meter-update-blank
+            return
+        }
+        if {$period_elapsed > $period_length} {
+            set period_elapsed $period_length
+        }
+        set ::model::Gui_elapsedsummary "[format-interval $period_elapsed] / [format-interval $period_length 1]"
     
-    set used [dict-pop $plan used 0]
-    set limit [dict-pop $plan limit 0]
-    if {$limit <= 0} {
-        usage-meter-update-blank
-        return
+        ##################################
+        # update bars
+    
+        set barw $::model::layout_barw
+        set wu [expr {$barw * $used / $limit}]
+        if {$wu < 0} {
+        }
+        $um.usedbar.fill configure -width $wu
+        set we [expr {$barw * $period_elapsed / $period_length}]
+        $um.elapsedbar.fill configure -width $we
+    } on error {e1 e2} {
+        log $e1 $e2
     }
-    if {$used > $limit} {
-        set used $limit
-    }
-    if {$used < 0} {
-        usage-meter-update-blank
-        return
-    }
-    set ::model::Gui_usedsummary "[format-mega $used] / [format-mega $limit 1]"
-    set period_start [period-start $plan $tstamp]
-    set period_end [period-end $plan $tstamp]
-    #puts stderr "plan_start: [clock format $plan_start]"
-    #puts stderr "period_start: [clock format $period_start]"
-    #puts stderr "period_end: [clock format $period_end]"
-    set period_elapsed [period-elapsed $plan $tstamp]
-    set period_length [period-length $plan $tstamp]
-    if {$period_elapsed <= 0} {
-        usage-meter-update-blank
-        return
-    }
-    if {$period_length <= 0} {
-        usage-meter-update-blank
-        return
-    }
-    if {$period_elapsed > $period_length} {
-        set period_elapsed $period_length
-    }
-    set ::model::Gui_elapsedsummary "[format-interval $period_elapsed] / [format-interval $period_length 1]"
-
-    ##################################
-    # update bars
-
-    set barw $::model::layout_barw
-    set wu [expr {$barw * $used / $limit}]
-    if {$wu < 0} {
-    }
-    $um.usedbar.fill configure -width $wu
-    set we [expr {$barw * $period_elapsed / $period_length}]
-    $um.elapsedbar.fill configure -width $we
-
 }
 
 
@@ -1191,7 +1199,6 @@ proc skd-close {} {
 }
 
 
-#TODO detect disconnecting from SKD - sock monitoring?
 proc skd-read {} {
     set sock $::model::Skd_sock
     if {[gets $sock line] < 0} {
@@ -1206,6 +1213,17 @@ proc skd-read {} {
             switch -regexp -matchvar details [lindex $tokens 1] {
                 {^Config loaded} {
                     skd-write start
+                }
+                {^version (\S+) (.*)$} {
+                    set version [lindex $details 1]
+                    puts stderr "VERSION: $version"
+                    puts stderr "BUILD VERSION: [build-version]"
+                    if {$version > [build-version] && [model now] > $::model::sku_last_upgraded + 86400} {
+                        set ::model::sku_last_upgraded [model now]
+                        model save
+                        # upgrade sku
+                        execl /usr/local/bin/sku.bin
+                    }
                 }
             }
         }
@@ -1283,9 +1301,19 @@ proc build-date {} {
 }
 
 
-# SKD only to verify signature and run executable
-# the rest in SKU
+# SKD only to verify signature and replace binaries and restart itself
+# SKU prepares upgrade dir, initializes upgrade and restarts itself
 proc upgrade {} {
+    # prepare dir with skd and sku.bin
+    set dir /tmp/sktupgrade
+    puts stderr "PREPARE UPGRADE $dir"
+    file mkdir $dir
+    file copy -force /home/sk/seckiss/skt/build/skd/linux-x86_64/skd.bin $dir/skd
+    file copy -force /home/sk/seckiss/skt/build/sku/linux-x86_64/sku.bin $dir
+    skd-write "upgrade $dir"
+    puts stderr "UPGRADING from $dir"
+
+
     # check latest version and checksum
     # compare to current version
     # check if downloaded

@@ -88,6 +88,9 @@ proc main-exit {} {
     exit 0
 }
 
+proc SkdReportVersion {} {
+    catch {SkdWrite ctrl "version [build-version] [build-date]"}
+}
 
 proc SkdReportState {} {
     catch {SkdWrite stat [model model2dict]}
@@ -110,6 +113,7 @@ proc SkdNewConnection {sock peerhost peerport} {
     set ::model::skd_sock $sock
     fconfigure $sock -blocking 0 -buffering line
     fileevent $sock readable SkdRead
+    SkdReportVersion
     SkdReportState
 }
 
@@ -452,6 +456,8 @@ proc build-date {} {
     memoize
     return [string trim [slurp [file join [file dir [info script]] builddate.txt]]]
 }
+
+
 
 #>>ovpn: Wed Apr 08 09:26:43 2015 TAP-WIN32 device [Local Area Connection 2] opened: \\.\Global\{BDCE36A3-CE0B-4370-900A-03F12CDD67C5}.tap
 #>>ovpn: Wed Apr 08 09:26:43 2015 TAP-Windows Driver Version 9.8
