@@ -48,26 +48,35 @@ interp bgerror "" background-error
  
  
 proc main {} {
-    if {![unix has-root]} {
-        puts stderr "You need to be root. Try again with sudo."
-        exit 0
-    }
-    log Starting SKD server
-    # intercept termination signals
-    signal trap {SIGTERM SIGINT SIGQUIT} main-exit
-    # ignore disconnecting terminal - it's supposed to be a daemon. This is causing problem - do not enable. Use linux nohup
-    #signal ignore SIGHUP
+    try {
+        if {![unix has-root]} {
+            puts stderr "You need to be root. Try again with sudo."
+            exit 0
+        }
+        log Starting SKD server with PID [pid]
+        log SKD build version: [build-version]
+        log SKD build date: [build-date]
+        # intercept termination signals
+        signal trap {SIGTERM SIGINT SIGQUIT} main-exit
+        # ignore disconnecting terminal - it's supposed to be a daemon. This is causing problem - do not enable. Use linux nohup
+        #signal ignore SIGHUP
+        
+        log [create-pidfile "/var/run/skd.pid"]
     
-    create-pidfile /var/run/skd.pid
-
-    #TODO check if openvpn installed, install otherwise, retry if needed
-    #TODO check if X11 running, if so try Tk. If a problem install deps, retry if needed
-    linuxdeps openvpn-install
-    linuxdeps tkdeps-install
-
-    model reset-ovpn-state
-    socket -server SkdNewConnection -myaddr 127.0.0.1 7777
-    CyclicSkdReportState
+        #TODO check if openvpn installed, install otherwise, retry if needed
+        #TODO check if X11 running, if so try Tk. If a problem install deps, retry if needed
+        #TODO make it after a delay to allow previous dpkg terminate
+        #TODO sku must wait and retry 
+        linuxdeps openvpn-install
+        linuxdeps tkdeps-install
+    
+        model reset-ovpn-state
+        socket -server SkdNewConnection -myaddr 127.0.0.1 7777
+        log Listening on 127.0.0.1:7777
+        CyclicSkdReportState
+    } on error {e1 e2} {
+        log ERROR in main: $e1 $e2
+    }
 }
 
 
@@ -231,12 +240,12 @@ proc SkdRead {} {
         }
         {^upgrade (.+)$} {
             log $line
-            set pkg [lindex $tokens 1]
-            if {[upgrade $pkg]} {
-                SkdWrite ctrl "Upgraded $pkg"
-            } else {
-                SkdWrite ctrl "Could not upgrade $pkg"
-            }
+            # $dir should contain skd, sku.bin and their signatures
+            set dir [lindex $tokens 1]
+            # if upgrade is successfull it never returns (execl replace program)
+            set err [upgrade $dir]
+            log Could not upgrade from $dir: $err
+            SkdWrite ctrl "Could not upgrade from $dir: $err"
         }
         default {
             SkdWrite ctrl "Unknown command"
@@ -276,32 +285,56 @@ proc restore-dns {} {
 }
 
 # again reduce SKD functionality to minimum
-# SKD only to verify signature and install package
-# install only deb/rpm - it simplifies packaging (eliminate zipping), signature verification and autorun 
-proc upgrade {filepath} {
-    if {[verify-signature /etc/skd/keys/skt_public.pem $filepath]} {
-        switch -regexp -matchvar tokens $filepath {
-            {.+\.(deb|rpm)$} {
-                set inst [linuxdeps ext2installer [lindex $tokens 1]]
-                if {[catch {exec $inst -i $filepath} out err]} {
-                    log $out
-                    log $err
-                    return 0
-                } else {
-                    log $out
-                    log $filepath installed with $inst
-                    return 1
-                }
-            }
-            default {
-                log Wrong upgrading file $filepath. It should be deb or rpm package
-                return 0
+# SKD only to verify signature and replace skd and sku.bin
+# dir - folder where new skd and sku.bin and signatures are placed
+proc upgrade {dir} {
+    # replace the current program with new version - effectively restart from the new binary, PID is preserved
+    try {
+        # backup id
+        set bid [rand-int 999999999]
+        set skdpath /usr/local/sbin/skd
+        set newskd [file join $dir skd]
+        set bskd /tmp/skd-backup-$bid
+        set skupath /usr/local/bin/sku.bin
+        set newsku [file join $dir sku.bin]
+        set bsku /tmp/sku.bin-backup-$bid
+
+        # TODO check if openvpn running? Try to make skd upgrade independent. After restart it should reconnect to existing openvpn.
+        # TODO check if $newskd and $newsku exist
+        # TODO verify signature - for now skip
+        if {[verify-signature /etc/skd/keys/skt_public.pem $newskd]} {
+        } else {
+            #return [log Upgrade failed because signature verification failed]
+        }
+        # replace skd
+        # raname is necessary to prevent "cannot create regular file ...: Text file busy" error
+        file rename -force $skdpath $bskd
+        file copy -force $newskd $skdpath
+        # replace sku.bin
+        # so sku.bin is deployed here with root rights, but sku must restart itself
+        file rename -force $skupath $bsku
+        file copy -force $newsku $skupath
+
+        # if this does not fail it never returns
+        execl /usr/local/sbin/skd
+    } on error {e1 e2} {
+        # restore SKD and SKU from the backup path
+        catch {
+            if {[file isfile $bskd]} {
+                file delete -force $skdpath
+                file rename -force $bskd $skdpath
             }
         }
-    } else {
-        log Upgrade failed because signature verification failed
-        return 0
+        catch {
+            if {[file isfile $bsku]} {
+                file delete -force $skupath
+                file rename -force $bsku $skupath
+            }
+        }
+        log $e1 $e2
+        return $e1
     }
+    return "upgrade unexpected error"
 }
 
 
@@ -410,6 +443,15 @@ proc OvpnExit {code} {
 }
 
 
+proc build-version {} {
+    memoize
+    return [string trim [slurp [file join [file dir [info script]] buildver.txt]]]
+}
+
+proc build-date {} {
+    memoize
+    return [string trim [slurp [file join [file dir [info script]] builddate.txt]]]
+}
 
 #>>ovpn: Wed Apr 08 09:26:43 2015 TAP-WIN32 device [Local Area Connection 2] opened: \\.\Global\{BDCE36A3-CE0B-4370-900A-03F12CDD67C5}.tap
 #>>ovpn: Wed Apr 08 09:26:43 2015 TAP-Windows Driver Version 9.8
@@ -486,4 +528,3 @@ proc OvpnExit {code} {
 main
 
 vwait forever
-

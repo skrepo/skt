@@ -88,6 +88,9 @@ proc ::linuxdeps::tkdeps-install {} {
                 set deps [dict get $pkgmgr2deps $pkg_mgr]
                 exec {*}$pkgcmd {*}$deps >&@ stdout
             }
+        } else {
+            wm withdraw .
+            destroy .
         }
     }
 }
@@ -95,7 +98,7 @@ proc ::linuxdeps::tkdeps-install {} {
 proc ::linuxdeps::ext2installer {ext} {
     if {$ext eq "deb"} {
         return dpkg
-    } else if {$ext eq "rpm"} {
+    } elseif {$ext eq "rpm"} {
         return rpm
     } else {
         error "Unrecognized extension in ext2installer: $ext"

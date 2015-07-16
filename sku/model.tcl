@@ -223,8 +223,8 @@ proc ::model::load {} {
         main-exit
     }
 
-    puts stderr "READ CONFIG:"
-    ::model::print
+    #puts stderr "READ CONFIG:"
+    #::model::print
     #puts stderr "[inicfg dict-pretty $::Config]"
 }
 

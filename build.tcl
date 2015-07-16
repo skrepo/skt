@@ -54,10 +54,15 @@ proc build-skd {os arch} {
     # use the sku version as skd version
     spit skd/buildver.txt [slurp sku/buildver.txt]
     build $os $arch skd base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
-    ex sudo service skd stop
+    #ex sudo service skd stop
+
+    # this is necessary to prevent "cp: cannot create regular file ‘/usr/local/sbin/skd’: Text file busy"
+    # do the same when auto-upgrading inside SKD
+    ex sudo mv /usr/local/sbin/skd /usr/local/sbin/skd-prev
     ex sudo cp build/skd/linux-x86_64/skd.bin /usr/local/sbin/skd
+
     ex sudo cp skd/exclude/etc/init.d/skd /etc/init.d/skd
-    ex sudo service skd restart
+    #ex sudo service skd restart
 }
 
 proc build-deb-rpm {arch_exact} {
@@ -119,6 +124,7 @@ prepare-lib sklib 0.0.0
 
 build-sku linux x86_64
 build-skd linux x86_64
+#build-deb-rpm x86_64
 
 
 #build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 sklib-0.0.0 Tclx-8.4}

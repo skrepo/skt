@@ -201,6 +201,7 @@ proc ::ovconf::parse {config_file} {
     regsub -all -line {^} $config "--" config
     regsub -all {\n} $config " " config
 
+    # convert relative paths to absolute
     foreach sn $snames {
         ::set sv [::ovconf::get $config $sn]
         if {$sv ne "" && [file pathtype $sv] ne "absolute"} {

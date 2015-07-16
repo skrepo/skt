@@ -1,11 +1,5 @@
 #!/bin/sh
     
-if [ -x /usr/local/bin/sku ]; then
-    # If needed install openvpn and Tk dependencies (X11 related and zlib)
-    # /usr/local/bin/sku --install-deps
-    :
-fi
-
 if [ -x "/etc/init.d/skd" ]; then
     # Some distros like OpenSUSE keep rcN.d dirs within init.d
     if [ -d "/etc/init.d/rc2.d" ]; then

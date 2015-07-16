@@ -24,7 +24,6 @@ package require json
 package require i18n
 package require csp
 namespace import csp::*
-package require Tk 
 package require img
 # skutil must be last required package in order to overwrite the log proc from Tclx
 package require skutil
@@ -153,6 +152,7 @@ proc main {} {
     puts stderr [build-date]
     puts stderr [build-version]
 
+    #TODO log to stderr?
     if {$params(generate-keys)} {
         main-generate-keys
         main-exit
@@ -171,7 +171,7 @@ proc main {} {
     }
 
     #skd-connect 7777
-    model print
+    #model print
     in-ui main
     skd-monitor
     plan-monitor
@@ -219,21 +219,23 @@ proc error-cli {msg} {
 # ruturn 1 on success, 0 otherwise
 # Print to stderr for user-visible messages. Use log for detailed info written to log file
 proc main-generate-keys {} {
-    log Generating RSA keys
+    puts stderr [log Generating RSA keys]
     set privkey [file join $::model::KEYSDIR client.key]
     if {[file exists $privkey]} {
-        log RSA key $privkey already exists
+        puts stderr [log RSA key $privkey already exists]
     } else {
         if {![generate-rsa $privkey]} {
+            puts stderr [log Could not generate RSA keys]
             return 0
         }
     }
     set csr [file join $::model::KEYSDIR client.csr]
     if {[file exists $csr]} {
-        log CSR $csr already exists
+        puts stderr [log CSR $csr already exists]
     } else {
         set cn [generate-cn]
         if {![generate-csr $privkey $csr $cn]} {
+            puts stderr [log Could not generate Certificate Signing Request]
             return 0
         }
     }
@@ -246,22 +248,23 @@ proc main-generate-keys {} {
             log $err
         }
         set vigo [get-next-vigo "" $i]
-        puts -nonewline stderr "Trying vigo $vigo...\t"
+        log Trying vigo $vigo
         #TODO expected-hostname should not be needed - ensure that vigo provides proper certificate with IP common name
         if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err] == 1} {
-            puts stderr FAILED
+            log $vigo FAILED
             log $err
             close $fd
         } else {
-            puts stderr OK
-            puts stderr "Received the signed certificate"
+            log $vigo OK
+            puts stderr [log Received the signed certificate]
             log crtdata: $crtdata
             spit [file join $::model::KEYSDIR client.crt] $crtdata
             close $fd
-            break
+            return 1
         }
     }
-    return 1
+    puts stderr [log Could not receive the signed certificate]
+    return 0
 }
 
 
@@ -292,6 +295,8 @@ proc hsep {parent height} {
 
 proc main-gui {} {
     log Running GUI
+    # TODO sku may be started before all Tk deps are installed, so run in CLI first and check for Tk a few times with delay
+    package require Tk 
     wm title . "SecurityKISS Tunnel"
     wm deiconify .
     wm protocol . WM_DELETE_WINDOW {
@@ -335,7 +340,8 @@ proc main-gui {} {
     grid rowconfigure .c 0 -weight 1
     bind . <Configure> [list MovedResized %W %x %y %w %h]
 
-    set ::conf [::ovconf::parse config.ovpn]
+    # TODO use config.ovpn and other config files from welcome message or by a separate call
+    set ::conf [::ovconf::parse /home/sk/seckiss/skt/config.ovpn]
     go check-for-updates
     go get-welcome $::model::Cn
 
@@ -1007,7 +1013,7 @@ proc ServerListClicked {} {
     if {$modal eq "ok"} {
         model selected-sitem [current-provider] [$wt selection]
     }
-    model print
+    #model print
     destroy $w
 
 }
@@ -1268,12 +1274,12 @@ proc ClickDisconnect {} {
 
 proc build-version {} {
     memoize
-    return [slurp [file join [file dir [info script]] buildver.txt]]
+    return [string trim [slurp [file join [file dir [info script]] buildver.txt]]]
 }
 
 proc build-date {} {
     memoize
-    return [slurp [file join [file dir [info script]] builddate.txt]]
+    return [string trim [slurp [file join [file dir [info script]] builddate.txt]]]
 }
 
 

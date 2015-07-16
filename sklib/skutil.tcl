@@ -71,40 +71,41 @@ proc create-pidfile {path} {
     if {[file exists $path]} {
         if {[file isfile $path]} {
             # Some heuristics to give meaningful error message
-            set pid [slurp $path]
+            set pid [string trim [slurp $path]]
             if {$pid ne ""} {
                 set process [ofpid $pid]
                 if {$process eq ""} {
-                    # proceed
-                    log "No process for PID $pid so the creator probably abruptly ended. Proceed to create-pidfile"
+                    log "No process for PID $pid so the creator probably abruptly ended. Proceeding to create-pidfile."
+                    catch {exec pkill [file tail $path]}
+                    #proceed to create pid file
                 } else {
                     set root [file root [file tail $path]]
                     if {[string match *$root* $process]} {
-                        return "Program is already running with PID $pid"
+                        return "Program is already running with PID $pid. Pidfile not created this time."
                     } else {
-                        return "$path points to existing process $process. Is program already running?"
+                        return "$path points to existing process $process. Is program already running? Pidfile not created this time."
                     }
                 }
             } else {
-                # proceed
-                log "$path exists but is empty. Previous program run did not close correctly. Proceed to create-pidfile"
+                log "$path exists but is empty. Previous program run did not close correctly. Proceeding to create-pidfile."
+                    catch {exec pkill [file tail $path]}
+                #proceed to create pid file
             }
         } else {
-            return "$path exists but is not a file. Please delete it and start again."
+            return "$path exists but is not a file. Please delete it and start again. Pidfile not created this time."
         }
-
     }
     if {[catch {
         mk-head-dir $path
         set fd [open $path w]
-        puts $fd [pid]
+        puts -nonewline $fd [pid]
         close $fd
     } out err]} {
         log $out
         log $err
         return "Could not create $path. Check logs for details."
     }
-    log created pidfile $path
+    log Created pidfile $path
     return ""
 }
 
@@ -118,10 +119,11 @@ proc delete-pidfile {path} {
     }
 }
 
-# log with timestamp to stdout
+# log with timestamp to stdout and return stringified args (for further logging/printing)
 proc log {args} {
     # swallow exception
     catch {puts [join [list [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"] {*}$args]]}
+    return [join $args]
 } 
 
 
