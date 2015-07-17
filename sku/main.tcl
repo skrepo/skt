@@ -577,8 +577,8 @@ proc conn-status-display {} {
     img place status/$status .c.stat.imagestatus
 
     set ip [dict-pop $::model::Current_sitem ip {}]
-    set city [dict-pop $::model::Current_sitem city {}]
-    set ccode [dict-pop $::model::Current_sitem ccode EMPTY]
+    set city [dict-pop $::model::Current_sitem city ?]
+    set ccode [dict-pop $::model::Current_sitem ccode ?]
     set flag EMPTY
 
     switch $status {
@@ -599,7 +599,9 @@ proc conn-status-display {} {
             set msg [_ "Connected to {0}, {1}" $city $ccode] ;# _540ebc2e02c2c88e
             # TODO make it more robust - for now we assume external ip after get connected. Check externally.
             set ::model::Gui_externalip $ip
-            set flag $ccode
+            if {$ccode ni {"" ?}} {
+                set flag $ccode
+            }
         }
     }
     

@@ -13,17 +13,21 @@ namespace eval ::model {
     # OpenVPN config as double-dashed one-line string
     variable ovpn_config ""
 
-    # pid also determines openvpn status: started, stopped
-    # TODO make retrieving OpenVPN pid more robust: ovpn mgmt pid command
-    # > pid
-    # > SUCCESS: pid=3422
-    variable ovpn_pid 0
     # DNS pushed from the server
     variable ovpn_dnsip ""
 
 
     # mgmt port
-    variable mgmt_port 0
+    variable mgmt_port 42385
+
+
+    ##################################
+    # mgmt state command output
+
+    # timestamp of last state command update in milliseconds
+    variable mgmt_state_tstamp 0
+    # management console client socket
+    variable mgmt_sock ""
     # TUN/TAP read bytes
     variable mgmt_vread 0
     # TUN/TAP write bytes
@@ -38,11 +42,28 @@ namespace eval ::model {
     variable mgmt_vip ""
     # real IP
     variable mgmt_rip ""
+
+    ################################
+    # OpenVPN process PID
+    
+    # openvpn process PID as per mgmt console
+    variable mgmt_pid 0
+    # last pid update in milliseconds
+    variable mgmt_pid_tstamp 0
+
+    # openvpn process PID when starting OpenVPN
+    variable start_pid 0
+
+    # final openvpn process PID set by algorithm
+    variable ovpn_pid 0
+
 }
 
 
 proc ::model::reset-ovpn-state {} {
-    set ::model::mgmt_port 0
+    set ::model::mgmt_state_tstamp 0
+    set ::model::mgmt_sock ""
+    set ::model::mgmt_port 42385
     set ::model::mgmt_vread 0
     set ::model::mgmt_vwrite 0
     set ::model::mgmt_rread 0
@@ -50,9 +71,12 @@ proc ::model::reset-ovpn-state {} {
     set ::model::mgmt_connstatus ""
     set ::model::mgmt_vip ""
     set ::model::mgmt_rip ""
-    set ::model::ovpn_pid 0
     set ::model::ovpn_connstatus disconnected
     set ::model::ovpn_dnsip ""
+    set ::model::mgmt_pid 0
+    set ::model::mgmt_pid_tstamp 0
+    set ::model::start_pid 0
+    set ::model::ovpn_pid 0
 }
 
 # Display all model variables to stderr

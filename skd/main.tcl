@@ -61,11 +61,15 @@ proc main {} {
         # ignore disconnecting terminal - it's supposed to be a daemon. This is causing problem - do not enable. Use linux nohup
         #signal ignore SIGHUP
 
+
         # when starting fix resolv.conf if needed
         #TODO restore only if not connected, so mgmt check for ovpn connection status first
+        #TODO call it after delay
         dns-restore
         
         log [create-pidfile "/var/run/skd.pid"]
+
+
     
         #TODO check if openvpn installed, install otherwise, retry if needed
         #TODO check if X11 running, if so try Tk. If a problem install deps, retry if needed
@@ -75,6 +79,8 @@ proc main {} {
         linuxdeps tkdeps-install
     
         model reset-ovpn-state
+        # call after reseting model state
+        MgmtMonitor
         socket -server SkdNewConnection -myaddr 127.0.0.1 7777
         log Listening on 127.0.0.1:7777
         CyclicSkdReportState
@@ -152,7 +158,7 @@ proc adjust-config {conf} {
     if {[lindex $mgmt 0] in {localhost 127.0.0.1} && [lindex $mgmt 1]>0 && [lindex $mgmt 1]<65536} {
         # it's OK
     } else {
-        set conf [::ovconf::set $conf management {127.0.0.1 42385}]
+        set conf [::ovconf::set $conf management [list 127.0.0.1 $::model::mgmt_port]]
     }
     # adjust verbosity
     set conf [::ovconf::set $conf verb 3]
@@ -194,10 +200,9 @@ proc SkdRead {} {
     log SkdRead: $line
     switch -regexp -matchvar tokens $line {
         {^stop$} {
-            set pid $::model::ovpn_pid
-            if {$pid != 0} {
-                if {[catch {exec kill $pid} out err]} {
-                    log "kill $pid failed"
+            if {[ovpn-pid] != 0} {
+                if {[catch {exec kill [ovpn-pid]} out err]} {
+                    log "kill [ovpn-pid] failed"
                     log $out \n $err
                 }
                 OvpnExit 0
@@ -212,9 +217,8 @@ proc SkdRead {} {
                 SkdWrite ctrl "No OpenVPN config loaded"
                 return
             }
-            set pid $::model::ovpn_pid
-            if {$pid != 0} {
-                SkdWrite ctrl "OpenVPN already running with pid $pid"
+            if {[ovpn-pid] != 0} {
+                SkdWrite ctrl "OpenVPN already running with pid [ovpn-pid]"
                 return
             } else {
                 model reset-ovpn-state
@@ -227,9 +231,10 @@ proc SkdRead {} {
                 log "ADJUSTED CONFIG: $config"
                 set ovpncmd "openvpn $config"
                 set chan [cmd invoke $ovpncmd OvpnExit OvpnRead OvpnErrRead]
-                set pid [pid $chan]
-                set ::model::ovpn_pid $pid
-                SkdWrite ctrl "OpenVPN with pid $pid started"
+                set ::model::start_pid [pid $chan]
+                # this call is necessary to update ovpn_pid
+                ovpn-pid
+                SkdWrite ctrl "OpenVPN with pid [ovpn-pid] started"
                 SkdReportState
                 return
             }
@@ -361,8 +366,9 @@ proc OvpnRead {line} {
     set ignoreline 0
     switch -regexp -matchvar tokens $line {
         {MANAGEMENT: TCP Socket listening on \[AF_INET\]127\.0\.0\.1:(\d+)} {
+            # update the mgmt port in case we had to choose another port than default from the model
             set ::model::mgmt_port [lindex $tokens 1]
-            #we should call MgmtStarted here, but it was moved after "TCP connection established" 
+            #we should call MgmtStart here, but it was moved after "TCP connection established" 
             #because connecting to mgmt interface too early caused OpenVPN to hang
         }
         {MANAGEMENT: Client connected from \[AF_INET\]127\.0\.0\.1:\d+} {
@@ -373,7 +379,6 @@ proc OvpnRead {line} {
             # busy mgmt port most likely means that openvpn is already running
             # on rare occasions it may be occupied by other application
             #retry/alter port
-            MgmtCantStart [lindex $tokens 1]
         }
         {Exiting due to fatal error} {
             OvpnExit 1
@@ -391,11 +396,12 @@ proc OvpnRead {line} {
             # this only occurs for TCP tunnels = useless for general use
         }
         {TLS: Initial packet from \[AF_INET\](\d+\.\d+\.\d+\.\d+):(\d+)} {
-            after idle MgmtStarted $::model::mgmt_port
+            #after idle MgmtStarted $::model::mgmt_port
         }
         {TUN/TAP device (tun\d+) opened} {
         }
         {Initialization Sequence Completed} {
+            MgmtStatus
             dns-replace
         }
         {Network is unreachable} {
@@ -451,9 +457,8 @@ proc OvpnErrRead {line} {
 
 # should be idempotent, as may be called many times on openvpn shutdown
 proc OvpnExit {code} {
-    set pid $::model::ovpn_pid
-    if {$pid != 0} {
-        SkdWrite ctrl "OpenVPN with pid $pid stopped"
+    if {[ovpn-pid] != 0} {
+        SkdWrite ctrl "OpenVPN with pid [ovpn-pid] stopped"
     }
     dns-restore
     model reset-ovpn-state
@@ -469,6 +474,17 @@ proc build-date {} {
     memoize
     return [string trim [slurp [file join [file dir [info script]] builddate.txt]]]
 }
+
+proc ovpn-pid {} {
+    # if mgmt_pid up to date
+    if {$::model::mgmt_pid != 0 && [clock milliseconds] - $::model::mgmt_pid_tstamp < 3000} {
+        set ::model::ovpn_pid $::model::mgmt_pid
+    } else {
+        set ::model::ovpn_pid $::model::start_pid
+    }
+    return $::model::ovpn_pid
+}
+
 
 
 # TODO
