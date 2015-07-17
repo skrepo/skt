@@ -122,7 +122,7 @@ prepare-lib sklib 0.0.0
 #package require i18n
 #i18n code2msg ./sku/main.tcl {es pl} ./sku/messages.txt 
 
-#build-sku linux x86_64
+build-sku linux x86_64
 build-skd linux x86_64
 #build-deb-rpm x86_64
 

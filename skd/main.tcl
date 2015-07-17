@@ -60,6 +60,10 @@ proc main {} {
         signal trap {SIGTERM SIGINT SIGQUIT} main-exit
         # ignore disconnecting terminal - it's supposed to be a daemon. This is causing problem - do not enable. Use linux nohup
         #signal ignore SIGHUP
+
+        # when starting fix resolv.conf if needed
+        #TODO restore only if not connected, so mgmt check for ovpn connection status first
+        dns-restore
         
         log [create-pidfile "/var/run/skd.pid"]
     
@@ -258,35 +262,46 @@ proc SkdRead {} {
     }
 }
 
-proc replace-dns {} {
+proc dns-replace {} {
     set dnsip $::model::ovpn_dnsip
     # Do nothing if DNS was not pushed by the server
     if {$dnsip eq ""} {
         return
     }
+    # Do not backup resolv.conf if existing resolv.conf was SKD generated
+    # It prevents overwriting proper backup
+    if {![dns-is-resolv-skd-generated]} {
+        if {[catch {file rename -force /etc/resolv.conf /etc/resolv-skd.conf} out err]} {
+            log $err
+            return
+        }
+    }
+    spit /etc/resolv.conf "$::model::resolv_marker\nnameserver $dnsip"
+}
+
+proc dns-restore {} {
+    if {[dns-is-resolv-skd-generated]} {
+        if {[catch {file copy -force /etc/resolv-skd.conf /etc/resolv.conf} out err]} {
+            # Not really an error, resolv-skd.conf may be non-existing for many reasons
+            log "INFO: /etc/resolv-skd.conf does not exist"
+        }
+    }
+}
+
+proc dns-read-resolv {} {
     # Read existing resolv.conf
     if {[catch {set resolv [slurp /etc/resolv.conf]} out err]} {
         # log and ignore error
         log $err
         set resolv ""
     }
-    # Do not backup resolv.conf if existing resolv.conf was SKD generated
-    # It prevents overwriting proper backup
-    if {![string match "*DO NOT MODIFY - SKD generated*" $resolv]} {
-        if {[catch {file rename -force /etc/resolv.conf /etc/resolv-skd.conf} out err]} {
-            log $err
-            return
-        }
-    }
-    spit /etc/resolv.conf "#DO NOT MODIFY - SKD generated\nnameserver $dnsip"
+    return $resolv
 }
 
-proc restore-dns {} {
-    if {[catch {file copy -force /etc/resolv-skd.conf /etc/resolv.conf} out err]} {
-        # Not really an error, resolv-skd.conf may be non-existing for many reasons
-        log "INFO: /etc/resolv-skd.conf does not exist"
-    }
+proc dns-is-resolv-skd-generated {} {
+    return [string match *$::model::resolv_marker* [dns-read-resolv]]
 }
+
 
 # again reduce SKD functionality to minimum
 # SKD only to verify signature and replace skd and sku.bin
@@ -364,7 +379,6 @@ proc OvpnRead {line} {
             OvpnExit 1
         }
         {MANAGEMENT: Client disconnected} {
-            #OvpnExit 1
             log Management client disconnected
         }
         {MANAGEMENT: CMD 'state'} {
@@ -382,7 +396,7 @@ proc OvpnRead {line} {
         {TUN/TAP device (tun\d+) opened} {
         }
         {Initialization Sequence Completed} {
-            replace-dns
+            dns-replace
         }
         {Network is unreachable} {
         }
@@ -441,8 +455,7 @@ proc OvpnExit {code} {
     if {$pid != 0} {
         SkdWrite ctrl "OpenVPN with pid $pid stopped"
     }
-    #TODO ensure restoring resolv.conf also by external process?
-    restore-dns
+    dns-restore
     model reset-ovpn-state
 }
 
@@ -455,6 +468,18 @@ proc build-version {} {
 proc build-date {} {
     memoize
     return [string trim [slurp [file join [file dir [info script]] builddate.txt]]]
+}
+
+
+# TODO
+proc ovpn-is-connected {} {
+#    if {[dict get $stat ovpn_pid] == 0} 
+#        set connstatus disconnected
+#    elseif {[dict get $stat mgmt_connstatus] eq "CONNECTED"} 
+}
+
+# TODO
+proc mgmt-is-connected {} {
 }
 
 

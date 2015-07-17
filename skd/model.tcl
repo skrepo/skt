@@ -5,6 +5,9 @@ namespace eval ::model {
     namespace export *
     namespace ensemble create
     
+    variable resolv_marker "# DO NOT MODIFY - SKD generated"
+
+
     # skd-sku client socket, also indicates if sku client connected
     variable skd_sock ""
     # OpenVPN config as double-dashed one-line string
