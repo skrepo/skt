@@ -811,7 +811,7 @@ proc frame-toolbar {p} {
     hyperlink $tb.appeal2 -command [list launchBrowser "https://securitykiss.com/locate/"] -text "feedback."
     label $tb.appeal3 -text "We listen."
 
-    button $tb.options -relief flat
+    button $tb.options -relief flat -command OptionsClicked
     img place options24  $tb.options
     grid $tb.appealimg -column 0 -row 0 -sticky w
     grid $tb.appeal1 -column 1 -row 0 -sticky w
@@ -960,8 +960,37 @@ proc setDialogSize {window} {
 }
 
 
+proc OptionsClicked {} {
+    set w .options_dialog
+    catch { destroy $w }
+    toplevel $w
+    #catch {wm withdraw $w}
 
-#TODO sorting by country
+    set wb $w.buttons
+    frame $wb
+    button $wb.cancel -text Cancel -width 10 -command [list set ::Modal.Result cancel]
+    button $wb.ok -text OK -width 10 -command [list set ::Modal.Result ok]
+    grid $wb -sticky news
+    grid $wb.cancel -row 5 -column 0 -padx {30 0} -pady 5 -sticky w
+    grid $wb.ok -row 5 -column 1 -padx {0 30} -pady 5 -sticky e
+    grid columnconfigure $wb 0 -weight 1
+    grid columnconfigure $wb 1 -weight 1
+
+    bind $w <Escape> [list set ::Modal.Result cancel]
+    bind $w <Control-w> [list set ::Modal.Result cancel]
+    bind $w <Control-q> [list set ::Modal.Result cancel]
+    wm title $w "Options"
+    #catch {wm deiconify $w}
+
+    set modal [ShowModal $w]
+    if {$modal eq "ok"} {
+        puts stderr "Options ok"
+    }
+    destroy $w
+}
+
+
+#TODO sorting by country and favorites
 proc ServerListClicked {} {
     set slist [model slist [current-provider]]
     set ssitem [model selected-sitem [current-provider]]
