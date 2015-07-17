@@ -964,7 +964,19 @@ proc OptionsClicked {} {
     set w .options_dialog
     catch { destroy $w }
     toplevel $w
-    #catch {wm withdraw $w}
+
+
+    set nb [ttk::notebook $w.nb]
+    frame $nb.about
+    label $nb.about.buildver -text "Build version: [build-version]"
+    label $nb.about.builddate -text "Build date: [build-date]"
+    grid $nb.about.buildver -sticky w -padx 5 -pady 5
+    grid $nb.about.builddate -sticky w -padx 5 -pady 5
+    frame $nb.settings
+    ttk::notebook::enableTraversal $nb
+    $nb add $nb.about -text About -padding 20
+    $nb add $nb.settings -text Settings
+    grid $nb -sticky news -padx 10 -pady 10 
 
     set wb $w.buttons
     frame $wb
@@ -980,7 +992,6 @@ proc OptionsClicked {} {
     bind $w <Control-w> [list set ::Modal.Result cancel]
     bind $w <Control-q> [list set ::Modal.Result cancel]
     wm title $w "Options"
-    #catch {wm deiconify $w}
 
     set modal [ShowModal $w]
     if {$modal eq "ok"} {
