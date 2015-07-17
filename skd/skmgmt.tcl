@@ -21,7 +21,7 @@ proc MgmtClose {} {
 proc MgmtRead {sock} {
     try {
         if {[gets $sock line] >= 0} {
-            log "MGMT: $line"
+            #log "MGMT: $line"
             switch -regexp -matchvar tokens $line {
                 {^TUN/TAP read bytes,(\d+)$} {
                     # status command output
@@ -113,7 +113,7 @@ proc MgmtMonitor {} {
         MgmtConnect
     }
     MgmtStatus
-    after 2000 MgmtMonitor
+    after 1000 MgmtMonitor
 }
 
 

@@ -392,6 +392,9 @@ proc OvpnRead {line} {
         {MANAGEMENT: CMD 'status'} {
             set ignoreline 1
         }
+        {MANAGEMENT: CMD 'pid'} {
+            set ignoreline 1
+        }
         {TCP connection established with \[AF_INET\](\d+\.\d+\.\d+\.\d+):(\d+)} {
             # this only occurs for TCP tunnels = useless for general use
         }
@@ -477,7 +480,7 @@ proc build-date {} {
 
 proc ovpn-pid {} {
     # if mgmt_pid up to date
-    if {$::model::mgmt_pid != 0 && [clock milliseconds] - $::model::mgmt_pid_tstamp < 3000} {
+    if {$::model::mgmt_pid != 0 && [clock milliseconds] - $::model::mgmt_pid_tstamp < 2000} {
         set ::model::ovpn_pid $::model::mgmt_pid
     } else {
         set ::model::ovpn_pid $::model::start_pid

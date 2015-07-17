@@ -46,6 +46,9 @@ proc build-sku {os arch} {
     github-repo csp securitykiss-com  ;#https://github.com/securitykiss-com/csp/archive/0.1.0.zip
     #build $os $arch sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 snit-2.3.2 doctools-1.4.19 textutil::expander-1.3.1 csp-0.1.0}
     build $os $arch sku base-tk-8.6.3.1 {sklib-0.0.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 csp-0.1.0}
+
+    # this is necessary to prevent "cp: cannot create regular file ‘/usr/local/sbin/skd’: Text file busy"
+    ex sudo mv /usr/local/bin/sku.bin /usr/local/bin/sku-prev.bin
     ex sudo cp build/sku/linux-x86_64/sku.bin /usr/local/bin/sku.bin
 }
 
