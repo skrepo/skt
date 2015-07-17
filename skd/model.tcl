@@ -5,11 +5,11 @@ namespace eval ::model {
     namespace export *
     namespace ensemble create
     
-    variable resolv_marker "# DO NOT MODIFY - SKD generated"
+    variable Resolv_marker "# DO NOT MODIFY - SKD generated"
 
 
     # skd-sku client socket, also indicates if sku client connected
-    variable skd_sock ""
+    variable Skd_sock ""
     # OpenVPN config as double-dashed one-line string
     variable ovpn_config ""
 
@@ -25,9 +25,9 @@ namespace eval ::model {
     # mgmt state command output
 
     # timestamp of last state command update in milliseconds
-    variable mgmt_state_tstamp 0
+    variable Mgmt_state_tstamp 0
     # management console client socket
-    variable mgmt_sock ""
+    variable Mgmt_sock ""
     # TUN/TAP read bytes
     variable mgmt_vread 0
     # TUN/TAP write bytes
@@ -47,12 +47,12 @@ namespace eval ::model {
     # OpenVPN process PID
     
     # openvpn process PID as per mgmt console
-    variable mgmt_pid 0
+    variable Mgmt_pid 0
     # last pid update in milliseconds
-    variable mgmt_pid_tstamp 0
+    variable Mgmt_pid_tstamp 0
 
     # openvpn process PID when starting OpenVPN
-    variable start_pid 0
+    variable Start_pid 0
 
     # final openvpn process PID set by algorithm
     variable ovpn_pid 0
@@ -61,8 +61,8 @@ namespace eval ::model {
 
 
 proc ::model::reset-ovpn-state {} {
-    set ::model::mgmt_state_tstamp 0
-    set ::model::mgmt_sock ""
+    set ::model::Mgmt_state_tstamp 0
+    set ::model::Mgmt_sock ""
     set ::model::mgmt_port 42385
     set ::model::mgmt_vread 0
     set ::model::mgmt_vwrite 0
@@ -71,11 +71,10 @@ proc ::model::reset-ovpn-state {} {
     set ::model::mgmt_connstatus ""
     set ::model::mgmt_vip ""
     set ::model::mgmt_rip ""
-    set ::model::ovpn_connstatus disconnected
     set ::model::ovpn_dnsip ""
-    set ::model::mgmt_pid 0
-    set ::model::mgmt_pid_tstamp 0
-    set ::model::start_pid 0
+    set ::model::Mgmt_pid 0
+    set ::model::Mgmt_pid_tstamp 0
+    set ::model::Start_pid 0
     set ::model::ovpn_pid 0
 }
 

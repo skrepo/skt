@@ -5,16 +5,16 @@
 proc MgmtConnect {} {
     catch {
         MgmtClose
-        set ::model::mgmt_sock [socket 127.0.0.1 $::model::mgmt_port]
-        chan configure $::model::mgmt_sock -blocking 0 -buffering line
-        chan event $::model::mgmt_sock readable [list MgmtRead $::model::mgmt_sock]
+        set ::model::Mgmt_sock [socket 127.0.0.1 $::model::mgmt_port]
+        chan configure $::model::Mgmt_sock -blocking 0 -buffering line
+        chan event $::model::Mgmt_sock readable [list MgmtRead $::model::Mgmt_sock]
     }
 }
 
 proc MgmtClose {} {
-    if {$::model::mgmt_sock ne ""} {
-        catch {close $::model::mgmt_sock}
-        set ::model::mgmt_sock ""
+    if {$::model::Mgmt_sock ne ""} {
+        catch {close $::model::Mgmt_sock}
+        set ::model::Mgmt_sock ""
     }
 }
 
@@ -61,8 +61,8 @@ proc MgmtRead {sock} {
                 }
                 {^SUCCESS: pid=(\d+)$} {
                     # pid command output
-                    set ::model::mgmt_pid [lindex $tokens 1]
-                    set ::model::mgmt_pid_tstamp [clock milliseconds]
+                    set ::model::Mgmt_pid [lindex $tokens 1]
+                    set ::model::Mgmt_pid_tstamp [clock milliseconds]
                     # this call is necessary to update ovpn_pid in the model
                     ovpn-pid
                 }
@@ -99,8 +99,8 @@ proc MgmtRead {sock} {
 }
 
 proc MgmtStatus {} {
-    if {$::model::mgmt_sock ne ""} {
-        if {[catch {puts -nonewline $::model::mgmt_sock "status\r\nstate\r\npid\r\n"} out err]} {
+    if {$::model::Mgmt_sock ne ""} {
+        if {[catch {puts -nonewline $::model::Mgmt_sock "status\r\nstate\r\npid\r\n"} out err]} {
             log $out $err
             MgmtClose
         }
@@ -109,7 +109,7 @@ proc MgmtStatus {} {
 
 
 proc MgmtMonitor {} {
-    if {$::model::mgmt_sock eq ""} {
+    if {$::model::Mgmt_sock eq ""} {
         MgmtConnect
     }
     MgmtStatus

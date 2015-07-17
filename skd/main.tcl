@@ -116,11 +116,11 @@ proc CyclicSkdReportState {} {
 # On new connection to SKD, close the previous one
 proc SkdNewConnection {sock peerhost peerport} {
     model print 
-    if {$::model::skd_sock ne ""} {
-        SkdWrite ctrl "Closing SKD connection $::model::skd_sock. Superseded by $sock $peerhost $peerport"
+    if {$::model::Skd_sock ne ""} {
+        SkdWrite ctrl "Closing SKD connection $::model::Skd_sock. Superseded by $sock $peerhost $peerport"
         skd-conn-close
     }
-    set ::model::skd_sock $sock
+    set ::model::Skd_sock $sock
     fconfigure $sock -blocking 0 -buffering line
     fileevent $sock readable SkdRead
     SkdReportVersion
@@ -129,16 +129,16 @@ proc SkdNewConnection {sock peerhost peerport} {
 
 
 proc skd-conn-close {} {
-    if {$::model::skd_sock eq ""} {
+    if {$::model::Skd_sock eq ""} {
         return
     }
-    log skd-conn-close $::model::skd_sock
-    catch {close $::model::skd_sock}
-    set ::model::skd_sock ""
+    log skd-conn-close $::model::Skd_sock
+    catch {close $::model::Skd_sock}
+    set ::model::Skd_sock ""
 }
 
 proc SkdWrite {prefix msg} {
-    set sock $::model::skd_sock
+    set sock $::model::Skd_sock
     if {$sock eq ""} {
         return
     }
@@ -186,7 +186,7 @@ proc load-config {conf} {
 }
 
 proc SkdRead {} {
-    set sock $::model::skd_sock
+    set sock $::model::Skd_sock
     if {$sock eq ""} {
         return
     }
@@ -231,7 +231,7 @@ proc SkdRead {} {
                 log "ADJUSTED CONFIG: $config"
                 set ovpncmd "openvpn $config"
                 set chan [cmd invoke $ovpncmd OvpnExit OvpnRead OvpnErrRead]
-                set ::model::start_pid [pid $chan]
+                set ::model::Start_pid [pid $chan]
                 # this call is necessary to update ovpn_pid
                 ovpn-pid
                 SkdWrite ctrl "OpenVPN with pid [ovpn-pid] started"
@@ -281,7 +281,7 @@ proc dns-replace {} {
             return
         }
     }
-    spit /etc/resolv.conf "$::model::resolv_marker\nnameserver $dnsip"
+    spit /etc/resolv.conf "$::model::Resolv_marker\nnameserver $dnsip"
 }
 
 proc dns-restore {} {
@@ -304,7 +304,7 @@ proc dns-read-resolv {} {
 }
 
 proc dns-is-resolv-skd-generated {} {
-    return [string match *$::model::resolv_marker* [dns-read-resolv]]
+    return [string match *$::model::Resolv_marker* [dns-read-resolv]]
 }
 
 
@@ -479,11 +479,11 @@ proc build-date {} {
 }
 
 proc ovpn-pid {} {
-    # if mgmt_pid up to date
-    if {$::model::mgmt_pid != 0 && [clock milliseconds] - $::model::mgmt_pid_tstamp < 2000} {
-        set ::model::ovpn_pid $::model::mgmt_pid
+    # if Mgmt_pid up to date
+    if {$::model::Mgmt_pid != 0 && [clock milliseconds] - $::model::Mgmt_pid_tstamp < 2000} {
+        set ::model::ovpn_pid $::model::Mgmt_pid
     } else {
-        set ::model::ovpn_pid $::model::start_pid
+        set ::model::ovpn_pid $::model::Start_pid
     }
     return $::model::ovpn_pid
 }
