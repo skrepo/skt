@@ -356,14 +356,18 @@ proc check-for-updates {} {
                 set data [<- $chout]
                 if {[is-dot-ver $data]} { 
                     set ::model::Latest_version $data
+                } else {
+                    set ::model::Latest_version 0
                 }
                 puts stderr "Check for updates: $data"
             }
             <- $cherr {
+                set ::model::Latest_version 0
                 set err [<- $cherr]
                 puts stderr "Check failed: $err"
             }
         }
+        CheckForUpdatesCompleted
         $chout close
         $cherr close
     } on error {e1 e2} {
@@ -970,13 +974,36 @@ proc CheckForUpdatesClicked {} {
     try {
         set about .options_dialog.nb.about
         $about.checkforupdates configure -state disabled
-        grid $about.updateframe.status
-        grid $about.updateframe.button
+        go check-for-updates
     } on error {e1 e2} {
         log $e1 $e2
     }
 }
 
+# Three possible outcomes: 
+# -The program is up to date
+# -New version XXX available
+# -No updates found (connection problem) 
+proc CheckForUpdatesCompleted {} {
+    try {
+        set msg ""
+        set latest $::model::Latest_version
+        if {$latest ne "0" && [is-dot-ver $latest]} {
+            if {[int-ver $latest] > [int-ver [build-version]]} {
+                set msg "New version $latest available"
+                set about .options_dialog.nb.about
+                grid $about.updateframe.button
+            } else {
+                set msg "The program version is up to date"
+            }
+        } else {
+            set msg "No updates found"
+        }
+        set ::model::Check_for_updates_status $msg
+    } on error {e1 e2} {
+        log $e1 $e2
+    }
+}
 
 proc OptionsClicked {} {
     set w .options_dialog
@@ -986,12 +1013,11 @@ proc OptionsClicked {} {
 
     set nb [ttk::notebook $w.nb]
     frame $nb.about
-    label $nb.about.buildver -text "Build version: [build-version]"
+    label $nb.about.buildver -text "Program version: [build-version]"
     label $nb.about.builddate -text "Build date: [build-date]"
     button $nb.about.checkforupdates -text "Check for updates" -command CheckForUpdatesClicked
     frame $nb.about.updateframe
-    set ::model::Check_for_updates_status "Statiski"
-
+    set ::model::Check_for_updates_status ""
     label $nb.about.updateframe.status -textvariable ::model::Check_for_updates_status
     button $nb.about.updateframe.button -text "Update"
     grid $nb.about.buildver -sticky w -padx 5 -pady 5
@@ -1031,7 +1057,7 @@ proc OptionsClicked {} {
     if {$modal eq "ok"} {
         puts stderr "Options ok"
     }
-    set ::model::Check_for_updates_status " "
+    set ::model::Check_for_updates_status ""
     destroy $w
 }
 
