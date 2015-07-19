@@ -4,7 +4,7 @@
 # TODO Consider using kill -0 instead, not sure if POSIX
 # TODO See openvpn init script for inspiration
 
-EXEC=/usr/local/sbin/skd
+EXEC=/usr/local/sbin/skd.bin
 PIDFILE=/var/run/skd.pid
 LOGFILE=/var/log/skd.log
 

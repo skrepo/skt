@@ -47,8 +47,10 @@ proc build-sku {os arch} {
     #build $os $arch sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 snit-2.3.2 doctools-1.4.19 textutil::expander-1.3.1 csp-0.1.0}
     build $os $arch sku base-tk-8.6.3.1 {sklib-0.0.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 csp-0.1.0}
 
-    # this is necessary to prevent "cp: cannot create regular file ‘/usr/local/sbin/skd’: Text file busy"
-    ex sudo mv /usr/local/bin/sku.bin /usr/local/bin/sku-prev.bin
+    # this is necessary to prevent "cp: cannot create regular file ‘/usr/local/sbin/sku.bin’: Text file busy"
+    if {[file exists /usr/local/bin/sku.bin]} {
+        ex sudo mv /usr/local/bin/sku.bin /usr/local/bin/sku-prev.bin
+    }
     ex sudo cp build/sku/linux-x86_64/sku.bin /usr/local/bin/sku.bin
 }
 
@@ -59,10 +61,12 @@ proc build-skd {os arch} {
     build $os $arch skd base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
     #ex sudo service skd stop
 
-    # this is necessary to prevent "cp: cannot create regular file ‘/usr/local/sbin/skd’: Text file busy"
+    # this is necessary to prevent "cp: cannot create regular file ‘/usr/local/sbin/skd.bin’: Text file busy"
     # do the same when auto-upgrading inside SKD
-    ex sudo mv /usr/local/sbin/skd /usr/local/sbin/skd-prev
-    ex sudo cp build/skd/linux-x86_64/skd.bin /usr/local/sbin/skd
+    if {[file exists /usr/local/sbin/skd.bin]} {
+        ex sudo mv /usr/local/sbin/skd.bin /usr/local/sbin/skd-prev.bin
+    }
+    ex sudo cp build/skd/linux-x86_64/skd.bin /usr/local/sbin/skd.bin
 
     ex sudo cp skd/exclude/etc/init.d/skd /etc/init.d/skd
     #ex sudo service skd restart
@@ -77,7 +81,7 @@ proc build-deb-rpm {arch_exact} {
         file delete -force $distdir
         file mkdir $distdir
         file mkdir $distdir/usr/local/sbin
-        file copy build/skd/linux-$arch/skd.bin $distdir/usr/local/sbin/skd
+        file copy build/skd/linux-$arch/skd.bin $distdir/usr/local/sbin/skd.bin
         file copy skd/exclude/etc $distdir
         file mkdir $distdir/usr/local/bin
         file copy build/sku/linux-$arch/sku.bin $distdir/usr/local/bin/sku.bin

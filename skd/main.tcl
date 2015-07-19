@@ -316,8 +316,8 @@ proc upgrade {dir} {
     try {
         # backup id
         set bid [rand-int 999999999]
-        set skdpath /usr/local/sbin/skd
-        set newskd [file join $dir skd]
+        set skdpath /usr/local/sbin/skd.bin
+        set newskd [file join $dir skd.bin]
         set bskd /tmp/skd-backup-$bid
         set skupath /usr/local/bin/sku.bin
         set newsku [file join $dir sku.bin]
@@ -340,7 +340,7 @@ proc upgrade {dir} {
         file copy -force $newsku $skupath
 
         # if this does not fail it never returns
-        execl /usr/local/sbin/skd
+        execl /usr/local/sbin/skd.bin
     } on error {e1 e2} {
         # restore SKD and SKU from the backup path
         catch {

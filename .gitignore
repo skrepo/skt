@@ -7,5 +7,7 @@ base-tcl
 base-tcl.exe
 skd/builddate.txt
 sku/builddate.txt
+skd/buildver.txt
 sku/images/flag
 sklib/*.html
+
