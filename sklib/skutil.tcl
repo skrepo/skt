@@ -644,3 +644,9 @@ proc int-ver {v} {
     }
     return [string trimleft $result 0]
 }
+
+# return true for version format: 0, 1, 12, 123, 1234, 1.2, 1.23, 1.23.45, 11.22.33.44 etc
+proc is-dot-ver {v} {
+    return [regexp {^\d{1,4}(\.\d{1,4}){0,3}$} $v]
+}
+

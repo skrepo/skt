@@ -348,20 +348,27 @@ proc main-gui {} {
 }
 
 proc check-for-updates {} {
-    channel {chout cherr} 1
-    vigo-curl $chout $cherr /check-for-updates
-    select {
-        <- $chout {
-            set data [<- $chout]
-            puts stderr "Check for updates: $data"
+    try {
+        channel {chout cherr} 1
+        vigo-curl $chout $cherr /check-for-updates
+        select {
+            <- $chout {
+                set data [<- $chout]
+                if {[is-dot-ver $data]} { 
+                    set ::model::Latest_version $data
+                }
+                puts stderr "Check for updates: $data"
+            }
+            <- $cherr {
+                set err [<- $cherr]
+                puts stderr "Check failed: $err"
+            }
         }
-        <- $cherr {
-            set err [<- $cherr]
-            puts stderr "Check failed: $err"
-        }
+        $chout close
+        $cherr close
+    } on error {e1 e2} {
+        log $e1 $e2
     }
-    $chout close
-    $cherr close
 }
 
 # select current slist from welcome as a function of welcome message and current plan/time
@@ -959,19 +966,44 @@ proc setDialogSize {window} {
     wm geometry $window ${cw}x${ch}+${cx}+${cy}
 }
 
+proc CheckForUpdatesClicked {} {
+    try {
+        set about .options_dialog.nb.about
+        $about.checkforupdates configure -state disabled
+        grid $about.updateframe.status
+        grid $about.updateframe.button
+    } on error {e1 e2} {
+        log $e1 $e2
+    }
+}
+
 
 proc OptionsClicked {} {
     set w .options_dialog
     catch { destroy $w }
-    toplevel $w
+    toplevel $w ;#-width 400 -height 400
 
 
     set nb [ttk::notebook $w.nb]
     frame $nb.about
     label $nb.about.buildver -text "Build version: [build-version]"
     label $nb.about.builddate -text "Build date: [build-date]"
+    button $nb.about.checkforupdates -text "Check for updates" -command CheckForUpdatesClicked
+    frame $nb.about.updateframe
+    set ::model::Check_for_updates_status "Statiski"
+
+    label $nb.about.updateframe.status -textvariable ::model::Check_for_updates_status
+    button $nb.about.updateframe.button -text "Update"
     grid $nb.about.buildver -sticky w -padx 5 -pady 5
     grid $nb.about.builddate -sticky w -padx 5 -pady 5
+    grid $nb.about.checkforupdates -sticky e -padx 5 -pady 5
+    grid $nb.about.updateframe -sticky news -padx 5 -pady 5
+    grid $nb.about.updateframe.status -row 0 -column 0 -sticky w
+    grid $nb.about.updateframe.button -row 0 -column 1 -sticky e
+    grid columnconfigure $nb.about 0 -weight 1
+    grid columnconfigure $nb.about.updateframe 0 -weight 1
+    grid rowconfigure $nb.about.updateframe 0 -weight 1 -minsize 40
+    grid remove $nb.about.updateframe.button
     frame $nb.settings
     ttk::notebook::enableTraversal $nb
     $nb add $nb.about -text About -padding 20
@@ -986,7 +1018,9 @@ proc OptionsClicked {} {
     grid $wb.cancel -row 5 -column 0 -padx {30 0} -pady 5 -sticky w
     grid $wb.ok -row 5 -column 1 -padx {0 30} -pady 5 -sticky e
     grid columnconfigure $wb 0 -weight 1
-    grid columnconfigure $wb 1 -weight 1
+    grid rowconfigure $wb 0 -weight 1
+    grid columnconfigure $w 0 -weight 1
+    grid rowconfigure $w 0 -weight 1
 
     bind $w <Escape> [list set ::Modal.Result cancel]
     bind $w <Control-w> [list set ::Modal.Result cancel]
@@ -997,6 +1031,7 @@ proc OptionsClicked {} {
     if {$modal eq "ok"} {
         puts stderr "Options ok"
     }
+    set ::model::Check_for_updates_status " "
     destroy $w
 }
 
@@ -1047,7 +1082,6 @@ proc ServerListClicked {} {
     grid $wb.cancel -row 5 -column 0 -padx {30 0} -pady 5 -sticky w
     grid $wb.ok -row 5 -column 1 -padx {0 30} -pady 5 -sticky e
     grid columnconfigure $wb 0 -weight 1
-    grid columnconfigure $wb 1 -weight 1
 
     bind Treeview <Return> [list set ::Modal.Result ok]
     bind Treeview <Double-Button-1> [list set ::Modal.Result ok]
@@ -1102,6 +1136,8 @@ proc ShowModal {win args} {
     set x [expr {([winfo width  .] - [winfo reqwidth  $win]) / 2 + [winfo rootx .]}]
     set y [expr {([winfo height .] - [winfo reqheight $win]) / 2 + [winfo rooty .]}]
     wm geometry $win +$x+$y
+    #wm attributes $win -topmost 1
+    #wm attributes $win -type dialog
     raise $win
     focus $win
     grab $win
@@ -1257,10 +1293,11 @@ proc skd-read {} {
                     skd-write start
                 }
                 {^version (\S+) (.*)$} {
-                    set version [lindex $details 1]
-                    puts stderr "VERSION: $version"
+                    set skd_version [lindex $details 1]
+                    puts stderr "SKD VERSION: $skd_version"
                     puts stderr "BUILD VERSION: [build-version]"
-                    if {$version > [build-version] && [model now] > $::model::sku_last_upgraded + 86400} {
+                    # sku upgrade itself if skd already upgraded and not too often
+                    if {[int-ver $skd_version] > [int-ver [build-version]] && [model now] > $::model::sku_last_upgraded + 86400} {
                         set ::model::sku_last_upgraded [model now]
                         model save
                         # upgrade sku
@@ -1346,6 +1383,7 @@ proc build-date {} {
 # SKD only to verify signature and replace binaries and restart itself
 # SKU prepares upgrade dir, initializes upgrade and restarts itself
 proc upgrade {} {
+
     # prepare dir with skd and sku.bin
     set dir /tmp/sktupgrade
     puts stderr "PREPARE UPGRADE $dir"
