@@ -221,7 +221,9 @@ proc ::https::parseurl {url} {
 # puts [https curl https://91.227.221.115/geo-ip.php -expected-hostname www.securitykiss.com]
 proc ::https::curl {url args} {
     set async [expr {[lsearch -exact $args -command] != -1}]
-    set tok [https::geturl $url {*}$args]
+    if {[catch {set tok [https::geturl $url {*}$args]} out err]} {
+        error $err
+    }
     if {$async} {
         return $tok
     }
@@ -255,7 +257,7 @@ proc ::https::curl-callback {tok} {
 proc ::https::wget {url filepath args} {
     set async [expr {[lsearch -exact $args -command] != -1}]
     set fd [open $filepath w]
-    if {[catch {set tok [http::geturl $url -channel $fd {*}$args]} out err]} {
+    if {[catch {set tok [https::geturl $url -channel $fd {*}$args]} out err]} {
         close $fd
         error $err
     }

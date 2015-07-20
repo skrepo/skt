@@ -655,3 +655,24 @@ proc is-dot-ver {v} {
     return [regexp {^\d{1,4}(\.\d{1,4}){0,3}$} $v]
 }
 
+
+
+proc generalize-arch {arch} {
+    switch -glob $arch {
+        i?86 {return ix86}
+        x86_64 {return x86_64}
+        default {error "Unrecognized CPU architecture"}
+    }
+}
+
+proc this-arch {} {
+    return [generalize-arch $::tcl_platform(machine)]
+}
+
+proc this-os {} {
+    switch -glob $::tcl_platform(os) {
+        Linux {return linux}
+        Windows* {return win32}
+        default {error "Unrecognized OS"}
+    }
+}

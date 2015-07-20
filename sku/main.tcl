@@ -499,7 +499,7 @@ proc plan-comparator {tstamp a b} {
 proc get-welcome {cn} {
     try {
         channel {chout cherr} 1
-        vigo-curl $chout $cherr /welcome?cn=$cn
+        vigo-curl $chout $cherr /welcome/$cn
         select {
             <- $chout {
                 set data [<- $chout]
@@ -530,8 +530,16 @@ proc get-welcome {cn} {
 
 
 proc vigo-curl {chout cherr urlpath} {
-    go curl-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
+    go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
 }
+
+
+proc vigo-wget {chout cherr urlpath filepath} {
+    go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com -filepath $filepath
+# -indiv_timeout 60000
+}
+
+
 
 # save main window position and size changes in Config
 proc MovedResized {window x y w h} {
@@ -1035,16 +1043,95 @@ proc UpdateNowClicked {uframe} {
     try {
         set about .options_dialog.nb.about
         $uframe.button configure -state disabled
-        checkforupdates-status $uframe 16/downloading "Downloading..."
 
-        #TODO check if version downloaded, download, upgrade, all with events
+        set version $::model::Latest_version
+        if {[int-ver $version] <= [int-ver [build-version]]} {
+            return
+        }
+
+        file mkdir [file join $::model::UPGRADEDIR $version]
+        set platform [this-os]-[this-arch]
+        set files {sku.bin.sig skd.bin.sig sku.bin skd.bin}
+        # csp channel for collecting info about downloaded files
+        channel collector
+        foreach f $files {
+            set filepath [file join $::model::UPGRADEDIR $version $f]
+            if {![file exists $f]} {
+                checkforupdates-status $uframe 16/downloading "Downloading..."
+                go download-latest-skt $collector /latest-skt/$version/$platform/$f $filepath $uframe
+            }
+        }
+        # given timeout is per item
+        go wait-for-items $collector [llength $files] 60000 DownloadLatestSktFinished
 
     } on error {e1 e2} {
         log $e1 $e2
     }
 }
 
+proc DownloadLatestSktFinished {status} {
+    log DownloadLatestSktFinished $status
+}
 
+# csp coroutine to collect messages from collector channel
+# if $n items received within individual $timeouts
+# then call "$command ok". Otherwise "$command timeout"
+proc wait-for-items {collector n timeout command} {
+    try {
+        for {set i 0} {$i < $n} {incr i} {
+            timer t $timeout
+            select {
+                <- $collector {
+                    set item [<- $collector]
+                    log "wait-for-items collected item=$item for n=$n timeout=$timeout command=$command"
+                }
+                <- $t {
+                    log "wait-for-items timed out for n=$n timeout=$timeout command=$command"
+                    <- $t
+                    {*}$command timeout
+                    return
+                }
+            }
+        }
+        log "wait-for-items completed successfully for n=$n timeout=$timeout command=$command"
+        {*}$command ok
+        return
+    } on error {e1 e2} {
+        log $e1 $e2
+    } finally {
+        catch {
+            $collector close
+        }
+    }
+}
+
+
+
+proc download-latest-skt {collector url filepath uframe} {
+    try {
+        channel {chout cherr} 1
+        vigo-wget $chout $cherr $url $filepath
+        log "download-latest-skt started $url $filepath"
+        select {
+            <- $chout {
+                set data [<- $chout]
+                $collector <- $filepath
+                puts stderr "download-latest-skt $url $filepath OK"
+            }
+            <- $cherr {
+                set err [<- $cherr]
+                puts stderr "download-latest-skt $url $filepath ERROR: $err"
+            }
+        }
+    } on error {e1 e2} {
+        log $e1 $e2
+    } finally {
+        catch {
+            $chout close
+            $cherr close
+        }
+    }
+}
 
 proc OptionsClicked {} {
     set w .options_dialog
@@ -1233,60 +1320,82 @@ proc ShowModal {win args} {
 
 # tablelist vs TkTable vs treectrl vs treeview vs BWidget::Tree
 
-proc curl-hosts {tryout tryerr args} {
-    fromargs {-urlpath -indiv_timeout -hosts -hindex -proto -port -expected_hostname} \
-             {/ 5000 {} 0 https}
-    if {$proto ne "http" && $proto ne "https"} {
-        error "Wrong proto: $proto"
-    }
-    if {$port eq ""} {
-        if {$proto eq "http"} {
-            set port 80
-        } elseif {$proto eq "https"} {
-            set port 443
+proc vigo-hosts {tryout tryerr args} {
+    try {
+        fromargs {-urlpath -indiv_timeout -hosts -hindex -proto -port -expected_hostname -filepath} \
+                 {/ 5000 {} 0 https}
+        if {$proto ne "http" && $proto ne "https"} {
+            error "Wrong proto: $proto"
         }
-    }
-    set opts {}
-    if {$indiv_timeout ne ""} {
-        lappend opts -timeout $indiv_timeout
-    }
-    if {$expected_hostname ne ""} {
-        lappend opts -expected-hostname $expected_hostname
-    }
-
-    set hlen [llength $hosts]
-    foreach i [seq $hlen] {
-        set host_index [expr {($hindex+$i) % $hlen}]
-        # host_index is the index to start from when iterating hosts
-        set host [lindex $hosts $host_index]
-        set url $proto://$host:${port}${urlpath}
-        # Need to catch error in case the handler triggers after the channel was closed (if using select with timer channel for timeouts)
-        # or https curl throws error immediately
-        try {
-            https curl $url {*}$opts -command [-> chhttp]
-            set tok [<- $chhttp]
-            set ncode [http::ncode $tok]
-            set status [http::status $tok]
-            if {$status eq "ok" && $ncode == 200} {
-                set data [http::data $tok]
-                set ::model::vigo_lastok $host_index
-                log "curl-hosts $url success. data: $data"
-                $tryout <- $data
-                return
-            } else {
-                log "curl-hosts $url failed with status: [http::status $tok], error: [http::error $tok]"
-            }
-        } on error {e1 e2} { 
-            log $e1 $e2
-        } finally {
-            catch {
-                http::cleanup $tok
-                $chhttp close
+        if {$port eq ""} {
+            if {$proto eq "http"} {
+                set port 80
+            } elseif {$proto eq "https"} {
+                set port 443
             }
         }
+        set opts {}
+        if {$indiv_timeout ne ""} {
+            lappend opts -timeout $indiv_timeout
+        }
+        if {$expected_hostname ne ""} {
+            lappend opts -expected-hostname $expected_hostname
+        }
+    
+        set hlen [llength $hosts]
+        foreach i [seq $hlen] {
+            set host_index [expr {($hindex+$i) % $hlen}]
+            # host_index is the index to start from when iterating hosts
+            set host [lindex $hosts $host_index]
+            set url $proto://$host:${port}${urlpath}
+            # Need to catch error in case the handler triggers after the channel was closed (if using select with timer channel for timeouts)
+            # or https curl throws error immediately
+            try {
+                if {$filepath ne ""} {
+                    https wget $url $filepath {*}$opts -command [-> chhttp]
+                } else {
+                    https curl $url {*}$opts -command [-> chhttp]
+                }
+                set tok [<- $chhttp]
+                upvar #0 $tok state
+                set ncode [http::ncode $tok]
+                set status [http::status $tok]
+                if {$status eq "ok" && $ncode == 200} {
+                    set data [http::data $tok]
+                    set ::model::vigo_lastok $host_index
+                    log "vigo-hosts $url success. data: $data"
+                    $tryout <- $data
+                    return
+                } else {
+                    log "vigo-hosts $url failed with status: [http::status $tok], error: [http::error $tok]"
+                    if {$filepath ne ""} {
+                        file delete $filepath
+                    }
+                }
+            } on error {e1 e2} { 
+                log $e1 $e2
+            } finally {
+                catch {
+                    http::cleanup $tok
+                    $chhttp close
+                    set fd $state(-channel)
+                    close $fd
+                }
+            }
+        }
+        $tryerr <- "All hosts failed error"
+    } on error {e1 e2} {
+        log $e1 $e2
+    } finally {
     }
-    $tryerr <- "All hosts failed error"
 }
+
+
+
+
+
+
+
 
 
 # get next host to try based on the attempt number relative the last succeeded host
@@ -1376,11 +1485,11 @@ proc skd-read {} {
                     set skd_version [lindex $details 1]
                     puts stderr "SKD VERSION: $skd_version"
                     puts stderr "BUILD VERSION: [build-version]"
-                    # sku upgrade itself if skd already upgraded and not too often
+                    # sku to restart itself if skd already upgraded and not too often
                     if {[int-ver $skd_version] > [int-ver [build-version]] && [model now] > $::model::sku_last_upgraded + 86400} {
                         set ::model::sku_last_upgraded [model now]
                         model save
-                        # upgrade sku
+                        # just restart itself from the new binary - skd should have replaced it
                         execl /usr/local/bin/sku.bin
                     }
                 }
@@ -1445,8 +1554,6 @@ proc ClickDisconnect {} {
 
     skd-write stop
 }
-
-# TODO check and save latest version with signature
 
 
 proc build-version {} {
