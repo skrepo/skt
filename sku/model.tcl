@@ -42,8 +42,6 @@ namespace eval ::model {
     # Time offset relative to the "now" received in welcome message
     variable now_offset 0
 
-    variable sku_last_upgraded 0
-
     # latest skd/sku version to upgrade from check-for-updates
     variable Latest_version 0
 

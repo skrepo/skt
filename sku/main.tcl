@@ -513,7 +513,6 @@ proc get-welcome {cn} {
                 model slist [current-provider] [current-slist [model now]]
                 set ::model::Gui_externalip [dict-pop $welcome ip ???]
                 usage-meter-update [model now]
-                #upgrade
             }
             <- $cherr {
                 set err [<- $cherr]
@@ -1049,28 +1048,41 @@ proc UpdateNowClicked {uframe} {
             return
         }
 
-        file mkdir [file join $::model::UPGRADEDIR $version]
+        set dir [file join $::model::UPGRADEDIR $version]
+        file mkdir $dir
         set platform [this-os]-[this-arch]
         set files {sku.bin.sig skd.bin.sig sku.bin skd.bin}
         # csp channel for collecting info about downloaded files
         channel collector
-        foreach f $files {
-            set filepath [file join $::model::UPGRADEDIR $version $f]
-            if {![file exists $f]} {
-                checkforupdates-status $uframe 16/downloading "Downloading..."
-                go download-latest-skt $collector /latest-skt/$version/$platform/$f $filepath $uframe
+        if {![files-exist $files]} {
+            checkforupdates-status $uframe 16/downloading "Downloading..."
+            foreach f $files {
+                set filepath [file join $dir $f]
+                go download-latest-skt $collector /latest-skt/$version/$platform/$f $filepath
             }
+            # given timeout is per item
+            go wait-for-items $collector [llength $files] 60000 [list upgrade-downloaded $dir $uframe]
+        } else {
+            upgrade-downloaded $dir $uframe ok
         }
-        # given timeout is per item
-        go wait-for-items $collector [llength $files] 60000 DownloadLatestSktFinished
-
     } on error {e1 e2} {
         log $e1 $e2
     }
 }
 
-proc DownloadLatestSktFinished {status} {
-    log DownloadLatestSktFinished $status
+# SKD only to verify signature and replace binaries and restart itself
+# SKU prepares upgrade dir, initializes upgrade and restarts itself
+proc upgrade-downloaded {dir uframe status} {
+    log upgrade-downloaded $status
+    if {$status eq "ok"} { 
+        checkforupdates-status $uframe 16/updating "Updating..."
+        puts stderr "PREPARE UPGRADE from $dir"
+        skd-write "upgrade $dir"
+        puts stderr "UPGRADING from $dir"
+    } else {
+        checkforupdates-status $uframe 16/error "Problem with the download"
+    }
+           
 }
 
 # csp coroutine to collect messages from collector channel
@@ -1107,7 +1119,7 @@ proc wait-for-items {collector n timeout command} {
 
 
 
-proc download-latest-skt {collector url filepath uframe} {
+proc download-latest-skt {collector url filepath} {
     try {
         channel {chout cherr} 1
         vigo-wget $chout $cherr $url $filepath
@@ -1486,8 +1498,7 @@ proc skd-read {} {
                     puts stderr "SKD VERSION: $skd_version"
                     puts stderr "BUILD VERSION: [build-version]"
                     # sku to restart itself if skd already upgraded and not too often
-                    if {[int-ver $skd_version] > [int-ver [build-version]] && [model now] > $::model::sku_last_upgraded + 86400} {
-                        set ::model::sku_last_upgraded [model now]
+                    if {[int-ver $skd_version] > [int-ver [build-version]]} {
                         model save
                         # just restart itself from the new binary - skd should have replaced it
                         execl /usr/local/bin/sku.bin
@@ -1566,26 +1577,6 @@ proc build-date {} {
     return [string trim [slurp [file join [file dir [info script]] builddate.txt]]]
 }
 
-
-# SKD only to verify signature and replace binaries and restart itself
-# SKU prepares upgrade dir, initializes upgrade and restarts itself
-proc upgrade {} {
-
-    # prepare dir with skd and sku.bin
-    set dir /tmp/sktupgrade
-    puts stderr "PREPARE UPGRADE $dir"
-    file mkdir $dir
-    file copy -force /home/sk/seckiss/skt/build/skd/linux-x86_64/skd.bin $dir/skd
-    file copy -force /home/sk/seckiss/skt/build/sku/linux-x86_64/sku.bin $dir
-    skd-write "upgrade $dir"
-    puts stderr "UPGRADING from $dir"
-
-
-    # check latest version and checksum
-    # compare to current version
-    # check if downloaded
-    # download if necessary / wget
-}
 
 
 main

@@ -75,8 +75,9 @@ proc main {} {
         #TODO check if X11 running, if so try Tk. If a problem install deps, retry if needed
         #TODO make it after a delay to allow previous dpkg terminate
         #TODO sku must wait and retry 
-        linuxdeps openvpn-install
-        linuxdeps tkdeps-install
+
+        #linuxdeps openvpn-install
+        #linuxdeps tkdeps-install
     
         model reset-ovpn-state
         # call after reseting model state
@@ -318,7 +319,7 @@ proc upgrade {dir} {
         set bid [rand-big]
         set skdpath /usr/local/sbin/skd.bin
         set newskd [file join $dir skd.bin]
-        set bskd /tmp/skd-backup-$bid
+        set bskd /tmp/skd.bin-backup-$bid
         set skupath /usr/local/bin/sku.bin
         set newsku [file join $dir sku.bin]
         set bsku /tmp/sku.bin-backup-$bid
@@ -331,13 +332,17 @@ proc upgrade {dir} {
             #return [log Upgrade failed because signature verification failed]
         }
         # replace skd
-        # raname is necessary to prevent "cannot create regular file ...: Text file busy" error
-        file rename -force $skdpath $bskd
-        file copy -force $newskd $skdpath
+        # rename is necessary to prevent "cannot create regular file ...: Text file busy" error
+        # we must use external system commands for skd since the file command does not work on the currently running program
+        exec mv $skdpath $bskd
+        exec cp -f $newskd $skdpath
+        exec chmod u+rwx,go+rx $skdpath
         # replace sku.bin
         # so sku.bin is deployed here with root rights, but sku must restart itself
         file rename -force $skupath $bsku
         file copy -force $newsku $skupath
+        file attributes $skupath -permissions u+rwx,go+rx
+        # replace sku.bin
 
         # if this does not fail it never returns
         execl /usr/local/sbin/skd.bin
@@ -363,72 +368,76 @@ proc upgrade {dir} {
 
 
 proc OvpnRead {line} {
-    set ignoreline 0
-    switch -regexp -matchvar tokens $line {
-        {MANAGEMENT: TCP Socket listening on \[AF_INET\]127\.0\.0\.1:(\d+)} {
-            # update the mgmt port in case we had to choose another port than default from the model
-            set ::model::mgmt_port [lindex $tokens 1]
-            #we should call MgmtStart here, but it was moved after "TCP connection established" 
-            #because connecting to mgmt interface too early caused OpenVPN to hang
-        }
-        {MANAGEMENT: Client connected from \[AF_INET\]127\.0\.0\.1:\d+} {
-            #
-        }
-        {MANAGEMENT: Socket bind failed on local address \[AF_INET\]127\.0\.0\.1:(\d+) Address already in use} {
-            # TODO what to do? 
-            # busy mgmt port most likely means that openvpn is already running
-            # on rare occasions it may be occupied by other application
-            #retry/alter port
-        }
-        {Exiting due to fatal error} {
-            OvpnExit 1
-        }
-        {MANAGEMENT: Client disconnected} {
-            log Management client disconnected
-        }
-        {MANAGEMENT: CMD 'state'} {
-            set ignoreline 1
-        }
-        {MANAGEMENT: CMD 'status'} {
-            set ignoreline 1
-        }
-        {MANAGEMENT: CMD 'pid'} {
-            set ignoreline 1
-        }
-        {TCP connection established with \[AF_INET\](\d+\.\d+\.\d+\.\d+):(\d+)} {
-            # this only occurs for TCP tunnels = useless for general use
-        }
-        {TLS: Initial packet from \[AF_INET\](\d+\.\d+\.\d+\.\d+):(\d+)} {
-            #after idle MgmtStarted $::model::mgmt_port
-        }
-        {TUN/TAP device (tun\d+) opened} {
-        }
-        {Initialization Sequence Completed} {
-            MgmtStatus
-            dns-replace
-        }
-        {Network is unreachable} {
-        }
-        {ERROR:.*Operation not permitted} {
-            OvpnExit 1
-        }
-        {SIGTERM.*received, process exiting} {
-            OvpnExit 0
-        }
-        {PUSH: Received control message} {
-            # We need to handle PUSH commands from the openvpn server. Primarily DNS because we need to change resolv.conf
-            #PUSH: Received control message: 'PUSH_REPLY,redirect-gateway def1 bypass-dhcp,dhcp-option DNS 10.10.0.1,route 10.10.0.1,topology net30,ping 5,ping-restart 28,ifconfig 10.10.0.66 10.10.0.65'
-            if {[regexp {dhcp-option DNS (\d+\.\d+\.\d+\.\d+)} $line _ dnsip]} {
-                set ::model::ovpn_dnsip $dnsip
+    try {
+        set ignoreline 0
+        switch -regexp -matchvar tokens $line {
+            {MANAGEMENT: TCP Socket listening on \[AF_INET\]127\.0\.0\.1:(\d+)} {
+                # update the mgmt port in case we had to choose another port than default from the model
+                set ::model::mgmt_port [lindex $tokens 1]
+                #we should call MgmtStart here, but it was moved after "TCP connection established" 
+                #because connecting to mgmt interface too early caused OpenVPN to hang
+            }
+            {MANAGEMENT: Client connected from \[AF_INET\]127\.0\.0\.1:\d+} {
+                #
+            }
+            {MANAGEMENT: Socket bind failed on local address \[AF_INET\]127\.0\.0\.1:(\d+) Address already in use} {
+                # TODO what to do? 
+                # busy mgmt port most likely means that openvpn is already running
+                # on rare occasions it may be occupied by other application
+                #retry/alter port
+            }
+            {Exiting due to fatal error} {
+                OvpnExit 1
+            }
+            {MANAGEMENT: Client disconnected} {
+                log Management client disconnected
+            }
+            {MANAGEMENT: CMD 'state'} {
+                set ignoreline 1
+            }
+            {MANAGEMENT: CMD 'status'} {
+                set ignoreline 1
+            }
+            {MANAGEMENT: CMD 'pid'} {
+                set ignoreline 1
+            }
+            {TCP connection established with \[AF_INET\](\d+\.\d+\.\d+\.\d+):(\d+)} {
+                # this only occurs for TCP tunnels = useless for general use
+            }
+            {TLS: Initial packet from \[AF_INET\](\d+\.\d+\.\d+\.\d+):(\d+)} {
+                #after idle MgmtStarted $::model::mgmt_port
+            }
+            {TUN/TAP device (tun\d+) opened} {
+            }
+            {Initialization Sequence Completed} {
+                MgmtStatus
+                dns-replace
+            }
+            {Network is unreachable} {
+            }
+            {ERROR:.*Operation not permitted} {
+                OvpnExit 1
+            }
+            {SIGTERM.*received, process exiting} {
+                OvpnExit 0
+            }
+            {PUSH: Received control message} {
+                # We need to handle PUSH commands from the openvpn server. Primarily DNS because we need to change resolv.conf
+                #PUSH: Received control message: 'PUSH_REPLY,redirect-gateway def1 bypass-dhcp,dhcp-option DNS 10.10.0.1,route 10.10.0.1,topology net30,ping 5,ping-restart 28,ifconfig 10.10.0.66 10.10.0.65'
+                if {[regexp {dhcp-option DNS (\d+\.\d+\.\d+\.\d+)} $line _ dnsip]} {
+                    set ::model::ovpn_dnsip $dnsip
+                }
+            }
+            default {
+                #log OPENVPN: $line
             }
         }
-        default {
-            #log OPENVPN: $line
+        if {!$ignoreline} {
+            SkdWrite ovpn $line
+            log OPENVPN: $line
         }
-    }
-    if {!$ignoreline} {
-        SkdWrite ovpn $line
-        log OPENVPN: $line
+    } on error {e1 e2} {
+        log $e1 $e2
     }
 }
 

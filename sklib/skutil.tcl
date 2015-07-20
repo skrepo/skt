@@ -676,3 +676,16 @@ proc this-os {} {
         default {error "Unrecognized OS"}
     }
 }
+
+# true if all files exist
+proc files-exist {files} {
+    foreach f $files {
+        if {![file exists $f]} {
+            return 0
+        }
+    }
+    return 1
+}
+
+
+
