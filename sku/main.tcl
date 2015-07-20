@@ -343,7 +343,7 @@ proc main-gui {} {
     # TODO use config.ovpn and other config files from welcome message or by a separate call
     set ::conf [::ovconf::parse /home/sk/seckiss/skt/config.ovpn]
     go check-for-updates ""
-    go get-welcome $::model::Cn
+    go get-welcome
 
 }
 
@@ -496,10 +496,10 @@ proc plan-comparator {tstamp a b} {
 # 
 # }
 # activePlans {{name JADEITE period month limit 50000000000 start 1431090862 used 12345678901 nop 3} {name GREEN period day limit 300000000 start 1431040000 used 15000000 nop 99999}}
-proc get-welcome {cn} {
+proc get-welcome {} {
     try {
         channel {chout cherr} 1
-        vigo-curl $chout $cherr /welcome/$cn
+        vigo-curl $chout $cherr /welcome/$::model::Cn
         select {
             <- $chout {
                 set data [<- $chout]
@@ -603,10 +603,13 @@ proc conn-status-display {} {
         unknown {
             lassign {normal disabled disabled} state1 state2 state3
             set msg [_ "Unknown"] ;# _a297104e26a168e6
+            set ::model::Gui_externalip ""
         }
         disconnected {
             lassign {normal normal disabled} state1 state2 state3
             set msg [_ "Disconnected"] ;# _afd638922a7655ae
+            set ::model::Gui_externalip ""
+            after 1000 [list go get-welcome]
         }
         connecting {
             lassign {disabled disabled normal} state1 state2 state3
@@ -849,11 +852,11 @@ proc frame-ipinfo {p} {
     set inf [frame $p.inf -background $bg2]
     ttk::label $inf.externaliplabel -text [_ "External IP:"] -background $bg2
     ttk::label $inf.externalip -textvariable ::model::Gui_externalip -background $bg2
-    #hyperlink $inf.geocheck -text "Geo" -background $bg2 -command [list launchBrowser "https://securitykiss.com/locate/"]
     hyperlink $inf.geocheck -image [img load 16/external] -background $bg2 -command [list launchBrowser "https://securitykiss.com/locate/"]
     grid $inf.externaliplabel -column 0 -row 2 -padx 10 -pady 5 -sticky w
-    grid $inf.externalip -column 1 -row 2 -padx 0 -pady 5 -sticky w
-    grid $inf.geocheck -column 2 -row 2 -padx 0 -pady 5 -sticky w
+    grid $inf.externalip -column 1 -row 2 -padx 0 -pady 5 -sticky e
+    grid $inf.geocheck -column 2 -row 2 -padx 5 -pady 5 -sticky w
+    grid columnconfigure $inf $inf.externalip -minsize 120
     grid $inf -padx 10 -sticky news
     return $inf
 }
