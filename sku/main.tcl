@@ -585,7 +585,7 @@ proc conn-status-reported {stat} {
 
 proc conn-status-display {} {
     set status $::model::Connstatus
-    img place status/$status .c.stat.imagestatus
+    img place 32/status/$status .c.stat.imagestatus
 
     set ip [dict-pop $::model::Current_sitem ip {}]
     set city [dict-pop $::model::Current_sitem city ?]
@@ -616,7 +616,7 @@ proc conn-status-display {} {
         }
     }
     
-    img place flag/64/$flag .c.stat.flag
+    img place 64/flag/$flag .c.stat.flag
 
     tabset-state $state1
     .c.bs.connect configure -state $state2
@@ -814,16 +814,16 @@ proc frame-usage-meter {p} {
 proc frame-toolbar {p} {
     set tb [frame $p.tb -borderwidth 0 -relief raised]
     #ttk::button $tb.feedback
-    #img place feedback16  $tb.feedback 
+    #img place 16/feedback  $tb.feedback 
     #grid $tb.feedback -column 0 -row 0 -sticky w
     label $tb.appealimg
-    img place bang16 $tb.appealimg
+    img place 16/bang $tb.appealimg
     label $tb.appeal1 -text "Help improve this program. Provide your"
     hyperlink $tb.appeal2 -command [list launchBrowser "https://securitykiss.com/locate/"] -text "feedback."
     label $tb.appeal3 -text "We listen."
 
     button $tb.options -relief flat -command OptionsClicked
-    img place options24  $tb.options
+    img place 24/options  $tb.options
     grid $tb.appealimg -column 0 -row 0 -sticky w
     grid $tb.appeal1 -column 1 -row 0 -sticky w
     grid $tb.appeal2 -column 2 -row 0 -sticky w
@@ -843,7 +843,7 @@ proc frame-ipinfo {p} {
     ttk::label $inf.externaliplabel -text [_ "External IP:"] -background $bg2
     ttk::label $inf.externalip -textvariable ::model::Gui_externalip -background $bg2
     #hyperlink $inf.geocheck -text "Geo" -background $bg2 -command [list launchBrowser "https://securitykiss.com/locate/"]
-    hyperlink $inf.geocheck -image [img load external16] -background $bg2 -command [list launchBrowser "https://securitykiss.com/locate/"]
+    hyperlink $inf.geocheck -image [img load 16/external] -background $bg2 -command [list launchBrowser "https://securitykiss.com/locate/"]
     grid $inf.externaliplabel -column 0 -row 2 -padx 10 -pady 5 -sticky w
     grid $inf.externalip -column 1 -row 2 -padx 0 -pady 5 -sticky w
     grid $inf.geocheck -column 2 -row 2 -padx 0 -pady 5 -sticky w
@@ -858,7 +858,7 @@ proc frame-status {p} {
 
     ttk::label $stat.status -text "" -background $bg2
     ttk::label $stat.flag -background $bg2
-    img place flag/64/EMPTY $stat.flag
+    img place 64/flag/EMPTY $stat.flag
     grid $stat.imagestatus -row 5 -column 0 -padx 10 -pady 5
     grid $stat.status -row 5 -column 1 -padx 10 -pady 5 -sticky w
     grid $stat.flag -row 5 -column 2 -padx 10 -pady 5 -sticky e
@@ -869,9 +869,9 @@ proc frame-status {p} {
 
 proc frame-buttons {p} {
     set bs [frame $p.bs]
-    button $bs.connect -font [dynafont -size 12] -compound left -image [img load connect24] -text [_ "Connect"] -command ClickConnect ;# _2eaf8d491417924c
-    button $bs.disconnect -font [dynafont -size 12] -compound left -image [img load disconnect24] -text [_ "Disconnect"] -command ClickDisconnect ;# _87fff3af45753920
-    button $bs.slist -font [dynafont -size 12] -compound left -image [img load servers24] -text [_ "Servers"] -command ServerListClicked ;# _bf9c42ec59d68714
+    button $bs.connect -font [dynafont -size 12] -compound left -image [img load 24/connect] -text [_ "Connect"] -command ClickConnect ;# _2eaf8d491417924c
+    button $bs.disconnect -font [dynafont -size 12] -compound left -image [img load 24/disconnect] -text [_ "Disconnect"] -command ClickDisconnect ;# _87fff3af45753920
+    button $bs.slist -font [dynafont -size 12] -compound left -image [img load 24/servers] -text [_ "Servers"] -command ServerListClicked ;# _bf9c42ec59d68714
     grid $bs.connect -row 0 -column 0 -padx 10 -sticky w
     grid $bs.disconnect -row 0 -column 1 -padx 10 -sticky w
     grid $bs.slist -row 0 -column 2 -padx 10 -sticky e
@@ -974,7 +974,7 @@ proc CheckForUpdatesClicked {uframe} {
     try {
         set about .options_dialog.nb.about
         $about.checkforupdates configure -state disabled
-        checkforupdates-status $uframe connecting16 "Checking for updates"
+        checkforupdates-status $uframe 16/connecting "Checking for updates"
         go check-for-updates $uframe
     } on error {e1 e2} {
         log $e1 $e2
@@ -1006,23 +1006,23 @@ proc checkforupdates-refresh {uframe quiet} {
         if {$quiet} {
             if {$latest ne "0" && [is-dot-ver $latest]} {
                 if {[int-ver $latest] > [int-ver [build-version]]} {
-                    checkforupdates-status $uframe attention16 "New version $latest is available"
+                    checkforupdates-status $uframe 16/attention "New version $latest is available"
                     grid $uframe.button
                     return
                 }
             }
-            checkforupdates-status $uframe empty16 ""
+            checkforupdates-status $uframe 16/empty ""
             return
         } else {
             if {$latest ne "0" && [is-dot-ver $latest]} {
                 if {[int-ver $latest] > [int-ver [build-version]]} {
-                    checkforupdates-status $uframe attention16 "New version $latest is available"
+                    checkforupdates-status $uframe 16/attention "New version $latest is available"
                     grid $uframe.button
                 } else {
-                    checkforupdates-status $uframe tick16 "The program is up to date"
+                    checkforupdates-status $uframe 16/tick "The program is up to date"
                 }
             } else {
-                checkforupdates-status $uframe question16 "No updates found"
+                checkforupdates-status $uframe 16/question "No updates found"
             }
         }
     } on error {e1 e2} {
@@ -1035,7 +1035,7 @@ proc UpdateNowClicked {uframe} {
     try {
         set about .options_dialog.nb.about
         $uframe.button configure -state disabled
-        checkforupdates-status $uframe downloading16 "Downloading..."
+        checkforupdates-status $uframe 16/downloading "Downloading..."
 
         #TODO check if version downloaded, download, upgrade, all with events
 
@@ -1146,8 +1146,7 @@ proc ServerListClicked {} {
         set country [dict get $sitem country]
         set city [dict get $sitem city]
         set ip [dict get $sitem ip]
-        img load flag/24/$ccode
-        $wt insert {} end -id $id -image flag_24_$ccode -values [list $country $city $ip]
+        $wt insert {} end -id $id -image [img load 24/flag/$ccode] -values [list $country $city $ip]
     }
     $wt selection set $ssid
     grid columnconfigure $w 0 -weight 1
