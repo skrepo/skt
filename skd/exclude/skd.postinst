@@ -28,6 +28,8 @@ if [ -x /usr/local/bin/sku ]; then
     # Generate private key, certificate signing request (CSR), receive cert from vigo and save it all in ~/.sku
     /usr/local/bin/sku.bin --generate-keys
 
+    /usr/local/bin/sku.bin --add-launcher
+    
     # Run sku client. sku responsible for dropping root privileges and logging to ~/.sku/sku.log
     /usr/local/bin/sku
 fi

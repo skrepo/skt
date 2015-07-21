@@ -90,6 +90,7 @@ proc ::unix::add-launcher {appname} {
 }
 
 # Remove pulpit shortcut
+# Delete .desktop launcher from Desktop directory
 proc ::unix::remove-launcher {appname} {
     set desktopdir [::unix::get-desktop-dir]
     set launcher [file join $desktopdir $appname.desktop]

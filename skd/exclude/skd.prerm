@@ -22,3 +22,6 @@ if [ -x "/etc/init.d/skd" ]; then
     
 fi
 
+if [ -x /usr/local/bin/sku ]; then
+    /usr/local/bin/sku.bin --remove-launcher
+fi
