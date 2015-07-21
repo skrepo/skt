@@ -62,3 +62,38 @@ proc ::unix::has-root {} {
 proc ::unix::is-x-running {} {
     return [expr {[array get ::env DISPLAY] ne ""}]
 }
+
+# locate desktop dir for current user
+proc ::unix::get-desktop-dir {} {
+    set userdirs [file normalize ~/.config/user-dirs.dirs]
+    set desktop Desktop
+    if {[file exists $userdirs]} {
+        set content [slurp $userdirs]
+        # the match will update desktop var
+        regexp {XDG_DESKTOP_DIR="\$HOME/([^"]+)"} $content --> desktop
+    }
+    if {[llength $desktop] > 3 || [string length $desktop] > 20} {
+        set desktop Desktop
+    }
+    set desktopdir [file normalize "~/$desktop"]
+    return $desktopdir
+}
+
+# Create pulpit shortcut
+# Place .desktop launcher in Desktop directory
+proc ::unix::add-launcher {appname} {
+    set desktopdir [::unix::get-desktop-dir]
+    if {[file exists $desktopdir]} {
+        file copy -force /usr/share/applications/$appname.desktop $desktopdir
+        file attributes [file join $desktopdir $appname.desktop] -permissions ugo+x
+    }
+}
+
+# Remove pulpit shortcut
+proc ::unix::remove-launcher {appname} {
+    set desktopdir [::unix::get-desktop-dir]
+    set launcher [file join $desktopdir $appname.desktop]
+    if {[file exists $launcher]} {
+        file delete $launcher
+    }
+}

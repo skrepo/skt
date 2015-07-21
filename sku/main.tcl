@@ -97,13 +97,13 @@ proc main {} {
 
     # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one
     set options {
-            {cli            "Run command line interface (CLI) instead of GUI"}
-            {generate-keys  "Generate private key and certificate signing request"}
-            {id             "Show client id from the certificate"}
-            {version        "Print version"}
-            {locale    en   "Run particular language version"}
-            {p              "Print anything"}
-            {ra             "Print anything"}
+            {cli                "Run command line interface (CLI) instead of GUI"}
+            {generate-keys      "Generate private key and certificate signing request"}
+            {add-launcher       "Add desktop launcher for current user"}
+            {remove-launcher    "Remove desktop launcher"}
+            {id                 "Show client id from the certificate"}
+            {version            "Print version"}
+            {locale    en       "Run particular language version"}
         }
     set usage ": sku \[options]\noptions:"
     if {[catch {array set params [::cmdline::getoptions ::argv $options $usage]}] == 1} {
@@ -157,6 +157,16 @@ proc main {} {
     #TODO log to stderr?
     if {$params(generate-keys)} {
         main-generate-keys
+        main-exit
+    }
+    if {$params(add-launcher)} {
+        puts stderr [log Adding Desktop Launcher]
+        unix add-launcher sku
+        main-exit
+    }
+    if {$params(remove-launcher)} {
+        puts stderr [log Removing Desktop Launcher]
+        unix remove-launcher sku
         main-exit
     }
     
@@ -217,6 +227,8 @@ proc error-cli {msg} {
 }
 
 
+
+
 # This is blocking procedure to be run from command line
 # ruturn 1 on success, 0 otherwise
 # Print to stderr for user-visible messages. Use log for detailed info written to log file
@@ -242,27 +254,32 @@ proc main-generate-keys {} {
         }
     }
 
+    set crt [file join $::model::KEYSDIR client.crt]
 
-    # POST csr and save cert
-    for {set i 0} {$i<[llength $::model::Vigos]} {incr i} {
-        if {[catch {open $csr r} fd err] == 1} {
-            log "Failed to open $csr for reading"
-            log $err
-        }
-        set vigo [get-next-vigo "" $i]
-        log Trying vigo $vigo
-        #TODO expected-hostname should not be needed - ensure that vigo provides proper certificate with IP common name
-        if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err] == 1} {
-            log $vigo FAILED
-            log $err
-            close $fd
-        } else {
-            log $vigo OK
-            puts stderr [log Received the signed certificate]
-            log crtdata: $crtdata
-            spit [file join $::model::KEYSDIR client.crt] $crtdata
-            close $fd
-            return 1
+    if {[file exists $crt]} {
+        puts stderr [log CRT $crt already exists]
+    } else {
+        # POST csr and save cert
+        for {set i 0} {$i<[llength $::model::Vigos]} {incr i} {
+            if {[catch {open $csr r} fd err] == 1} {
+                log "Failed to open $csr for reading"
+                log $err
+            }
+            set vigo [get-next-vigo "" $i]
+            log Trying vigo $vigo
+            #TODO expected-hostname should not be needed - ensure that vigo provides proper certificate with IP common name
+            if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err] == 1} {
+                log $vigo FAILED
+                log $err
+                close $fd
+            } else {
+                log $vigo OK
+                puts stderr [log Received the signed certificate]
+                log crtdata: $crtdata
+                spit $crt $crtdata
+                close $fd
+                return 1
+            }
         }
     }
     puts stderr [log Could not receive the signed certificate]

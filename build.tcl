@@ -131,8 +131,8 @@ prepare-lib sklib 0.0.0
 #i18n code2msg ./sku/main.tcl {es pl} ./sku/messages.txt 
 
 build-sku linux x86_64
-build-skd linux x86_64
-build-deb-rpm x86_64
+#build-skd linux x86_64
+#build-deb-rpm x86_64
 
 
 #build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 sklib-0.0.0 Tclx-8.4}

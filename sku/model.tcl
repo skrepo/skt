@@ -16,11 +16,13 @@ namespace eval ::model {
     # Constants
     ########################################
     
-    variable INIFILE [file normalize ~/.sku/sku.ini]
-    variable LOGFILE [file normalize ~/.sku/sku.log]
-    variable PROVIDERDIR [file normalize ~/.sku/provider]
-    variable UPGRADEDIR [file normalize ~/.sku/upgrade]
-    variable KEYSDIR [file join $::model::PROVIDERDIR securitykiss ovpnconf default]
+    variable HOME [file normalize ~]
+    variable CONFIGDIR [file join $HOME .sku]
+    variable INIFILE [file join $CONFIGDIR sku.ini]
+    variable LOGFILE [file join $CONFIGDIR sku.log]
+    variable PROVIDERDIR [file join $CONFIGDIR provider]
+    variable UPGRADEDIR [file join $CONFIGDIR upgrade]
+    variable KEYSDIR [file join $PROVIDERDIR securitykiss ovpnconf default]
 
 
     ######################################## 
