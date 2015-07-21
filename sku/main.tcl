@@ -373,7 +373,7 @@ proc check-for-updates {uframe} {
         $chout close
         $cherr close
     } on error {e1 e2} {
-        log $e1 $e2
+        log "$e1 $e2"
     }
 }
 
@@ -501,7 +501,7 @@ proc plan-comparator {tstamp a b} {
 proc get-welcome {} {
     try {
         channel {chout cherr} 1
-        vigo-curl $chout $cherr /welcome/$::model::Cn
+        vigo-curl $chout $cherr /welcome/[build-version]/$::model::Cn
         select {
             <- $chout {
                 set data [<- $chout]
@@ -525,7 +525,7 @@ proc get-welcome {} {
         $chout close
         $cherr close
     } on error {e1 e2} {
-        log $e1 $e2
+        log "$e1 $e2"
     }
 }
 
@@ -720,7 +720,7 @@ proc usage-meter-update {tstamp} {
         set we [expr {$barw * $period_elapsed / $period_length}]
         $um.elapsedbar.fill configure -width $we
     } on error {e1 e2} {
-        log $e1 $e2
+        log "$e1 $e2"
     }
 }
 
@@ -989,7 +989,7 @@ proc CheckForUpdatesClicked {uframe} {
         checkforupdates-status $uframe 16/connecting "Checking for updates"
         go check-for-updates $uframe
     } on error {e1 e2} {
-        log $e1 $e2
+        log "$e1 $e2"
     }
 }
 
@@ -998,7 +998,7 @@ proc checkforupdates-status {uframe img msg} {
         $uframe.status configure -text "  $msg"
         img place $img $uframe.status
     } on error {e1 e2} {
-        log $e1 $e2
+        log "$e1 $e2"
     }
 } 
 
@@ -1038,7 +1038,7 @@ proc checkforupdates-refresh {uframe quiet} {
             }
         }
     } on error {e1 e2} {
-        log $e1 $e2
+        log "$e1 $e2"
     }
 }
 
@@ -1071,7 +1071,7 @@ proc UpdateNowClicked {uframe} {
             upgrade-downloaded $dir $uframe ok
         }
     } on error {e1 e2} {
-        log $e1 $e2
+        log "$e1 $e2"
     }
 }
 
@@ -1116,7 +1116,7 @@ proc wait-for-items {collector n timeout command} {
         {*}$command ok
         return
     } on error {e1 e2} {
-        log $e1 $e2
+        log "$e1 $e2"
     } finally {
         catch {
             $collector close
@@ -1143,7 +1143,7 @@ proc download-latest-skt {collector url filepath} {
             }
         }
     } on error {e1 e2} {
-        log $e1 $e2
+        log "$e1 $e2"
     } finally {
         catch {
             $chout close
@@ -1392,7 +1392,7 @@ proc vigo-hosts {tryout tryerr args} {
                     }
                 }
             } on error {e1 e2} { 
-                log $e1 $e2
+                log "$e1 $e2"
             } finally {
                 catch {
                     http::cleanup $tok
@@ -1404,7 +1404,7 @@ proc vigo-hosts {tryout tryerr args} {
         }
         $tryerr <- "All hosts failed error"
     } on error {e1 e2} {
-        log $e1 $e2
+        log "$e1 $e2"
     } finally {
     }
 }

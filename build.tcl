@@ -30,11 +30,11 @@
 
 proc copy-flags {countries {sizes {16 24 64}}} {
     set from [file normalize ../images/flag/shiny]
-    set to [file normalize ./sku/images/flag]
+    set to [file normalize ./sku/images]
     foreach size $sizes {
-        file mkdir [file join $to $size]
+        file mkdir [file join $to $size flag]
         foreach c $countries {
-            file copy -force [file join $from $size $c.png] [file join $to $size]
+            file copy -force [file join $from $size $c.png] [file join $to $size flag]
         }
     }
 }
