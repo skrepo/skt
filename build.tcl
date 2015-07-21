@@ -80,9 +80,10 @@ proc build-deb-rpm {arch_exact} {
         set distdir dist/linux-$arch
         file delete -force $distdir
         file mkdir $distdir
+        file copy skd/exclude/etc $distdir
+        file copy sku/exclude/usr $distdir
         file mkdir $distdir/usr/local/sbin
         file copy build/skd/linux-$arch/skd.bin $distdir/usr/local/sbin/skd.bin
-        file copy skd/exclude/etc $distdir
         file mkdir $distdir/usr/local/bin
         file copy build/sku/linux-$arch/sku.bin $distdir/usr/local/bin/sku.bin
         file copy sku/exclude/sku $distdir/usr/local/bin/sku
@@ -131,7 +132,7 @@ prepare-lib sklib 0.0.0
 
 build-sku linux x86_64
 build-skd linux x86_64
-#build-deb-rpm x86_64
+build-deb-rpm x86_64
 
 
 #build linux ix86 sample base-tcl-8.6.3.1 {tls-1.6.4 autoproxy-1.5.3 sklib-0.0.0 Tclx-8.4}

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=SecurityKISS Tunnel
+Comment=VPN Client
+Exec=sku %U
+Icon=sku.png
+Terminal=false
+Type=Application
+Encoding=UTF-8
+Categories=Network;Application;

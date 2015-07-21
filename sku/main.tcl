@@ -300,6 +300,7 @@ proc main-gui {} {
     # TODO sku may be started before all Tk deps are installed, so run in CLI first and check for Tk a few times with delay
     package require Tk 
     wm title . "SecurityKISS Tunnel"
+    wm iconphoto . -default [img load 16/logo] [img load 24/logo] [img load 32/logo] [img load 64/logo]
     wm deiconify .
     wm protocol . WM_DELETE_WINDOW {
         #TODO improve the message
