@@ -324,12 +324,11 @@ proc upgrade {dir} {
         set newsku [file join $dir sku.bin]
         set bsku /tmp/sku.bin-backup-$bid
 
-        # TODO check if openvpn running? Try to make skd upgrade independent. After restart it should reconnect to existing openvpn.
-        # TODO check if $newskd and $newsku exist
-        # TODO verify signature - for now skip
-        if {[verify-signature /etc/skd/keys/skt_public.pem $newskd]} {
-        } else {
-            #return [log Upgrade failed because signature verification failed]
+        if {![verify-signature /etc/skd/keys/skt_public.pem $newskd]} {
+            return [log Upgrade failed because SKD signature verification failed]
+        }
+        if {![verify-signature /etc/skd/keys/skt_public.pem $newsku]} {
+            return [log Upgrade failed because SKU signature verification failed]
         }
         # replace skd
         # rename is necessary to prevent "cannot create regular file ...: Text file busy" error

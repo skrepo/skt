@@ -152,6 +152,8 @@ proc main {} {
     puts stderr [build-date]
     puts stderr [build-version]
 
+    set ::model::Running_binary_fingerprint [sha1sum [this-binary]]
+
     #TODO log to stderr?
     if {$params(generate-keys)} {
         main-generate-keys
@@ -1079,6 +1081,8 @@ proc upgrade-downloaded {dir uframe status} {
     log upgrade-downloaded $status
     if {$status eq "ok"} { 
         checkforupdates-status $uframe 16/updating "Updating..."
+        # give 5 seconds to restart itself, otherwise report update failed
+        after 5000 [list checkforupdates-status $uframe 16/warning "Update failed"]
         puts stderr "PREPARE UPGRADE from $dir"
         skd-write "upgrade $dir"
         puts stderr "UPGRADING from $dir"
@@ -1499,12 +1503,16 @@ proc skd-read {} {
                 {^version (\S+) (.*)$} {
                     set skd_version [lindex $details 1]
                     puts stderr "SKD VERSION: $skd_version"
-                    puts stderr "BUILD VERSION: [build-version]"
+                    puts stderr "SKU VERSION: [build-version]"
                     # sku to restart itself if skd already upgraded and not too often
                     if {[int-ver $skd_version] > [int-ver [build-version]]} {
-                        model save
+                        set sha [sha1sum [this-binary]]
                         # just restart itself from the new binary - skd should have replaced it
-                        execl /usr/local/bin/sku.bin
+                        # restart only if different binaries
+                        if {$sha ne $::model::Running_binary_fingerprint} {
+                            model save
+                            execl [this-binary]
+                        }
                     }
                 }
             }

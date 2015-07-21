@@ -173,7 +173,7 @@ proc verify-signature {pubkey filepath} {
         return 0
     }
     log $cmd returned: $out
-    return [string equal "Verfied OK" $out]
+    return [string equal "Verified OK" $out]
 }
 
 
@@ -688,4 +688,17 @@ proc files-exist {files} {
 }
 
 
+# returns file path to the currently running binary assuming it is a starkit
+proc this-binary {} {
+    return [file dirname [file normalize [info script]]]
+}
 
+
+# best effort sha1sum, return empty string if failed
+proc sha1sum {filepath} {
+    set result ""
+    catch {
+        set result [lindex [exec sha1sum $filepath] 0]
+    }
+    return $result
+}

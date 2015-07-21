@@ -39,6 +39,8 @@ namespace eval ::model {
     # User Interface (gui or cli)
     variable Ui ""
 
+    variable Running_binary_fingerprint ""
+
     # Time offset relative to the "now" received in welcome message
     variable now_offset 0
 
