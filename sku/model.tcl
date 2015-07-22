@@ -236,6 +236,7 @@ proc ::model::load {} {
     #puts stderr "[inicfg dict-pretty $::Config]"
 }
 
+# may throw errors
 proc ::model::save {} {
     # save main ini
     ::model::model2ini $::model::INIFILE

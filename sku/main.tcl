@@ -30,12 +30,15 @@ package require skutil
 
 source [file join [file dir [info script]] model.tcl]
 
-
 proc fatal {msg {err ""}} {
-    log $msg
-    log $err
+    log $msg $err
     in-ui error $msg
     main-exit
+}
+
+proc exit-nosave {msg} {
+    in-ui error [log $msg]
+    main-exit nosave
 }
 
 
@@ -93,6 +96,8 @@ proc redirect-stdout {} {
 # It may set global variables
 proc main {} {
     unix relinquish-root
+    # every created file by the app should be private
+    umask 0077
     redirect-stdout
 
     # watch out - cmdline is buggy. For example you cannot define help option, it conflicts with the implicit one
@@ -110,8 +115,6 @@ proc main {} {
         log [cmdline::usage $options $usage]
         exit 1
     }
-    log Params:
-    parray params
 
 
     if {[catch {i18n load en [file join [file dir [info script]] messages.txt]} out err]} {
@@ -119,68 +122,59 @@ proc main {} {
         log $err
     }
 
-    if {$params(cli) || ![unix is-x-running]} {
+    puts stderr [build-date]
+    puts stderr [build-version]
+    model load
+
+    if {$params(cli) || ![unix is-x-running] || $params(version) || $params(id) || $params(generate-keys) || $params(add-launcher) || $params(remove-launcher)} {
         set ::model::Ui cli
     } else {
         set ::model::Ui gui
     }
 
-
     if {$params(version)} {
-        main-version
-        main-exit
+        exit-nosave [build-version]
     }
 
-    if {$params(id)} {
-        set cn [cn-from-cert [file join $::model::KEYSDIR client.crt]]
-        if {$cn eq ""} {
-            error-cli "Could not retrieve client id. Try to reinstall the program." 
-        } else {
-            error-cli $cn
-        }
-        main-exit
-    }
-
-
-    set piderr [create-pidfile ~/.sku/sku.pid]
-    if {$piderr ne ""} {
-        fatal $piderr
-    } 
-
-    model load
-
-    puts stderr [build-date]
-    puts stderr [build-version]
-
-    set ::model::Running_binary_fingerprint [sha1sum [this-binary]]
-
-    #TODO log to stderr?
     if {$params(generate-keys)} {
         main-generate-keys
-        main-exit
+        main-exit nosave
     }
     if {$params(add-launcher)} {
         puts stderr [log Adding Desktop Launcher]
         unix add-launcher sku
-        main-exit
+        main-exit nosave
     }
     if {$params(remove-launcher)} {
         puts stderr [log Removing Desktop Launcher]
         unix remove-launcher sku
-        main-exit
+        main-exit nosave
     }
+
+    try {
+        set cn [cn-from-cert [file join $::model::KEYSDIR client.crt]]
+        set ::model::Cn $cn
+        if {$params(id)} {
+            exit-nosave $cn
+        }
+    } on error {e1 e2} {
+        log "$e1 $e2"
+        exit-nosave "Could not retrieve client id. Try to reinstall the program."
+    }
+
     
+    set piderr [create-pidfile ~/.sku/sku.pid]
+    if {$piderr ne ""} {
+        exit-nosave $piderr
+    } 
+
+    set ::model::Running_binary_fingerprint [sha1sum [this-binary]]
+
     # Copy cadir because it  must be accessible from outside of the starkit
     # Overwrites certs on every run
     set cadir [file normalize ~/.sku/certs]
     copy-merge [file join [file dir [info script]] certs] $cadir
     https init -cadir $cadir
-
-    set cn [cn-from-cert [file join $::model::KEYSDIR client.crt]]
-    set ::model::Cn $cn
-    if {$cn eq ""} {
-        fatal "Could not retrieve client id. Try to reinstall the program." 
-    }
 
     #skd-connect 7777
     #model print
@@ -191,12 +185,14 @@ proc main {} {
 }
 
 
-proc main-exit {} {
-    model save
+proc main-exit {{arg ""}} {
+    #TODO Disconnect and clean up
+    if {$arg ne "nosave"} {
+        model save
+    }
     # ignore if problems occurred in deleting pidfile
     delete-pidfile ~/.sku/sku.pid
     set ::until_exit 1
-    #TODO Disconnect and clean up
     catch {close [$::model::Skd_sock}
     catch {destroy .}
     exit
@@ -240,7 +236,7 @@ proc main-generate-keys {} {
     } else {
         if {![generate-rsa $privkey]} {
             puts stderr [log Could not generate RSA keys]
-            return 0
+            return
         }
     }
     set csr [file join $::model::KEYSDIR client.csr]
@@ -250,7 +246,7 @@ proc main-generate-keys {} {
         set cn [generate-cn]
         if {![generate-csr $privkey $csr $cn]} {
             puts stderr [log Could not generate Certificate Signing Request]
-            return 0
+            return
         }
     }
 
@@ -278,23 +274,18 @@ proc main-generate-keys {} {
                 log crtdata: $crtdata
                 spit $crt $crtdata
                 close $fd
-                return 1
+                return
             }
         }
+        puts stderr [log Could not receive the signed certificate]
     }
-    puts stderr [log Could not receive the signed certificate]
-    return 0
+    return
 }
 
 
 #TODO generate from HD UUID/dbus machine-id and add sha256 for checksum/proof of work
 proc generate-cn {} {
     return [join [lmap i [seq 8] {rand-byte-hex}] ""]
-}
-
-proc main-version {} {
-    log SKU Version:
-    #TODO
 }
 
 proc main-cli {} {

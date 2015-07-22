@@ -216,22 +216,23 @@ proc generate-csr {privkey csr cn} {
 
 # Extract common name from certificate
 # Return cn on success, empty string otherwise
+# Throws errors on failure
 proc cn-from-cert {crtpath} {
     memoize
-    log ca-from-cert $crtpath
+    if {![file isfile $crtpath]} {
+        error [log "ERROR: cn-from-cert: $crtpath does not exist"]
+    }
+    log cn-from-cert $crtpath
     set cmd [list openssl x509 -noout -subject -in $crtpath]
     if {[catch {exec {*}$cmd} subject err]} {
-        log $err
-        return ""
+        error [log $err]
     }
     if {[regexp {CN=([0-9a-f]{4,16})} $subject -> cn]} {
         log Extracted cn $cn from subject $subject
         return $cn
     } else {
-        log Could not extract cn from subject $subject
-        return ""
+        error [log Could not extract cn from subject $subject]
     }
-    
 }
 
 
