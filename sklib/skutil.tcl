@@ -285,7 +285,7 @@ proc mk-head-dir {filepath} {
 
 # return random 0 <= x < $n
 proc rand-int {n} {
-    return [expr {round(rand()*$n)}]
+    return [expr {round(floor(rand()*$n))}]
 }
 
 proc rand-byte {} {

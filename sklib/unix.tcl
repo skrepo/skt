@@ -85,7 +85,7 @@ proc ::unix::add-launcher {appname} {
     set desktopdir [::unix::get-desktop-dir]
     if {[file exists $desktopdir]} {
         file copy -force /usr/share/applications/$appname.desktop $desktopdir
-        file attributes [file join $desktopdir $appname.desktop] -permissions ugo+x
+        file attributes [file join $desktopdir $appname.desktop] -permissions ugo+rx
     }
 }
 

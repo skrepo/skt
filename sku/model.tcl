@@ -98,7 +98,7 @@ namespace eval ::model {
     variable layout_w 0
     variable layout_h 0
     variable layout_barw 350
-    variable layout_barh 6
+    variable layout_barh 8
 
     variable Gui_planline "Plan"
     variable Gui_usedlabel "Used"
@@ -279,7 +279,8 @@ proc ::model::selected-sitem {provider args} {
         set ssid [dict-pop $::model::Providers $provider selected_sitem_id {}]
         if {$ssid eq "" || [::model::sitem-by-id $provider $ssid] eq ""} {
             # pick random sitem
-            set sitem [lindex $slist [rand-int [llength $slist]]]
+            set rand [rand-int [llength $slist]]
+            set sitem [lindex $slist $rand]
             # save its id in model
             dict set ::model::Providers $provider selected_sitem_id [dict get $sitem id]
             return $sitem

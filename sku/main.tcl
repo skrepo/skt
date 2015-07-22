@@ -1236,67 +1236,71 @@ proc OptionsClicked {} {
 
 #TODO sorting by country and favorites
 proc ServerListClicked {} {
-    set slist [model slist [current-provider]]
-    set ssitem [model selected-sitem [current-provider]]
-    set ssid [dict get $ssitem id]
-
-
-    set w .slist_dialog
-    catch { destroy $w }
-    toplevel $w
-    set wt $w.tree
-
-    ttk::treeview $wt -columns "country city ip" -selectmode browse
+    try {
+        set slist [model slist [current-provider]]
+        set ssitem [model selected-sitem [current-provider]]
+        set ssid [dict get $ssitem id]
     
-    $wt heading #0 -text F
-    $wt heading 0 -text Country
-    $wt heading 1 -text City
-    $wt heading 2 -text IP
-    $wt column #0 -width 50 -anchor nw -stretch 0
-    $wt column 0 -width 140 -anchor w
-    $wt column 1 -width 140 -anchor w
-    $wt column 2 -width 140 -anchor w
     
-    foreach sitem $slist {
-        set id [dict get $sitem id]
-        set ccode [dict get $sitem ccode]
-        set country [dict get $sitem country]
-        set city [dict get $sitem city]
-        set ip [dict get $sitem ip]
-        $wt insert {} end -id $id -image [img load 24/flag/$ccode] -values [list $country $city $ip]
+        set w .slist_dialog
+        catch { destroy $w }
+        toplevel $w
+        set wt $w.tree
+    
+        ttk::treeview $wt -columns "country city ip" -selectmode browse
+        
+        $wt heading #0 -text F
+        $wt heading 0 -text Country
+        $wt heading 1 -text City
+        $wt heading 2 -text IP
+        $wt column #0 -width 50 -anchor nw -stretch 0
+        $wt column 0 -width 140 -anchor w
+        $wt column 1 -width 140 -anchor w
+        $wt column 2 -width 140 -anchor w
+        
+        foreach sitem $slist {
+            set id [dict get $sitem id]
+            set ccode [dict get $sitem ccode]
+            set country [dict get $sitem country]
+            set city [dict get $sitem city]
+            set ip [dict get $sitem ip]
+            $wt insert {} end -id $id -image [img load 24/flag/$ccode] -values [list $country $city $ip]
+        }
+        $wt selection set $ssid
+        grid columnconfigure $w 0 -weight 1
+        grid rowconfigure $w 0 -weight 1
+        grid $wt -sticky news
+    
+        set wb $w.buttons
+        frame $wb
+        # width may be in pixels or in chars depending on presence of the image
+        button $wb.cancel -text Cancel -width 10 -command [list set ::Modal.Result cancel]
+        button $wb.ok -text OK -width 10 -command [list set ::Modal.Result ok]
+        grid $wb -sticky news
+        grid $wb.cancel -row 5 -column 0 -padx {30 0} -pady 5 -sticky w
+        grid $wb.ok -row 5 -column 1 -padx {0 30} -pady 5 -sticky e
+        grid columnconfigure $wb 0 -weight 1
+    
+        bind Treeview <Return> [list set ::Modal.Result ok]
+        bind Treeview <Double-Button-1> [list set ::Modal.Result ok]
+        bind $w <Escape> [list set ::Modal.Result cancel]
+        bind $w <Control-w> [list set ::Modal.Result cancel]
+        bind $w <Control-q> [list set ::Modal.Result cancel]
+        wm title $w "Select server"
+    
+    
+        focus $wt
+        $wt focus $ssid
+        set modal [ShowModal $w]
+        if {$modal eq "ok"} {
+            model selected-sitem [current-provider] [$wt selection]
+        }
+        #model print
+        destroy $w
+
+    } on error {e1 e2} {
+        log "$e1 $e2"
     }
-    $wt selection set $ssid
-    grid columnconfigure $w 0 -weight 1
-    grid rowconfigure $w 0 -weight 1
-    grid $wt -sticky news
-
-    set wb $w.buttons
-    frame $wb
-    # width may be in pixels or in chars depending on presence of the image
-    button $wb.cancel -text Cancel -width 10 -command [list set ::Modal.Result cancel]
-    button $wb.ok -text OK -width 10 -command [list set ::Modal.Result ok]
-    grid $wb -sticky news
-    grid $wb.cancel -row 5 -column 0 -padx {30 0} -pady 5 -sticky w
-    grid $wb.ok -row 5 -column 1 -padx {0 30} -pady 5 -sticky e
-    grid columnconfigure $wb 0 -weight 1
-
-    bind Treeview <Return> [list set ::Modal.Result ok]
-    bind Treeview <Double-Button-1> [list set ::Modal.Result ok]
-    bind $w <Escape> [list set ::Modal.Result cancel]
-    bind $w <Control-w> [list set ::Modal.Result cancel]
-    bind $w <Control-q> [list set ::Modal.Result cancel]
-    wm title $w "Select server"
-
-
-    focus $wt
-    $wt focus $ssid
-    set modal [ShowModal $w]
-    if {$modal eq "ok"} {
-        model selected-sitem [current-provider] [$wt selection]
-    }
-    #model print
-    destroy $w
-
 }
 
 
@@ -1559,33 +1563,41 @@ proc get-client-no {crtpath} {
 
 
 proc ClickConnect {} {
-    # we artificially enforce Connstatus and update display 
-    # in order to immediately disable button to prevent double-click
-    # The Connstatus may be corrected by SKD reports
-    set ::model::Connstatus connecting
-    # temporary set Current_sitem - it will be overwritten by meta info
-    # received back from SKD
-    set ::model::Current_sitem [model selected-sitem [current-provider]]
-
-    set localconf $::conf
-    conn-status-display
-    set ip [dict get $::model::Current_sitem ip]
-    # TODO set ovs according to ovs preferences
-    set ovs [lindex [dict get $::model::Current_sitem ovses] 0]
-    set proto [dict get $ovs proto]
-    set port [dict get $ovs port]
-    append localconf " --proto $proto --remote $ip $port --meta $::model::Current_sitem "
-    skd-write "config $localconf"
+    try {
+        # we artificially enforce Connstatus and update display 
+        # in order to immediately disable button to prevent double-click
+        # The Connstatus may be corrected by SKD reports
+        set ::model::Connstatus connecting
+        # temporary set Current_sitem - it will be overwritten by meta info
+        # received back from SKD
+        set ::model::Current_sitem [model selected-sitem [current-provider]]
+    
+        set localconf $::conf
+        conn-status-display
+        set ip [dict get $::model::Current_sitem ip]
+        # TODO set ovs according to ovs preferences
+        set ovs [lindex [dict get $::model::Current_sitem ovses] 0]
+        set proto [dict get $ovs proto]
+        set port [dict get $ovs port]
+        append localconf " --proto $proto --remote $ip $port --meta $::model::Current_sitem "
+        skd-write "config $localconf"
+    } on error {e1 e2} {
+        log "$e1 $e2"
+    }
 }
 
 proc ClickDisconnect {} {
-    # we artificially enforce Connstatus and update display 
-    # in order to immediately disable button to prevent double-click
-    # The Connstatus may be corrected by SKD reports
-    set ::model::Connstatus disconnected
-    conn-status-display
-
-    skd-write stop
+    try {
+        # we artificially enforce Connstatus and update display 
+        # in order to immediately disable button to prevent double-click
+        # The Connstatus may be corrected by SKD reports
+        set ::model::Connstatus disconnected
+        conn-status-display
+    
+        skd-write stop
+    } on error {e1 e2} {
+        log "$e1 $e2"
+    }
 }
 
 
