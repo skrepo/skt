@@ -258,8 +258,7 @@ proc SkdRead {} {
                 set dir [lindex $tokens 1]
                 # if upgrade is successfull it never returns (execl replace program)
                 set err [upgrade $dir]
-                log Could not upgrade from $dir: $err
-                SkdWrite ctrl "Could not upgrade from $dir: $err"
+                SkdWrite ctrl [log "Could not upgrade from $dir: $err"]
             }
             default {
                 SkdWrite ctrl "Unknown command"
@@ -320,6 +319,9 @@ proc dns-is-resolv-skd-generated {} {
 proc upgrade {dir} {
     # replace the current program with new version - effectively restart from the new binary, PID is preserved
     try {
+        if {![file isdirectory $dir]} {
+            return [log Upgrade failed because there is no $dir directory]
+        }
         # backup id
         set bid [rand-big]
         set skdpath /usr/local/sbin/skd.bin

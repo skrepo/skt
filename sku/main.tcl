@@ -369,8 +369,9 @@ proc main-gui {} {
 
 proc check-for-updates {uframe} {
     try {
+        set platform [this-os]-[this-arch]
         channel {chout cherr} 1
-        vigo-curl $chout $cherr /check-for-updates
+        vigo-curl $chout $cherr /check-for-updates/$platform
         select {
             <- $chout {
                 set data [<- $chout]
@@ -518,8 +519,9 @@ proc plan-comparator {tstamp a b} {
 # activePlans {{name JADEITE period month limit 50000000000 start 1431090862 used 12345678901 nop 3} {name GREEN period day limit 300000000 start 1431040000 used 15000000 nop 99999}}
 proc get-welcome {} {
     try {
+        set platform [this-os]-[this-arch]
         channel {chout cherr} 1
-        vigo-curl $chout $cherr /welcome/[build-version]/$::model::Cn
+        vigo-curl $chout $cherr /welcome/[build-version]/$platform/$::model::Cn
         select {
             <- $chout {
                 set data [<- $chout]

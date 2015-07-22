@@ -91,8 +91,8 @@ namespace eval ::model {
     variable layout_bg1 white
     variable layout_bg2 grey95
     variable layout_bg3 "light grey"
-    variable layout_fgused #e04006
-    variable layout_fgelapsed #4169e1
+    variable layout_fgused grey
+    variable layout_fgelapsed grey
     variable layout_x 300
     variable layout_y 300
     variable layout_w 0
