@@ -178,6 +178,12 @@ proc adjust-config {conf} {
 
 # validate config paths and store config in state
 proc load-config {conf} {
+    # every attempt to load config should reset the previous one
+    set ::model::ovpn_config ""
+    # sanitize config input
+    if {![regexp {^[\d\w\s_:/\-]*$} $config]} {
+        return "Config contains illegal characters"
+    }
     set patherror [::ovconf::check-paths-exist $conf]
     if {$patherror ne ""} {
         return $patherror
@@ -187,84 +193,83 @@ proc load-config {conf} {
 }
 
 proc SkdRead {} {
-    set sock $::model::Skd_sock
-    if {$sock eq ""} {
-        return
-    }
-    if {[gets $sock line] < 0} {
-        if {[eof $sock]} {
-            skd-conn-close
+    try {
+        set sock $::model::Skd_sock
+        if {$sock eq ""} {
+            return
         }
-        return
-    }
-    
-    log SkdRead: $line
-    switch -regexp -matchvar tokens $line {
-        {^stop$} {
-            if {[ovpn-pid] != 0} {
-                if {[catch {exec kill [ovpn-pid]} out err]} {
-                    log "kill [ovpn-pid] failed"
-                    log $out \n $err
-                }
-                OvpnExit 0
-                SkdReportState
-            } else {
-                SkdWrite ctrl "Nothing to be stopped"
-                return
-            }
-        }
-        {^start$} {
-            if {$::model::ovpn_config eq ""} {
-                SkdWrite ctrl "No OpenVPN config loaded"
-                return
-            }
-            if {[ovpn-pid] != 0} {
-                SkdWrite ctrl "OpenVPN already running with pid [ovpn-pid]"
-                return
-            } else {
-                model reset-ovpn-state
-                log "ORIGINAL CONFIG: $::model::ovpn_config"
-                try {
-                    set config [adjust-config $::model::ovpn_config]
-                } on error {e1 e2} {
-                    log $e1 $e2
-                }
-                log "ADJUSTED CONFIG: $config"
-                set ovpncmd "openvpn $config"
-                set chan [cmd invoke $ovpncmd OvpnExit OvpnRead OvpnErrRead]
-                set ::model::Start_pid [pid $chan]
-                # this call is necessary to update ovpn_pid
-                ovpn-pid
-                SkdWrite ctrl "OpenVPN with pid [ovpn-pid] started"
-                SkdReportState
-                return
-            }
-        }
-        {^config (.+)$} {
-            # TODO pass meta info in config (city, country, etc) for sending info back to SKU. Also to have a first hand info about connection to display
-            set config [lindex $tokens 1]
-            set configerror [load-config $config]
-            log config $config
-            if {$configerror eq ""} {
-                SkdWrite ctrl "Config loaded"
-            } else {
-                SkdWrite ctrl $configerror
+        if {[gets $sock line] < 0} {
+            if {[eof $sock]} {
+                skd-conn-close
             }
             return
         }
-        {^upgrade (.+)$} {
-            log $line
-            # $dir should contain skd, sku.bin and their signatures
-            set dir [lindex $tokens 1]
-            # if upgrade is successfull it never returns (execl replace program)
-            set err [upgrade $dir]
-            log Could not upgrade from $dir: $err
-            SkdWrite ctrl "Could not upgrade from $dir: $err"
-        }
-        default {
-            SkdWrite ctrl "Unknown command"
-        }
+        
+        log SkdRead: $line
+        switch -regexp -matchvar tokens $line {
+            {^stop$} {
+                if {[ovpn-pid] != 0} {
+                    if {[catch {exec kill [ovpn-pid]} out err]} {
+                        log "kill [ovpn-pid] failed"
+                        log $out \n $err
+                    }
+                    OvpnExit 0
+                } else {
+                    SkdWrite ctrl "Nothing to be stopped"
+                    return
+                }
+            }
+            {^start$} {
+                if {$::model::ovpn_config eq ""} {
+                    SkdWrite ctrl "No OpenVPN config loaded"
+                    return
+                }
+                if {[ovpn-pid] != 0} {
+                    SkdWrite ctrl "OpenVPN already running with pid [ovpn-pid]"
+                    return
+                } else {
+                    model reset-ovpn-state
+                    set config [adjust-config $::model::ovpn_config]
+                         
 
+                    set ovpncmd "openvpn $config"
+                    set chan [cmd invoke $ovpncmd OvpnExit OvpnRead OvpnErrRead]
+                    set ::model::Start_pid [pid $chan]
+                    # this call is necessary to update ovpn_pid
+                    ovpn-pid
+                    SkdWrite ctrl "OpenVPN with pid [ovpn-pid] started"
+                    return
+                }
+            }
+            {^config (.+)$} {
+                set config [lindex $tokens 1]
+                set configerror [load-config $config]
+                log config $config
+                if {$configerror eq ""} {
+                    SkdWrite ctrl "Config loaded"
+                } else {
+                    SkdWrite ctrl $configerror
+                }
+                return
+            }
+            {^upgrade (.+)$} {
+                log $line
+                # $dir should contain skd, sku.bin and their signatures
+                set dir [lindex $tokens 1]
+                # if upgrade is successfull it never returns (execl replace program)
+                set err [upgrade $dir]
+                log Could not upgrade from $dir: $err
+                SkdWrite ctrl "Could not upgrade from $dir: $err"
+            }
+            default {
+                SkdWrite ctrl "Unknown command"
+            }
+    
+        }
+    } on error {e1 e2} {
+        log "$e1 $e2"
+    } finally {
+        SkdReportState
     }
 }
 
