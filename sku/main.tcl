@@ -342,12 +342,12 @@ proc main-gui {} {
 
     # TODO use config.ovpn and other config files from welcome message or by a separate call
     set ::conf [::ovconf::parse /home/sk/seckiss/skt/config.ovpn]
-    go check-for-updates
+    go check-for-updates ""
     go get-welcome $::model::Cn
 
 }
 
-proc check-for-updates {} {
+proc check-for-updates {uframe} {
     try {
         channel {chout cherr} 1
         vigo-curl $chout $cherr /check-for-updates
@@ -367,7 +367,7 @@ proc check-for-updates {} {
                 puts stderr "Check failed: $err"
             }
         }
-        CheckForUpdatesCompleted
+        checkforupdates-refresh $uframe 0
         $chout close
         $cherr close
     } on error {e1 e2} {
@@ -970,40 +970,81 @@ proc setDialogSize {window} {
     wm geometry $window ${cw}x${ch}+${cx}+${cy}
 }
 
-proc CheckForUpdatesClicked {} {
+proc CheckForUpdatesClicked {uframe} {
     try {
         set about .options_dialog.nb.about
         $about.checkforupdates configure -state disabled
-        go check-for-updates
+        checkforupdates-status $uframe connecting16 "Checking for updates"
+        go check-for-updates $uframe
     } on error {e1 e2} {
         log $e1 $e2
     }
 }
 
+proc checkforupdates-status {uframe img msg} {
+    try {
+        $uframe.status configure -text "  $msg"
+        img place $img $uframe.status
+    } on error {e1 e2} {
+        log $e1 $e2
+    }
+} 
+
+
 # Three possible outcomes: 
 # -The program is up to date
 # -New version XXX available
 # -No updates found (connection problem) 
-proc CheckForUpdatesCompleted {} {
+# uframe - it is passed to update the correct widget
+# quiet - display message only if we already know that the program out of date
+proc checkforupdates-refresh {uframe quiet} {
     try {
-        set msg ""
-        set latest $::model::Latest_version
-        if {$latest ne "0" && [is-dot-ver $latest]} {
-            if {[int-ver $latest] > [int-ver [build-version]]} {
-                set msg "New version $latest available"
-                set about .options_dialog.nb.about
-                grid $about.updateframe.button
-            } else {
-                set msg "The program version is up to date"
-            }
-        } else {
-            set msg "No updates found"
+        if {![winfo exists $uframe]} {
+            return
         }
-        set ::model::Check_for_updates_status $msg
+        set latest $::model::Latest_version
+        if {$quiet} {
+            if {$latest ne "0" && [is-dot-ver $latest]} {
+                if {[int-ver $latest] > [int-ver [build-version]]} {
+                    checkforupdates-status $uframe attention16 "New version $latest is available"
+                    grid $uframe.button
+                    return
+                }
+            }
+            checkforupdates-status $uframe empty16 ""
+            return
+        } else {
+            if {$latest ne "0" && [is-dot-ver $latest]} {
+                if {[int-ver $latest] > [int-ver [build-version]]} {
+                    checkforupdates-status $uframe attention16 "New version $latest is available"
+                    grid $uframe.button
+                } else {
+                    checkforupdates-status $uframe tick16 "The program is up to date"
+                }
+            } else {
+                checkforupdates-status $uframe question16 "No updates found"
+            }
+        }
     } on error {e1 e2} {
         log $e1 $e2
     }
 }
+
+
+proc UpdateNowClicked {uframe} {
+    try {
+        set about .options_dialog.nb.about
+        $uframe.button configure -state disabled
+        checkforupdates-status $uframe downloading16 "Downloading..."
+
+        #TODO check if version downloaded, download, upgrade, all with events
+
+    } on error {e1 e2} {
+        log $e1 $e2
+    }
+}
+
+
 
 proc OptionsClicked {} {
     set w .options_dialog
@@ -1013,23 +1054,35 @@ proc OptionsClicked {} {
 
     set nb [ttk::notebook $w.nb]
     frame $nb.about
-    label $nb.about.buildver -text "Program version: [build-version]"
-    label $nb.about.builddate -text "Build date: [build-date]"
-    button $nb.about.checkforupdates -text "Check for updates" -command CheckForUpdatesClicked
-    frame $nb.about.updateframe
-    set ::model::Check_for_updates_status ""
-    label $nb.about.updateframe.status -textvariable ::model::Check_for_updates_status
-    button $nb.about.updateframe.button -text "Update"
-    grid $nb.about.buildver -sticky w -padx 5 -pady 5
-    grid $nb.about.builddate -sticky w -padx 5 -pady 5
-    grid $nb.about.checkforupdates -sticky e -padx 5 -pady 5
-    grid $nb.about.updateframe -sticky news -padx 5 -pady 5
-    grid $nb.about.updateframe.status -row 0 -column 0 -sticky w
-    grid $nb.about.updateframe.button -row 0 -column 1 -sticky e
-    grid columnconfigure $nb.about 0 -weight 1
-    grid columnconfigure $nb.about.updateframe 0 -weight 1
-    grid rowconfigure $nb.about.updateframe 0 -weight 1 -minsize 40
-    grid remove $nb.about.updateframe.button
+    label $nb.about.buildver1 -text "Program version:"
+    label $nb.about.buildver2 -text [build-version]
+    label $nb.about.builddate1 -text "Build date:"
+    label $nb.about.builddate2 -text [build-date]
+
+    # this widget needs to have unique id which is passed through button events to status update label
+    set update_id [rand-big]
+    set uframe $nb.about.updateframe$update_id
+
+    button $nb.about.checkforupdates -text "Check for updates" -command [list CheckForUpdatesClicked $uframe]
+
+    frame $uframe
+    label $uframe.status -compound left
+    button $uframe.button -text "Update now" -command [list UpdateNowClicked $uframe]
+
+
+
+    grid $nb.about.buildver1 -row 2 -column 0 -sticky w -padx 10 -pady 5
+    grid $nb.about.buildver2 -row 2 -column 1 -sticky w -padx 10 -pady 5
+    grid $nb.about.builddate1 -row 4 -column 0 -sticky w -padx 10 -pady 5
+    grid $nb.about.builddate2 -row 4 -column 1 -sticky w -padx 10 -pady 5
+    grid $nb.about.checkforupdates -column 1 -sticky e -padx 10 -pady 5
+    grid $uframe -columnspan 2 -sticky news -padx 10 -pady 5
+    grid $uframe.status -row 0 -column 0 -sticky w
+    grid $uframe.button -row 0 -column 1 -sticky e -padx {40 0}
+    grid columnconfigure $nb.about 0 -weight 1 -minsize 200
+    grid columnconfigure $uframe 0 -weight 1
+    grid rowconfigure $uframe 0 -weight 1 -minsize 40
+    grid remove $uframe.button
     frame $nb.settings
     ttk::notebook::enableTraversal $nb
     $nb add $nb.about -text About -padding 20
@@ -1052,12 +1105,14 @@ proc OptionsClicked {} {
     bind $w <Control-w> [list set ::Modal.Result cancel]
     bind $w <Control-q> [list set ::Modal.Result cancel]
     wm title $w "Options"
+    
+    # update status based on previous values of Latest_version - in quiet mode - display only if program out of date
+    checkforupdates-refresh $uframe 1
 
     set modal [ShowModal $w]
     if {$modal eq "ok"} {
         puts stderr "Options ok"
     }
-    set ::model::Check_for_updates_status ""
     destroy $w
 }
 

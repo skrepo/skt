@@ -295,6 +295,11 @@ proc rand-byte-hex {} {
     return [format %02x [rand-byte]]
 }
 
+# return 9-digit random integer
+proc rand-big {} {
+    return [expr {100000000 + [rand-int 900000000]}]
+}
+
 # return list of numbers from 0 to n-1
 proc seq {n} {
     set res {}

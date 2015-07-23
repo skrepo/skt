@@ -46,8 +46,6 @@ namespace eval ::model {
     # latest skd/sku version to upgrade from check-for-updates
     variable Latest_version 0
 
-    variable Check_for_updates_status ""
-
     # OpenVPN connection status 
     # Although the source of truth for connstatus is SKD stat reports
     # we keep local copy to know when to update display

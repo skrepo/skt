@@ -315,7 +315,7 @@ proc upgrade {dir} {
     # replace the current program with new version - effectively restart from the new binary, PID is preserved
     try {
         # backup id
-        set bid [rand-int 999999999]
+        set bid [rand-big]
         set skdpath /usr/local/sbin/skd.bin
         set newskd [file join $dir skd.bin]
         set bskd /tmp/skd-backup-$bid
