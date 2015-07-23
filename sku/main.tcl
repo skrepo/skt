@@ -351,10 +351,9 @@ proc main-gui {} {
     grid rowconfigure .c 0 -weight 1
     bind . <Configure> [list MovedResized %W %x %y %w %h]
 
-    # TODO use config.ovpn and other config files from welcome message or by a separate call
-    set ::conf [::ovconf::parse /home/sk/seckiss/skt/config.ovpn]
     go check-for-updates ""
     go get-welcome
+    go get-ovpnconfig
 
 }
 
@@ -540,6 +539,29 @@ proc get-welcome {} {
     }
 }
 
+proc get-ovpnconfig {} {
+    try {
+        set platform [this-os]-[this-arch]
+        channel {chout cherr} 1
+        vigo-curl $chout $cherr /ovpnconfig/[build-version]/$platform/$::model::Cn
+        select {
+            <- $chout {
+                set data [<- $chout]
+                puts stderr [log ovpngconfig received]
+                spit [file join $::model::KEYSDIR config.ovpn] $data
+                puts stderr [log ovpnconfig saved]
+            }
+            <- $cherr {
+                set err [<- $cherr]
+                puts stderr [log get-welcome failed with error: $err]
+            }
+        }
+        $chout close
+        $cherr close
+    } on error {e1 e2} {
+        log "$e1 $e2"
+    }
+}
 
 proc vigo-curl {chout cherr urlpath} {
     go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
@@ -1576,14 +1598,15 @@ proc ClickConnect {} {
         # received back from SKD
         set ::model::Current_sitem [model selected-sitem [current-provider]]
     
-        set localconf $::conf
+        set localconf [::ovconf::parse [file join $::model::KEYSDIR config.ovpn]]
         conn-status-display
         set ip [dict get $::model::Current_sitem ip]
         # TODO set ovs according to ovs preferences
         set ovs [lindex [dict get $::model::Current_sitem ovses] 0]
         set proto [dict get $ovs proto]
         set port [dict get $ovs port]
-        append localconf " --proto $proto --remote $ip $port --meta $::model::Current_sitem "
+        #TODO not really append, it's rather replace
+        append localconf " --proto $proto --remote $ip $port --meta $::model::Current_sitem --cert [file join $::model::KEYSDIR client.crt] --key [file join $::model::KEYSDIR client.key]"
         skd-write "config $localconf"
     } on error {e1 e2} {
         log "$e1 $e2"

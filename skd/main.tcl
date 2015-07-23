@@ -181,7 +181,8 @@ proc load-config {conf} {
     # every attempt to load config should reset the previous one
     set ::model::ovpn_config ""
     # sanitize config input
-    if {![regexp {^[\d\w\s_:/\-.\{\}]*$} $conf]} {
+    if {![regexp {^[\d\w\s_:/\-.\{\}"]*$} $conf]} {
+        log "CONF:\n$conf"
         return "Config contains illegal characters"
     }
     set patherror [::ovconf::check-paths-exist $conf]
