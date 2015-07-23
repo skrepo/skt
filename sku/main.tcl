@@ -1171,6 +1171,8 @@ proc OptionsClicked {} {
 
     set nb [ttk::notebook $w.nb]
     frame $nb.about
+    label $nb.about.userid1 -text "User ID:"
+    label $nb.about.userid2 -text $::model::Cn
     label $nb.about.buildver1 -text "Program version:"
     label $nb.about.buildver2 -text [build-version]
     label $nb.about.builddate1 -text "Build date:"
@@ -1188,6 +1190,8 @@ proc OptionsClicked {} {
 
 
 
+    grid $nb.about.userid1 -row 1 -column 0 -sticky w -padx 10 -pady 5
+    grid $nb.about.userid2 -row 1 -column 1 -sticky w -padx 10 -pady 5
     grid $nb.about.buildver1 -row 2 -column 0 -sticky w -padx 10 -pady 5
     grid $nb.about.buildver2 -row 2 -column 1 -sticky w -padx 10 -pady 5
     grid $nb.about.builddate1 -row 4 -column 0 -sticky w -padx 10 -pady 5

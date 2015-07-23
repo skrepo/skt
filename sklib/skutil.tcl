@@ -162,7 +162,7 @@ proc create-signature {privkey filepath} {
 #TODO provide Windows version
 proc verify-signature {pubkey filepath} {
     #TODO adjust paths like the one below
-    # public key must be in /etc/skd/keys/skt_public.pem
+    # public key of the signer must be in $pubkey
     set cmd [list openssl dgst -sha1 -verify $pubkey -signature $filepath.sig $filepath]
     log verify-signature: $cmd
     # -ignorestderr - Stops the exec command from treating the output of messages to the pipeline's standard error channel as an error case.

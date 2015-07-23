@@ -331,10 +331,10 @@ proc upgrade {dir} {
         set newsku [file join $dir sku.bin]
         set bsku /tmp/sku.bin-backup-$bid
 
-        if {![verify-signature /etc/skd/keys/skt_public.pem $newskd]} {
+        if {![verify-signature /etc/skd/keys/signer_public.pem $newskd]} {
             return [log Upgrade failed because SKD signature verification failed]
         }
-        if {![verify-signature /etc/skd/keys/skt_public.pem $newsku]} {
+        if {![verify-signature /etc/skd/keys/signer_public.pem $newsku]} {
             return [log Upgrade failed because SKU signature verification failed]
         }
         # replace skd
