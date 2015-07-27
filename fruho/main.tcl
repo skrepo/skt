@@ -1,5 +1,5 @@
 #
-# sku.tcl
+# fruho/main.tcl
 #
 # This should be the preamble to every application
 # It makes it possible to run as starpack or as a sourced script
@@ -50,7 +50,7 @@ interp bgerror "" background-error
 #after 4000 {error "This is my bg error"}
 
 # We need to redirect to log file here and not in external shell script
-# in case it is run with sudo. Then logging would go to /root/.sku
+# in case it is run with sudo. Then logging would go to /root/.fruho
 # Redirect stdout to a file $::model::LOGFILE
 namespace eval tolog {
     variable fh
@@ -112,7 +112,7 @@ proc main {} {
             {version            "Print version"}
             {locale    en       "Run particular language version"}
         }
-    set usage ": sku \[options]\noptions:"
+    set usage ": fruho \[options]\noptions:"
     if {[catch {array set params [::cmdline::getoptions ::argv $options $usage]}] == 1} {
         log [cmdline::usage $options $usage]
         exit 1
@@ -144,12 +144,12 @@ proc main {} {
     }
     if {$params(add-launcher)} {
         puts stderr [log Adding Desktop Launcher]
-        unix add-launcher sku
+        unix add-launcher fruho
         main-exit nosave
     }
     if {$params(remove-launcher)} {
         puts stderr [log Removing Desktop Launcher]
-        unix remove-launcher sku
+        unix remove-launcher fruho
         main-exit nosave
     }
 
@@ -165,7 +165,7 @@ proc main {} {
     }
 
     
-    set piderr [create-pidfile ~/.sku/sku.pid]
+    set piderr [create-pidfile ~/.fruho/fruho.pid]
     if {$piderr ne ""} {
         exit-nosave $piderr
     } 
@@ -174,14 +174,12 @@ proc main {} {
 
     # Copy cadir because it  must be accessible from outside of the starkit
     # Overwrites certs on every run
-    set cadir [file normalize ~/.sku/certs]
+    set cadir [file normalize ~/.fruho/certs]
     copy-merge [file join [file dir [info script]] certs] $cadir
     https init -cadir $cadir
 
-    #skd-connect 7777
-    #model print
     in-ui main
-    skd-monitor
+    daemon-monitor
     plan-monitor
     conn-status-display
 }
@@ -193,9 +191,9 @@ proc main-exit {{arg ""}} {
         model save
     }
     # ignore if problems occurred in deleting pidfile
-    delete-pidfile ~/.sku/sku.pid
+    delete-pidfile ~/.fruho/fruho.pid
     set ::until_exit 1
-    catch {close [$::model::Skd_sock}
+    catch {close [$::model::Ffconn_sock}
     catch {destroy .}
     exit
 }
@@ -213,7 +211,7 @@ proc error-gui {msg} {
         # hide toplevel window. Use wm deiconify to restore later
         catch {wm withdraw .}
         log $msg
-        tk_messageBox -title "SKU error" -type ok -icon error -message ERROR -detail "$msg\n\nPlease check $::model::LOGFILE for details"
+        tk_messageBox -title "fruho error" -type ok -icon error -message ERROR -detail "$msg\n\nPlease check $::model::LOGFILE for details"
     } else {
         error-cli $msg
     }
@@ -256,7 +254,7 @@ proc main-generate-keys {} {
 
 
 
-    #TODO cert request should be moved to first start of sku
+    #TODO cert request should be moved to the first start of fruho client
     #Only keypair generation happens on --generate-keys
     if {[file exists $crt]} {
         puts stderr [log CRT $crt already exists]
@@ -311,7 +309,7 @@ proc hsep {parent height} {
 
 proc main-gui {} {
     log Running GUI
-    # TODO sku may be started before all Tk deps are installed, so run in CLI first and check for Tk a few times with delay
+    # TODO fruho client may be started before all Tk deps are installed, so run in CLI first and check for Tk a few times with delay
     package require Tk 
     wm title . "SecurityKISS Tunnel"
     wm iconphoto . -default [img load 16/logo] [img load 24/logo] [img load 32/logo] [img load 64/logo]
@@ -606,7 +604,7 @@ proc tabset-state {state} {
 }
 
 
-# Extract new OpenVPN connstatus from SKD stat report
+# Extract new OpenVPN connstatus from fruhod stat report
 # update the model and refresh display if status changed
 proc conn-status-update {stat} {
     set newstatus [conn-status-reported $stat]
@@ -617,7 +615,7 @@ proc conn-status-update {stat} {
 }
 
 
-# Extract new OpenVPN connstatus from SKD stat report
+# Extract new OpenVPN connstatus from fruhod stat report
 proc conn-status-reported {stat} {
     if {$stat eq ""} {
         set connstatus unknown
@@ -1096,7 +1094,7 @@ proc UpdateNowClicked {uframe} {
         set dir [file join $::model::UPGRADEDIR $version]
         file mkdir $dir
         set platform [this-os]-[this-arch]
-        set files {sku.bin.sig skd.bin.sig sku.bin skd.bin}
+        set files {fruho.bin.sig fruhod.bin.sig fruho.bin fruhod.bin}
         # csp channel for collecting info about downloaded files
         channel collector
         if {![files-exist $files]} {
@@ -1115,8 +1113,8 @@ proc UpdateNowClicked {uframe} {
     }
 }
 
-# SKD only to verify signature and replace binaries and restart itself
-# SKU prepares upgrade dir, initializes upgrade and restarts itself
+# fruhod only to verify signature and replace binaries and restart itself
+# fruho client prepares upgrade dir, initializes upgrade and restarts itself
 proc upgrade-downloaded {dir uframe status} {
     log upgrade-downloaded $status
     if {$status eq "ok"} { 
@@ -1124,7 +1122,7 @@ proc upgrade-downloaded {dir uframe status} {
         # give 5 seconds to restart itself, otherwise report update failed
         after 5000 [list checkforupdates-status $uframe 16/warning "Update failed"]
         puts stderr "PREPARE UPGRADE from $dir"
-        skd-write "upgrade $dir"
+        ffwrite "upgrade $dir"
         puts stderr "UPGRADING from $dir"
     } else {
         checkforupdates-status $uframe 16/error "Problem with the download"
@@ -1496,50 +1494,49 @@ proc plan-monitor {} {
     after 5000 plan-monitor
 }
 
-proc skd-monitor {} {
+proc daemon-monitor {} {
     set ms [clock milliseconds]
-    #puts stderr "ms=$ms, Skd_beat=$::model::Skd_beat"
-    if {$ms - $::model::Skd_beat > 3000} {
+    if {$ms - $::model::Ffconn_beat > 3000} {
         log "Heartbeat not received within last 3 seconds. Restarting connection."
         set ::model::Connstatus unknown
         conn-status-display
-        skd-close
-        skd-connect 7777
+        ffconn-close
+        daemon-connect 7777
     }
-    after 1000 skd-monitor
+    after 1000 daemon-monitor
 }
 
 
-proc skd-connect {port} {
+proc daemon-connect {port} {
     #TODO handle error
     if {[catch {set sock [socket 127.0.0.1 $port]} out err] == 1} {
-        skd-close
+        ffconn-close
         return
     }
-    set ::model::Skd_sock $sock
+    set ::model::Ffconn_sock $sock
     chan configure $sock -blocking 0 -buffering line
-    chan event $sock readable skd-read
+    chan event $sock readable ffread
 }
 
 
-proc skd-write {msg} {
-    if {[catch {puts $::model::Skd_sock $msg} out err] == 1} {
-        log "skd-write problem writing $msg to $::model::Skd_sock"
-        skd-close
+proc ffwrite {msg} {
+    if {[catch {puts $::model::Ffconn_sock $msg} out err] == 1} {
+        log "ffwrite problem writing $msg to $::model::Ffconn_sock"
+        ffconn-close
     }
 }
 
-proc skd-close {} {
-    catch {close $::model::Skd_sock}
+proc ffconn-close {} {
+    catch {close $::model::Ffconn_sock}
 }
 
 
-proc skd-read {} {
-    set sock $::model::Skd_sock
+proc ffread {} {
+    set sock $::model::Ffconn_sock
     if {[gets $sock line] < 0} {
         if {[eof $sock]} {
-            log "skd-read_sock EOF. Connection terminated"
-            skd-close
+            log "ffread_sock EOF. Connection terminated"
+            ffconn-close
         }
         return
     }
@@ -1547,16 +1544,16 @@ proc skd-read {} {
         {^ctrl: (.*)$} {
             switch -regexp -matchvar details [lindex $tokens 1] {
                 {^Config loaded} {
-                    skd-write start
+                    ffwrite start
                 }
                 {^version (\S+) (.*)$} {
-                    set skd_version [lindex $details 1]
-                    puts stderr "SKD VERSION: $skd_version"
-                    puts stderr "SKU VERSION: [build-version]"
-                    # sku to restart itself if skd already upgraded and not too often
-                    if {[int-ver $skd_version] > [int-ver [build-version]]} {
+                    set daemon_version [lindex $details 1]
+                    puts stderr "DAEMON VERSION: $daemon_version"
+                    puts stderr "FRUHO CLIENT VERSION: [build-version]"
+                    # fruho client to restart itself if daemon already upgraded and not too often
+                    if {[int-ver $daemon_version] > [int-ver [build-version]]} {
                         set sha [sha1sum [this-binary]]
-                        # just restart itself from the new binary - skd should have replaced it
+                        # just restart itself from the new binary - daemon should have replaced it
                         # restart only if different binaries
                         if {$sha ne $::model::Running_binary_fingerprint} {
                             model save
@@ -1576,8 +1573,7 @@ proc skd-read {} {
         }
         {^stat: (.*)$} {
             set stat [dict create {*}[lindex $tokens 1]]
-            set ::model::Skd_beat [clock milliseconds]
-            #puts stderr "Skd_beat set to $::model::Skd_beat"
+            set ::model::Ffconn_beat [clock milliseconds]
             set ovpn_config [dict-pop $stat ovpn_config {}]
             set ::model::Current_sitem [lindex [ovconf get $ovpn_config --meta] 0]
             conn-status-update $stat
@@ -1586,7 +1582,7 @@ proc skd-read {} {
 
         }
     }
-    log SKD>> $line
+    log fruhod>> $line
 }
 
 
@@ -1601,10 +1597,10 @@ proc ClickConnect {} {
     try {
         # we artificially enforce Connstatus and update display 
         # in order to immediately disable button to prevent double-click
-        # The Connstatus may be corrected by SKD reports
+        # The Connstatus may be corrected by daemon reports
         set ::model::Connstatus connecting
         # temporary set Current_sitem - it will be overwritten by meta info
-        # received back from SKD
+        # received back from daemon
         set ::model::Current_sitem [model selected-sitem [current-provider]]
     
         set localconf [::ovconf::parse [file join $::model::KEYSDIR config.ovpn]]
@@ -1616,7 +1612,7 @@ proc ClickConnect {} {
         set port [dict get $ovs port]
         #TODO not really append, it's rather replace
         append localconf " --proto $proto --remote $ip $port --meta $::model::Current_sitem --cert [file join $::model::KEYSDIR client.crt] --key [file join $::model::KEYSDIR client.key]"
-        skd-write "config $localconf"
+        ffwrite "config $localconf"
     } on error {e1 e2} {
         log "$e1 $e2"
     }
@@ -1626,11 +1622,11 @@ proc ClickDisconnect {} {
     try {
         # we artificially enforce Connstatus and update display 
         # in order to immediately disable button to prevent double-click
-        # The Connstatus may be corrected by SKD reports
+        # The Connstatus may be corrected by daemon reports
         set ::model::Connstatus disconnected
         conn-status-display
     
-        skd-write stop
+        ffwrite stop
     } on error {e1 e2} {
         log "$e1 $e2"
     }

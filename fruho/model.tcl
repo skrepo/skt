@@ -17,9 +17,9 @@ namespace eval ::model {
     ########################################
     
     variable HOME [file normalize ~]
-    variable CONFIGDIR [file join $HOME .sku]
-    variable INIFILE [file join $CONFIGDIR sku.ini]
-    variable LOGFILE [file join $CONFIGDIR sku.log]
+    variable CONFIGDIR [file join $HOME .fruho]
+    variable INIFILE [file join $CONFIGDIR fruho.ini]
+    variable LOGFILE [file join $CONFIGDIR fruho.log]
     variable PROVIDERDIR [file join $CONFIGDIR provider]
     variable UPGRADEDIR [file join $CONFIGDIR upgrade]
     variable KEYSDIR [file join $PROVIDERDIR securitykiss ovpnconf default]
@@ -32,11 +32,11 @@ namespace eval ::model {
     # currently selected provider tab
     variable current_provider securitykiss
 
-    # SKD connection socket 
-    variable Skd_sock ""
+    # fruhod --- fruho client connection socket 
+    variable Ffconn_sock ""
 
-    # last SKD stat heartbeat timestamp in millis
-    variable Skd_beat 0
+    # last stat heartbeat from fruhod timestamp in millis
+    variable Ffconn_beat 0
 
     # User Interface (gui or cli)
     variable Ui ""
@@ -46,15 +46,15 @@ namespace eval ::model {
     # Time offset relative to the "now" received in welcome message
     variable now_offset 0
 
-    # latest skd/sku version to upgrade from check-for-updates
+    # latest fruho version to upgrade from check-for-updates
     variable Latest_version 0
 
     # OpenVPN connection status 
-    # Although the source of truth for connstatus is SKD stat reports
+    # Although the source of truth for connstatus is fruhod stat reports
     # we keep local copy to know when to update display
     variable Connstatus unknown
 
-    # Last line of log received from SKD/Openvpn server with ovpn prefix
+    # Last line of log received from fruhod/openvpn server with ovpn prefix
     variable OvpnServerLog ""
 
     # other providers dict
@@ -140,7 +140,7 @@ proc ::model::vars {} {
 }
 
 # Update model provider_list based on filesystem provider folders 
-# When adding/removing provider, just create/delete folder in ~/.sku/provider
+# When adding/removing provider, just create/delete folder in ~/.fruho/provider
 # and call this proc - it will take care of updating the model
 proc ::model::update-provider-list {} {
     # ensure there is at least one provider

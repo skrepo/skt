@@ -1,8 +1,8 @@
 [Desktop Entry]
-Name=SecurityKISS Tunnel
+Name=Fruho
 Comment=VPN Client
-Exec=sku %U
-Icon=sku.png
+Exec=fruho %U
+Icon=fruho
 Terminal=false
 Type=Application
 Encoding=UTF-8
