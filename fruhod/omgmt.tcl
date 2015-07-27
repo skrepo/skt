@@ -1,5 +1,5 @@
 #
-# skd/skmgmt.tcl
+# fruhod/omgmt.tcl
 #
 
 proc MgmtConnect {} {
@@ -50,10 +50,10 @@ proc MgmtRead {sock} {
                     set connstatus [lindex $tokens 2]
                     set ::model::mgmt_vip [lindex $tokens 4]
                     set ::model::mgmt_rip [lindex $tokens 5]
-                    # immediately report the change to CONNECTED status to a client by calling SkdReportState
+                    # immediately report the change to CONNECTED status to a client by calling daemon-model-report
                     if {$connstatus eq "CONNECTED" && $::model::mgmt_connstatus ne "CONNECTED"} {
                         set ::model::mgmt_connstatus $connstatus
-                        SkdReportState
+                        daemon-model-report
                     } else {
                         set ::model::mgmt_connstatus $connstatus
                     }

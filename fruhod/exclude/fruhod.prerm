@@ -1,7 +1,7 @@
 #!/bin/sh
 
-if [ -x "/etc/init.d/skd" ]; then
-    /etc/init.d/skd stop
+if [ -x "/etc/init.d/fruhod" ]; then
+    /etc/init.d/fruhod stop
 
     # Some distros like OpenSUSE keep rcN.d dirs within init.d
     if [ -d "/etc/init.d/rc2.d" ]; then
@@ -14,14 +14,14 @@ if [ -x "/etc/init.d/skd" ]; then
     fi
         
     for level in 0 1 6; do
-        rm -f $RCROOT/rc${level}.d/K07skd
+        rm -f $RCROOT/rc${level}.d/K07fruhod
     done
     for level in 2 3 4 5; do
-        rm -f $RCROOT/rc${level}.d/S93skd
+        rm -f $RCROOT/rc${level}.d/S93fruhod
     done
     
 fi
 
-if [ -x /usr/local/bin/sku ]; then
-    /usr/local/bin/sku.bin --remove-launcher
+if [ -x /usr/local/bin/fruho.bin ]; then
+    /usr/local/bin/fruho.bin --remove-launcher
 fi

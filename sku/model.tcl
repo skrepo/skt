@@ -230,7 +230,7 @@ proc ::model::load {} {
         puts stderr $out
         log $out
         log $err
-        main-exit
+        main-exit nosave
     }
 
     #puts stderr "READ CONFIG:"

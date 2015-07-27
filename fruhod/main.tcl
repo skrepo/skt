@@ -1,5 +1,6 @@
 #
-# skd/main.tcl
+# fruhod/main.tcl
+# fruhod should be as close to plain OpenVPN functionality as possible. keep only current openvpn config, don't save fruhod model, should be stateless across fruhod reboots
 #
 # This should be the preamble to every application
 # It makes it possible to run as starpack or as a sourced script
@@ -21,7 +22,7 @@ package require linuxdeps
 package require skutil
 
 source [file join [file dir [info script]] model.tcl]
-source [file join [file dir [info script]] skmgmt.tcl]
+source [file join [file dir [info script]] omgmt.tcl]
 
 proc background-error {msg e} {
     set pref [lindex [info level 0] 0]
@@ -32,30 +33,16 @@ proc background-error {msg e} {
 }
 
 interp bgerror "" background-error
-#after 2000 {error "This is my bg error"}
 
-
-#TODO
-# document API for SKU: config, start, stop
-# config API - how to pass config with cert files? SKU to provide absolute paths, and split single ovpn file to config and certs/keys if necessary
-# periodic health check
-# SKU: make config file parser, various formats, canonical way of submitting to SKD
-# make SKD as close to plain OpenVPN functionality as possible. keep only current config, handle multiple remote, how to handle relative paths to client.crt, should we add mgmt interface listen entry if missing? Also set verbosity to standard level
-# don't save config or anything from SKD, should be stateless across SKD reboots
-# SKU: check for SKD upgrades, SKU download the upgrade and call SKD to install (because SKD already has sudo)
-# Do we need to secure the SKD-SKU channel? only for upgrades (installing arbitrary code) - the signature must be verified - public key distributed with skt. Check signatures with openssl
-#
- 
- 
 proc main {} {
     try {
         if {![unix has-root]} {
             puts stderr "You need to be root. Try again with sudo."
             exit 0
         }
-        log Starting SKD server with PID [pid]
-        log SKD build version: [build-version]
-        log SKD build date: [build-date]
+        log Starting fruhod server with PID [pid]
+        log fruhod build version: [build-version]
+        log fruhod build date: [build-date]
         # intercept termination signals
         signal trap {SIGTERM SIGINT SIGQUIT} main-exit
         # ignore disconnecting terminal - it's supposed to be a daemon. This is causing problem - do not enable. Use linux nohup
@@ -67,14 +54,13 @@ proc main {} {
         #TODO call it after delay
         dns-restore
         
-        log [create-pidfile "/var/run/skd.pid"]
+        log [create-pidfile "/var/run/fruhod.pid"]
 
 
     
         #TODO check if openvpn installed, install otherwise, retry if needed
         #TODO check if X11 running, if so try Tk. If a problem install deps, retry if needed
         #TODO make it after a delay to allow previous dpkg terminate
-        #TODO sku must wait and retry 
 
         #linuxdeps openvpn-install
         #linuxdeps tkdeps-install
@@ -82,9 +68,9 @@ proc main {} {
         model reset-ovpn-state
         # call after reseting model state
         MgmtMonitor
-        socket -server SkdNewConnection -myaddr 127.0.0.1 7777
+        socket -server daemon-new-connection -myaddr 127.0.0.1 7777
         log Listening on 127.0.0.1:7777
-        CyclicSkdReportState
+        cyclic-daemon-model-report
     } on error {e1 e2} {
         log ERROR in main: $e1 $e2
     }
@@ -93,62 +79,62 @@ proc main {} {
 
 # TODO how it works on Windows? Also pidfile
 proc main-exit {} {
-    log Gracefully exiting SKD
+    log Gracefully exiting fruhod
     #TODO wind up
-    delete-pidfile /var/run/skd.pid
+    delete-pidfile /var/run/fruhod.pid
     exit 0
 }
 
-proc SkdReportVersion {} {
-    catch {SkdWrite ctrl "version [build-version] [build-date]"}
+proc daemon-version-report {} {
+    catch {ffwrite ctrl "version [build-version] [build-date]"}
 }
 
-proc SkdReportState {} {
-    catch {SkdWrite stat [model model2dict]}
+proc daemon-model-report {} {
+    catch {ffwrite stat [model model2dict]}
 } 
 
-proc CyclicSkdReportState {} {
-    SkdReportState
-    after 2000 CyclicSkdReportState
+proc cyclic-daemon-model-report {} {
+    daemon-model-report
+    after 2000 cyclic-daemon-model-report
 } 
 
 
 
-# On new connection to SKD, close the previous one
-proc SkdNewConnection {sock peerhost peerport} {
+# On new connection to the daemon, close the previous one
+proc daemon-new-connection {sock peerhost peerport} {
     model print 
-    if {$::model::Skd_sock ne ""} {
-        SkdWrite ctrl "Closing SKD connection $::model::Skd_sock. Superseded by $sock $peerhost $peerport"
-        skd-conn-close
+    if {$::model::Ffconn_sock ne ""} {
+        ffwrite ctrl "Closing connection to fruho client $::model::Ffconn_sock. Superseded by $sock $peerhost $peerport"
+        ffconn-close
     }
-    set ::model::Skd_sock $sock
+    set ::model::Ffconn_sock $sock
     fconfigure $sock -blocking 0 -buffering line
-    fileevent $sock readable SkdRead
-    SkdReportVersion
-    SkdReportState
+    fileevent $sock readable ffread
+    daemon-version-report
+    daemon-model-report
 }
 
 
-proc skd-conn-close {} {
-    if {$::model::Skd_sock eq ""} {
+proc ffconn-close {} {
+    if {$::model::Ffconn_sock eq ""} {
         return
     }
-    log skd-conn-close $::model::Skd_sock
-    catch {close $::model::Skd_sock}
-    set ::model::Skd_sock ""
+    log ffconn-close $::model::Ffconn_sock
+    catch {close $::model::Ffconn_sock}
+    set ::model::Ffconn_sock ""
 }
 
-proc SkdWrite {prefix msg} {
-    set sock $::model::Skd_sock
+proc ffwrite {prefix msg} {
+    set sock $::model::Ffconn_sock
     if {$sock eq ""} {
         return
     }
     if {[catch {puts $sock "$prefix: $msg"; flush $sock;} out err]} {
         log $err
-        log Because of error could not SkdWrite: $prefix: $msg
-        skd-conn-close
+        log Because of error could not ffwrite: $prefix: $msg
+        ffconn-close
     } else {
-        log SkdWrite: $prefix: $msg
+        log ffwrite: $prefix: $msg
     }
 }
 
@@ -193,20 +179,20 @@ proc load-config {conf} {
     return ""
 }
 
-proc SkdRead {} {
+proc ffread {} {
     try {
-        set sock $::model::Skd_sock
+        set sock $::model::Ffconn_sock
         if {$sock eq ""} {
             return
         }
         if {[gets $sock line] < 0} {
             if {[eof $sock]} {
-                skd-conn-close
+                ffconn-close
             }
             return
         }
         
-        log SkdRead: $line
+        log ffread: $line
         switch -regexp -matchvar tokens $line {
             {^stop$} {
                 if {[ovpn-pid] != 0} {
@@ -216,17 +202,17 @@ proc SkdRead {} {
                     }
                     OvpnExit 0
                 } else {
-                    SkdWrite ctrl "Nothing to be stopped"
+                    ffwrite ctrl "Nothing to be stopped"
                     return
                 }
             }
             {^start$} {
                 if {$::model::ovpn_config eq ""} {
-                    SkdWrite ctrl "No OpenVPN config loaded"
+                    ffwrite ctrl "No OpenVPN config loaded"
                     return
                 }
                 if {[ovpn-pid] != 0} {
-                    SkdWrite ctrl "OpenVPN already running with pid [ovpn-pid]"
+                    ffwrite ctrl "OpenVPN already running with pid [ovpn-pid]"
                     return
                 } else {
                     model reset-ovpn-state
@@ -238,7 +224,7 @@ proc SkdRead {} {
                     set ::model::Start_pid [pid $chan]
                     # this call is necessary to update ovpn_pid
                     ovpn-pid
-                    SkdWrite ctrl "OpenVPN with pid [ovpn-pid] started"
+                    ffwrite ctrl "OpenVPN with pid [ovpn-pid] started"
                     return
                 }
             }
@@ -247,29 +233,29 @@ proc SkdRead {} {
                 set configerror [load-config $config]
                 log config $config
                 if {$configerror eq ""} {
-                    SkdWrite ctrl "Config loaded"
+                    ffwrite ctrl "Config loaded"
                 } else {
-                    SkdWrite ctrl $configerror
+                    ffwrite ctrl $configerror
                 }
                 return
             }
             {^upgrade (.+)$} {
                 log $line
-                # $dir should contain skd, sku.bin and their signatures
+                # $dir should contain fruhod.bin, fruho.bin and their signatures
                 set dir [lindex $tokens 1]
                 # if upgrade is successfull it never returns (execl replace program)
                 set err [upgrade $dir]
-                SkdWrite ctrl [log "Could not upgrade from $dir: $err"]
+                ffwrite ctrl [log "Could not upgrade from $dir: $err"]
             }
             default {
-                SkdWrite ctrl "Unknown command"
+                ffwrite ctrl "Unknown command"
             }
     
         }
     } on error {e1 e2} {
         log "$e1 $e2"
     } finally {
-        SkdReportState
+        daemon-model-report
     }
 }
 
@@ -279,10 +265,10 @@ proc dns-replace {} {
     if {$dnsip eq ""} {
         return
     }
-    # Do not backup resolv.conf if existing resolv.conf was SKD generated
+    # Do not backup resolv.conf if existing resolv.conf was fruhod generated
     # It prevents overwriting proper backup
-    if {![dns-is-resolv-skd-generated]} {
-        if {[catch {file rename -force /etc/resolv.conf /etc/resolv-skd.conf} out err]} {
+    if {![dns-is-resolv-fruhod-generated]} {
+        if {[catch {file rename -force /etc/resolv.conf /etc/resolv-fruhod.conf} out err]} {
             log $err
             return
         }
@@ -291,10 +277,10 @@ proc dns-replace {} {
 }
 
 proc dns-restore {} {
-    if {[dns-is-resolv-skd-generated]} {
-        if {[catch {file copy -force /etc/resolv-skd.conf /etc/resolv.conf} out err]} {
-            # Not really an error, resolv-skd.conf may be non-existing for many reasons
-            log "INFO: /etc/resolv-skd.conf does not exist"
+    if {[dns-is-resolv-fruhod-generated]} {
+        if {[catch {file copy -force /etc/resolv-fruhod.conf /etc/resolv.conf} out err]} {
+            # Not really an error, resolv-fruhod.conf may be non-existing for many reasons
+            log "INFO: /etc/resolv-fruhod.conf does not exist"
         }
     }
 }
@@ -309,14 +295,13 @@ proc dns-read-resolv {} {
     return $resolv
 }
 
-proc dns-is-resolv-skd-generated {} {
+proc dns-is-resolv-fruhod-generated {} {
     return [string match *$::model::Resolv_marker* [dns-read-resolv]]
 }
 
 
-# again reduce SKD functionality to minimum
-# SKD only to verify signature and replace skd and sku.bin
-# dir - folder where new skd and sku.bin and signatures are placed
+# fruhod only to verify signature and replace binaries
+# dir - folder where new fruhod.bin and fruho.bin and signatures are placed
 proc upgrade {dir} {
     # replace the current program with new version - effectively restart from the new binary, PID is preserved
     try {
@@ -325,46 +310,45 @@ proc upgrade {dir} {
         }
         # backup id
         set bid [rand-big]
-        set skdpath /usr/local/sbin/skd.bin
-        set newskd [file join $dir skd.bin]
-        set bskd /tmp/skd.bin-backup-$bid
-        set skupath /usr/local/bin/sku.bin
-        set newsku [file join $dir sku.bin]
-        set bsku /tmp/sku.bin-backup-$bid
+        set fruhodpath /usr/local/sbin/fruhod.bin
+        set newfruhod [file join $dir fruhod.bin]
+        set bfruhod /tmp/fruhod.bin-backup-$bid
+        set fpath /usr/local/bin/fruho.bin
+        set newf [file join $dir fruho.bin]
+        set bf /tmp/fruho.bin-backup-$bid
 
-        if {![verify-signature /etc/skd/keys/signer_public.pem $newskd]} {
-            return [log Upgrade failed because SKD signature verification failed]
+        if {![verify-signature /etc/fruhod/keys/signer_public.pem $newfruhod]} {
+            return [log Upgrade failed because fruhod signature verification failed]
         }
-        if {![verify-signature /etc/skd/keys/signer_public.pem $newsku]} {
-            return [log Upgrade failed because SKU signature verification failed]
+        if {![verify-signature /etc/fruhod/keys/signer_public.pem $newf]} {
+            return [log Upgrade failed because fruho client signature verification failed]
         }
-        # replace skd
+        # replace fruhod
         # rename is necessary to prevent "cannot create regular file ...: Text file busy" error
-        # we must use external system commands for skd since the file command does not work on the currently running program
-        exec mv $skdpath $bskd
-        exec cp -f $newskd $skdpath
-        exec chmod u+rwx,go+rx $skdpath
-        # replace sku.bin
-        # so sku.bin is deployed here with root rights, but sku must restart itself
-        file rename -force $skupath $bsku
-        file copy -force $newsku $skupath
-        file attributes $skupath -permissions u+rwx,go+rx
-        # replace sku.bin
+        # we must use external system commands for fruhod since the file command does not work on the currently running program
+        exec mv $fruhodpath $bfruhod
+        exec cp -f $newfruhod $fruhodpath
+        exec chmod u+rwx,go+rx $fruhodpath
+        # replace fruho.bin
+        # so fruho.bin is deployed here with root rights, but fruho client must restart itself
+        file rename -force $fpath $bf
+        file copy -force $newf $fpath
+        file attributes $fpath -permissions u+rwx,go+rx
 
         # if this does not fail it never returns
-        execl /usr/local/sbin/skd.bin
+        execl /usr/local/sbin/fruhod.bin
     } on error {e1 e2} {
-        # restore SKD and SKU from the backup path
+        # restore binaries from the backup path
         catch {
-            if {[file isfile $bskd]} {
-                file delete -force $skdpath
-                file rename -force $bskd $skdpath
+            if {[file isfile $bfruhod]} {
+                file delete -force $fruhodpath
+                file rename -force $bfruhod $fruhodpath
             }
         }
         catch {
-            if {[file isfile $bsku]} {
-                file delete -force $skupath
-                file rename -force $bsku $skupath
+            if {[file isfile $bf]} {
+                file delete -force $fpath
+                file rename -force $bf $fpath
             }
         }
         log $e1 $e2
@@ -440,7 +424,7 @@ proc OvpnRead {line} {
             }
         }
         if {!$ignoreline} {
-            SkdWrite ovpn $line
+            ffwrite ovpn $line
             log OPENVPN: $line
         }
     } on error {e1 e2} {
@@ -471,13 +455,13 @@ proc OvpnRead {line} {
 proc OvpnErrRead {line} {
     #TODO communicate error to user. gui and cli
     log openvpn stderr: $line
-    SkdWrite ovpn "stderr: $line"
+    ffwrite ovpn "stderr: $line"
 }
 
 # should be idempotent, as may be called many times on openvpn shutdown
 proc OvpnExit {code} {
     if {[ovpn-pid] != 0} {
-        SkdWrite ctrl "OpenVPN with pid [ovpn-pid] stopped"
+        ffwrite ctrl "OpenVPN with pid [ovpn-pid] stopped"
     }
     dns-restore
     model reset-ovpn-state

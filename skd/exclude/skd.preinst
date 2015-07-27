@@ -1,6 +1,0 @@
-#!/bin/sh
-
-if [ -x "/etc/init.d/skd" ]; then
-    /etc/init.d/skd stop
-fi
-

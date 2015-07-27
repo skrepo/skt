@@ -1,5 +1,5 @@
 
-me: Writing a single cross platform SKT program is a stupid idea. Why to conflate things? We need 3 separate codebases for Windows, Mac and Linux to handle differences in:
+me: is writing a single cross platform SKT program a stupid idea? Why conflate things? We need 3 separate codebases for Windows, Mac and Linux to handle differences in:
 - design - depends on the OS architecture
 - requirements / feature set
 - build process
@@ -13,30 +13,19 @@ https://developer.gnome.org/integration-guide/stable/icons.html.en
 Use scalable folder for svg
 
 TODO: 
-+ convert cert paths in ovconf to absolute
-+ SKD to call ovconf to check if cert files exist
-+ SKD delete win-sys and other windows specific options on Linux
-+ SKD test on windows
-- focus on SKD first: cert gen, linux service, upgrades, installer, CAcert for vbox IPs? Shouldn't certs be signed centrally?
 - SKD check if it is possible to include OpenVPN in vfs and run it from there. How about upgrades then? If not in vfs, where to store OpenVPN? In the same place where SKD.
 --- OpenVPN and SKD are stationary and stateless pieces
-- SKD Linux: replace resolv.conf, handle DNS
-- SKD as a Linux service
 - SKD as a Windows service
 - SKD/SKU handle "requires a TAP-Windows driver that is at least version 9.9" problem
 - SKD/SKU make the OpenVPN module pluggable so that tun/tap driver can be upgraded easily
 - deployment and upgrade code so that we can release early and upgrade often without worrying about supporting legacy stuff
 - it's OK to use existing welcome msg and other API, we need to support it for long time anyway
-+ SKU generating key and CSR, API on vboxes
-+ SKU store preloaded vbox list
 - SKU HTTPS get existing welcome message - requires preloaded certificate in SKU
 - do canary deployment, new app only for new users from English speaking regions - facilitate feedback
 
 
-TODO: sku run from script: allows change logging easily and running in background
+- sku run from script: allows change logging easily and running in background
 In sku script redirect only stdout to log file. stderr to console so that we can report errors if GUI cannot be started - that rules out nohup - it will redirect stderr to stdout then
-TODO: sku i18n - after both linux and win version is ready
-TODO: handle sku-skd reconnect
 TODO: handle sku close/quit - give option to close without disconnect?
 TODO: sku handle minimizing to tray. Is it OS/desktop dependent?
 TODO: check Linux AirVPN client for inspiration
@@ -49,7 +38,6 @@ Problem: we cannot do apt-get/yum/zypper install directly from postinst script b
 - however no need to call this procedure from postinst. It would make sense because installing deps could be part of dpkg/rpm install, but then it must be done asynchronously from SKD anyway
 - so it's better to install deps on first run of SKU, then SKU may wait for response from SKD and report to the user.
 - progress bar to inform user
-- consider security, not allow SKD perform arbitrary command
 + pkg-install and lib-install commands
 
 
@@ -88,9 +76,7 @@ Vbox reqs:
 ---- SKC sends asynchronously total usage updates
 
 TODO:
-+ check if Tcl tls verifies certificates and how it determines the default CA store
 - provide CA.crt for tls that signs skw and IP based certs
-+ when installing from deb/rpm, sku to generate keys only once - check if files exist
 - admin side scripts: generate CA.key, create cert from CSR and CA.key, sign the upgrade deb/rpm
 - sku to check for upgrades and download upgrade
 - sku command line option to restart SKD service (only when run with root). Why?
@@ -124,8 +110,6 @@ Another possibility: generic installer with obfuscated secret S. After installat
 
 
 This is also a potential method to distribute SK client IDs! Scenario:
-- USER: downloads generic installer with the field to enter code and link to website to get free code
-- USER: user clicks the https link, fires the browser, copies the client id and code (passphrase) to the program
 - NOTE: We can eliminate copy paste step by generating the link with random number and ask user to click the link to confirm/accept
 - SERVER: tries to identify the user by checking cookie/other_tracking and browser+IP fingerprinting and serves the same code on duplicate requests or denies if request per IP limit exceeded. This is to prevent Sybil attacks.
 - SERVER: applies key derivation algorithm hash(client_id_counter++ + master_key) and presents it to the USER as the code along with client id

@@ -49,6 +49,8 @@ proc background-error {msg err} {
 interp bgerror "" background-error
 #after 4000 {error "This is my bg error"}
 
+# We need to redirect to log file here and not in external shell script
+# in case it is run with sudo. Then logging would go to /root/.sku
 # Redirect stdout to a file $::model::LOGFILE
 namespace eval tolog {
     variable fh
@@ -252,6 +254,10 @@ proc main-generate-keys {} {
 
     set crt [file join $::model::KEYSDIR client.crt]
 
+
+
+    #TODO cert request should be moved to first start of sku
+    #Only keypair generation happens on --generate-keys
     if {[file exists $crt]} {
         puts stderr [log CRT $crt already exists]
     } else {
