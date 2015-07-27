@@ -136,7 +136,6 @@ proc get-fetchnames {os arch pkgname ver} {
 
 
 #TODO support url redirect (Location header)
-# also in skutil
 proc wget {url filepath} {
   set fo [open $filepath w]
   set tok [http::geturl $url -channel $fo]
