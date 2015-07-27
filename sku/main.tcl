@@ -341,7 +341,7 @@ proc main-gui {} {
     bind . <Control-w> main-exit
     bind . <Control-q> main-exit
 
-    grid [ttk::label .statusline -textvariable ::status]
+    grid [ttk::label .statusline -textvariable ::model::OvpnServerLog]
     # sizegrip - bottom-right corner for resize
     grid [ttk::sizegrip .grip] -sticky se
 
@@ -528,7 +528,8 @@ proc get-welcome {} {
             }
             <- $cherr {
                 set err [<- $cherr]
-                tk_messageBox -message "Could not receive Welcome message" -type ok
+                #tk_messageBox -message "Could not receive Welcome message" -type ok
+                set ::model::OvpnServerLog "Could not receive Welcome message"
                 log get-welcome failed with error: $err
             }
         }
@@ -1491,6 +1492,7 @@ proc plan-monitor {} {
 
 proc skd-monitor {} {
     set ms [clock milliseconds]
+    #puts stderr "ms=$ms, Skd_beat=$::model::Skd_beat"
     if {$ms - $::model::Skd_beat > 3000} {
         log "Heartbeat not received within last 3 seconds. Restarting connection."
         set ::model::Connstatus unknown
@@ -1559,7 +1561,7 @@ proc skd-read {} {
             }
         }
         {^ovpn: (.*)$} {
-            set ::status [lindex $tokens 1]
+            set ::model::OvpnServerLog [lindex $tokens 1]
             switch -regexp -matchvar details [lindex $tokens 1] {
                 {^Initialization Sequence Completed} {
                     #conn-status-display connected
@@ -1569,6 +1571,7 @@ proc skd-read {} {
         {^stat: (.*)$} {
             set stat [dict create {*}[lindex $tokens 1]]
             set ::model::Skd_beat [clock milliseconds]
+            #puts stderr "Skd_beat set to $::model::Skd_beat"
             set ovpn_config [dict-pop $stat ovpn_config {}]
             set ::model::Current_sitem [lindex [ovconf get $ovpn_config --meta] 0]
             conn-status-update $stat

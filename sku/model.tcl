@@ -54,6 +54,8 @@ namespace eval ::model {
     # we keep local copy to know when to update display
     variable Connstatus unknown
 
+    # Last line of log received from SKD/Openvpn server with ovpn prefix
+    variable OvpnServerLog ""
 
     # other providers dict
     # entire welcome message is stored
