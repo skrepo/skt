@@ -1287,6 +1287,7 @@ proc OptionsClicked {} {
 
     set nb [ttk::notebook $w.nb]
     frame $nb.about
+    label $nb.about.desc -text "Fruho - Universal VPN client" -font [dynafont -weight bold]
     label $nb.about.userid1 -text "User ID:"
     label $nb.about.userid2 -text $::model::Cn
     label $nb.about.buildver1 -text "Program version:"
@@ -1304,8 +1305,11 @@ proc OptionsClicked {} {
     label $uframe.status -compound left
     button $uframe.button -text "Update now" -command [list UpdateNowClicked $uframe]
 
+    #hyperlink $nb.about.website -command [list launchBrowser "https://fruho.com"] -text "Copyright \u00A9 fruho.com"
 
 
+
+    grid $nb.about.desc -row 0 -padx 10 -pady 5 -columnspan 2
     grid $nb.about.userid1 -row 1 -column 0 -sticky w -padx 10 -pady 5
     grid $nb.about.userid2 -row 1 -column 1 -sticky w -padx 10 -pady 5
     grid $nb.about.buildver1 -row 2 -column 0 -sticky w -padx 10 -pady 5
@@ -1313,9 +1317,10 @@ proc OptionsClicked {} {
     grid $nb.about.builddate1 -row 4 -column 0 -sticky w -padx 10 -pady 5
     grid $nb.about.builddate2 -row 4 -column 1 -sticky w -padx 10 -pady 5
     grid $nb.about.checkforupdates -column 1 -sticky e -padx 10 -pady 5
-    grid $uframe -columnspan 2 -sticky news -padx 10 -pady 5
+    grid $uframe -row 7 -sticky news -padx 10 -pady 5 -columnspan 2 
     grid $uframe.status -row 0 -column 0 -sticky w
     grid $uframe.button -row 0 -column 1 -sticky e -padx {40 0}
+    #grid $nb.about.website -row 9 -padx 10 -pady 5 -columnspan 2
     grid columnconfigure $nb.about 0 -weight 1 -minsize 200
     grid columnconfigure $uframe 0 -weight 1
     grid rowconfigure $uframe 0 -weight 1 -minsize 40
