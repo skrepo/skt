@@ -29,7 +29,7 @@ namespace eval ::model {
     # General globals
     ######################################## 
 
-    # currently selected provider tab
+    # currently selected provider tab - for now hardcoding default provider
     variable current_provider securitykiss
 
     # fruhod --- fruho client connection socket 
@@ -62,9 +62,9 @@ namespace eval ::model {
     # while welcome contains multiple slists, we need to store current slist as well since it depends on current time (through active plan selection)
     variable Providers [dict create securitykiss {
         tabname SecurityKISS
-        slist {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city Newcastle ip 31.24.33.221 ovses {{proto udp port 5353} {proto tcp port 443}}}}
+        slist {}
         selected_sitem_id {}
-        welcome {}
+        welcome {serverLists {GREEN {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}}} JADEITE {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city London ip 78.129.174.84 ovses {{proto udp port 5353} {proto tcp port 443}}}}} activePlans {{name JADEITE period month limit 50000000000 start 1431090862 used 12345678901 nop 3} {name GREEN period day limit 300000000 start 1431040000 used 15000000 nop 99999}}}
     }]
 
 
@@ -111,7 +111,7 @@ namespace eval ::model {
 
 
     ######################################## 
-    # securitykiss specific
+    # Fruho identity and bootstrap info
     ######################################## 
 
     # client id
@@ -220,12 +220,17 @@ proc ::model::load {} {
         # merge provider list from saved model provider folder structure
         update-provider-list
 
+        #puts stderr "model::Providers=$::model::Providers"
+
         foreach p $::model::provider_list {
             set inifile [file join $::model::PROVIDERDIR $p config.ini]
-            touch $inifile
-            dict set ::model::Providers $p [inicfg load $inifile]
+            if {[file exists $inifile]} {
+                dict set ::model::Providers $p [inicfg load $inifile]
+            }
+            # if provider ini file does not exist, ensure only that the tabname has a default value
             dict-put ::model::Providers $p tabname $p
         }
+        #puts stderr "2model::Providers=$::model::Providers"
     } out err]} {
         puts stderr $out
         log $out
@@ -259,6 +264,7 @@ proc ::model::save {} {
 # model slist $provider $slist - save $slist for $provider
 proc ::model::slist {provider args} {
     if {[llength $args] == 0} {
+        #puts stderr "provider: $provider, pros: $::model::Providers"
         return [dict-pop $::model::Providers $provider slist {}]
     } elseif {[llength $args] == 1} {
         set slist [lindex $args 0]
@@ -271,18 +277,23 @@ proc ::model::slist {provider args} {
 # so there is no guarantee that what you put in is what you get out
 #
 # With additional argument:
-# selected-sitem $provider - get selected sitem (dict) for provider or draw random from slist
+# selected-sitem $provider - get selected sitem (dict) for provider or draw random from slist, if slist is empty return empty
 # selected-sitem $provider ?sitem_id?
 # selected-sitem $provider ?sitem?
 # - saves selected sitem id. Given sitem may be empty
 proc ::model::selected-sitem {provider args} {
     if {[llength $args] == 0} {
         set slist [::model::slist $provider]
+        if {$slist eq ""} {
+            return ""
+        }
+        #puts stderr "slist: $slist, provider: $provider"
         set ssid [dict-pop $::model::Providers $provider selected_sitem_id {}]
         if {$ssid eq "" || [::model::sitem-by-id $provider $ssid] eq ""} {
             # pick random sitem
             set rand [rand-int [llength $slist]]
             set sitem [lindex $slist $rand]
+            #puts stderr "rand: $rand, sitem: $sitem"
             # save its id in model
             dict set ::model::Providers $provider selected_sitem_id [dict get $sitem id]
             return $sitem
@@ -313,7 +324,7 @@ proc ::model::sitem-by-id {provider sitem_id} {
             return $sitem
         }
     }
-    return {}
+    return ""
 }
 
 # [model now]

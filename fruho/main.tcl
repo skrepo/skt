@@ -154,7 +154,7 @@ proc main {} {
     }
 
     try {
-        set cn [cn-from-cert [file join $::model::KEYSDIR client.crt]]
+        set cn [extract-cn-from csr [file join $::model::KEYSDIR client.csr]]
         set ::model::Cn $cn
         if {$params(id)} {
             exit-nosave $cn
@@ -223,39 +223,9 @@ proc error-cli {msg} {
 }
 
 
-
-
-# This is blocking procedure to be run from command line
-# ruturn 1 on success, 0 otherwise
-# Print to stderr for user-visible messages. Use log for detailed info written to log file
-proc main-generate-keys {} {
-    puts stderr [log Generating RSA keys]
-    set privkey [file join $::model::KEYSDIR client.key]
-    if {[file exists $privkey]} {
-        puts stderr [log RSA key $privkey already exists]
-    } else {
-        if {![generate-rsa $privkey]} {
-            puts stderr [log Could not generate RSA keys]
-            return
-        }
-    }
-    set csr [file join $::model::KEYSDIR client.csr]
-    if {[file exists $csr]} {
-        puts stderr [log CSR $csr already exists]
-    } else {
-        set cn [generate-cn]
-        if {![generate-csr $privkey $csr $cn]} {
-            puts stderr [log Could not generate Certificate Signing Request]
-            return
-        }
-    }
-
-    set crt [file join $::model::KEYSDIR client.crt]
-
-
-
-    #TODO cert request should be moved to the first start of fruho client
-    #Only keypair generation happens on --generate-keys
+#TODO make the sign-cert asynchronous
+proc cert-sign-request {csr} {
+    set crt [file join [file rootname $csr] .crt]
     if {[file exists $crt]} {
         puts stderr [log CRT $crt already exists]
     } else {
@@ -283,6 +253,37 @@ proc main-generate-keys {} {
         }
         puts stderr [log Could not receive the signed certificate]
     }
+}
+
+
+# This is blocking procedure to be run from command line
+# ruturn 1 on success, 0 otherwise
+# Print to stderr for user-visible messages. Use log for detailed info written to log file
+proc main-generate-keys {} {
+    puts stderr [log Generating RSA keys]
+    set privkey [file join $::model::KEYSDIR client.key]
+    if {[file exists $privkey]} {
+        puts stderr [log RSA key $privkey already exists]
+    } else {
+        if {![generate-rsa $privkey]} {
+            puts stderr [log Could not generate RSA keys]
+            return
+        }
+    }
+    set csr [file join $::model::KEYSDIR client.csr]
+    if {[file exists $csr]} {
+        puts stderr [log CSR $csr already exists]
+    } else {
+        set cn [generate-cn]
+        if {![generate-csr $privkey $csr $cn]} {
+            puts stderr [log Could not generate Certificate Signing Request]
+            return
+        }
+    }
+
+    # if this fails, retry later when fruho client starts
+    cert-sign-request $csr
+
     return
 }
 
@@ -311,7 +312,7 @@ proc main-gui {} {
     log Running GUI
     # TODO fruho client may be started before all Tk deps are installed, so run in CLI first and check for Tk a few times with delay
     package require Tk 
-    wm title . "SecurityKISS Tunnel"
+    wm title . "Fruho VPN"
     wm iconphoto . -default [img load 16/logo] [img load 24/logo] [img load 32/logo] [img load 64/logo]
     wm deiconify .
     wm protocol . WM_DELETE_WINDOW {
@@ -358,6 +359,11 @@ proc main-gui {} {
     go check-for-updates ""
     go get-welcome
     go get-ovpnconfig
+
+    #ticker t1 1000 #5
+    #go config-init-monitor $t1
+
+
 
 }
 
@@ -497,20 +503,8 @@ proc plan-comparator {tstamp a b} {
     }
     return [expr {[dict-pop $b limit 0] - [dict-pop $a limit 0]}] 
 }
-
  
 
-# sample welcome message:
-# ip 127.0.0.1
-# now 1436792064
-# latestSkt 1.4.4
-# serverLists
-# {
-#     GREEN {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}}}
-#     JADEITE {{id 1 ccode DE country Germany city Darmstadt ip 46.165.221.230 ovses {{proto udp port 123} {proto tcp port 443}}} {id 2 ccode FR country France city Paris ip 176.31.32.106 ovses {{proto udp port 123} {proto tcp port 443}}} {id 3 ccode UK country {United Kingdom} city London ip 78.129.174.84 ovses {{proto udp port 5353} {proto tcp port 443}}}}
-# 
-# }
-# activePlans {{name JADEITE period month limit 50000000000 start 1431090862 used 12345678901 nop 3} {name GREEN period day limit 300000000 start 1431040000 used 15000000 nop 99999}}
 proc get-welcome {} {
     try {
         set platform [this-os]-[this-arch]
@@ -523,6 +517,7 @@ proc get-welcome {} {
                 puts stderr "welcome: $data"
                 set welcome [json::json2dict $data]
                 # save entire welcome message
+                puts stderr "saving welcome"
                 dict set ::model::Providers securitykiss welcome $welcome
                 model now [dict-pop $welcome now 0]
                 # TODO not really for currently selected provider
@@ -613,6 +608,22 @@ proc conn-status-update {stat} {
         conn-status-display
     }
 }
+
+proc config-init-update {} {
+}
+
+# trigger config initialization a few times or until succeeded
+proc config-init-monitor {tickerch} {
+    config-init-update
+    range t $tickerch {
+        if {$::model::Config_init_complete} {
+            $tickerch close
+        } else {
+            config-init-update
+        }
+    }
+}
+
 
 
 # Extract new OpenVPN connstatus from fruhod stat report
@@ -869,7 +880,7 @@ proc frame-toolbar {p} {
     label $tb.appealimg
     img place 16/bang $tb.appealimg
     label $tb.appeal1 -text "Help improve this program. Provide your"
-    hyperlink $tb.appeal2 -command [list launchBrowser "https://securitykiss.com/locate/"] -text "feedback."
+    hyperlink $tb.appeal2 -command [list launchBrowser "https://fruho.com/geo"] -text "feedback."
     label $tb.appeal3 -text "We listen."
 
     button $tb.options -relief flat -command OptionsClicked
@@ -1270,7 +1281,7 @@ proc ServerListClicked {} {
     try {
         set slist [model slist [current-provider]]
         set ssitem [model selected-sitem [current-provider]]
-        set ssid [dict get $ssitem id]
+        set ssid [dict-pop $ssitem id {}]
     
     
         set w .slist_dialog
@@ -1481,8 +1492,10 @@ proc get-next-vigo {vigo_lastok attempt} {
 }
 
 
+# periodically trigger updating usage meter
 proc plan-monitor {} {
     #puts stderr "########################1"
+    #puts stderr [dict-pretty [dict-pop $::model::Providers [current-provider] {}]]
     #puts stderr [dict-pretty [dict-pop $::model::Providers [current-provider] welcome {}]]
     #puts stderr "########################2"
     set now [model now]
@@ -1583,13 +1596,6 @@ proc ffread {} {
         }
     }
     log fruhod>> $line
-}
-
-
-proc get-client-no {crtpath} {
-    set crt [slurp $crtpath]
-    regexp {CN=(client\d{8})} $crt _ cn
-    return $cn
 }
 
 

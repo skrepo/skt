@@ -30,7 +30,7 @@
 
 proc copy-flags {countries {sizes {16 24 64}}} {
     set from [file normalize ../images/flag/shiny]
-    set to [file normalize ./sku/images]
+    set to [file normalize ./fruho/images]
     foreach size $sizes {
         file mkdir [file join $to $size flag]
         foreach c $countries {
@@ -40,36 +40,36 @@ proc copy-flags {countries {sizes {16 24 64}}} {
 }
 
 
-proc build-sku {os arch} {
-    spit sku/builddate.txt $::builddate
-    copy-flags {PL GB UK DE FR US}
+proc build-fruho {os arch} {
+    spit fruho/builddate.txt $::builddate
+    copy-flags {PL GB UK DE FR US EMPTY}
     github-repo csp securitykiss-com  ;#https://github.com/securitykiss-com/csp/archive/0.1.0.zip
-    #build $os $arch sku base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 snit-2.3.2 doctools-1.4.19 textutil::expander-1.3.1 csp-0.1.0}
-    build $os $arch sku base-tk-8.6.3.1 {sklib-0.0.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 csp-0.1.0}
+    #build $os $arch fruho base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 snit-2.3.2 doctools-1.4.19 textutil::expander-1.3.1 csp-0.1.0}
+    build $os $arch fruho base-tk-8.6.3.1 {sklib-0.0.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 csp-0.1.0}
 
-    # this is necessary to prevent "cp: cannot create regular file ‘/usr/local/sbin/sku.bin’: Text file busy"
-    if {[file exists /usr/local/bin/sku.bin]} {
-        ex sudo mv /usr/local/bin/sku.bin /usr/local/bin/sku-prev.bin
+    # this is necessary to prevent "cp: cannot create regular file ‘/usr/local/sbin/fruho.bin’: Text file busy"
+    if {[file exists /usr/local/bin/fruho.bin]} {
+        ex sudo mv /usr/local/bin/fruho.bin /tmp/fruho.bin-tmp
     }
-    ex sudo cp build/sku/linux-x86_64/sku.bin /usr/local/bin/sku.bin
+    ex sudo cp build/fruho/linux-x86_64/fruho.bin /usr/local/bin/fruho.bin
 }
 
-proc build-skd {os arch} {
-    spit skd/builddate.txt $::builddate
-    # use the sku version as skd version
-    spit skd/buildver.txt [slurp sku/buildver.txt]
-    build $os $arch skd base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
-    #ex sudo service skd stop
+proc build-fruhod {os arch} {
+    spit fruhod/builddate.txt $::builddate
+    # use the fruho client version as fruhod version
+    spit fruhod/buildver.txt [slurp fruho/buildver.txt]
+    build $os $arch fruhod base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
+    #ex sudo service fruhod stop
 
-    # this is necessary to prevent "cp: cannot create regular file ‘/usr/local/sbin/skd.bin’: Text file busy"
-    # do the same when auto-upgrading inside SKD
-    if {[file exists /usr/local/sbin/skd.bin]} {
-        ex sudo mv /usr/local/sbin/skd.bin /usr/local/sbin/skd-prev.bin
+    # this is necessary to prevent "cp: cannot create regular file ‘/usr/local/sbin/fruhod.bin’: Text file busy"
+    # do the same when auto-upgrading inside fruhod
+    if {[file exists /usr/local/sbin/fruhod.bin]} {
+        ex sudo mv /usr/local/sbin/fruhod.bin /tmp/fruhod.bin-tmp
     }
-    ex sudo cp build/skd/linux-x86_64/skd.bin /usr/local/sbin/skd.bin
+    ex sudo cp build/fruhod/linux-x86_64/fruhod.bin /usr/local/sbin/fruhod.bin
 
-    ex sudo cp skd/exclude/etc/init.d/skd /etc/init.d/skd
-    #ex sudo service skd restart
+    ex sudo cp fruhod/exclude/etc/init.d/fruhod /etc/init.d/fruhod
+    #ex sudo service fruhod restart
 }
 
 proc build-deb-rpm {arch_exact} {
@@ -80,15 +80,15 @@ proc build-deb-rpm {arch_exact} {
         set distdir dist/linux-$arch
         file delete -force $distdir
         file mkdir $distdir
-        file copy skd/exclude/etc $distdir
-        file copy sku/exclude/usr $distdir
+        file copy fruhod/exclude/etc $distdir
+        file copy fruho/exclude/usr $distdir
         file mkdir $distdir/usr/local/sbin
-        file copy build/skd/linux-$arch/skd.bin $distdir/usr/local/sbin/skd.bin
+        file copy build/fruhod/linux-$arch/fruhod.bin $distdir/usr/local/sbin/fruhod.bin
         file mkdir $distdir/usr/local/bin
-        file copy build/sku/linux-$arch/sku.bin $distdir/usr/local/bin/sku.bin
-        file copy sku/exclude/sku $distdir/usr/local/bin/sku
+        file copy build/fruho/linux-$arch/fruho.bin $distdir/usr/local/bin/fruho.bin
+        file copy fruho/exclude/fruho $distdir/usr/local/bin/fruho
         cd $distdir
-        set fpmopts "-a $arch_exact -s dir -n skapp -v 0.4.0 --before-install ../../skd/exclude/skd.preinst --after-install ../../skd/exclude/skd.postinst --before-remove ../../skd/exclude/skd.prerm --after-remove ../../skd/exclude/skd.postrm usr etc"
+        set fpmopts "-a $arch_exact -s dir -n fruho -v 0.4.0 --before-install ../../fruhod/exclude/fruhod.preinst --after-install ../../fruhod/exclude/fruhod.postinst --before-remove ../../fruhod/exclude/fruhod.prerm --after-remove ../../fruhod/exclude/fruhod.postrm usr etc"
         ex fpm -t deb {*}$fpmopts
         ex fpm -t rpm --rpm-autoreqprov {*}$fpmopts
         cd ../..
@@ -97,13 +97,13 @@ proc build-deb-rpm {arch_exact} {
 
 proc build-total {} {
     foreach arch_exact {x86_64} {
-        build-sku linux $arch_exact
-        build-skd linux $arch_exact
+        build-fruho linux $arch_exact
+        build-fruhod linux $arch_exact
         build-deb-rpm $arch_exact
     }
     puts "Install from dpkg"
-    ex sudo dpkg -i ./dist/linux-x86_64/skapp_0.4.0_amd64.deb
-    #ex ./build/sku/linux-ix86/sku.bin
+    ex sudo dpkg -i ./dist/linux-x86_64/fruho_0.4.0_amd64.deb
+    #ex ./build/fruho/linux-ix86/fruho.bin
 }
 
 proc release {} {
@@ -128,10 +128,10 @@ prepare-lib sklib 0.0.0
 #build-total
 #
 #package require i18n
-#i18n code2msg ./sku/main.tcl {es pl} ./sku/messages.txt 
+#i18n code2msg ./fruho/main.tcl {es pl} ./fruho/messages.txt 
 
-build-sku linux x86_64
-build-skd linux x86_64
+build-fruho linux x86_64
+#build-fruhod linux x86_64
 #build-deb-rpm x86_64
 
 

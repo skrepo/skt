@@ -13,30 +13,27 @@ https://developer.gnome.org/integration-guide/stable/icons.html.en
 Use scalable folder for svg
 
 TODO: 
-- SKD check if it is possible to include OpenVPN in vfs and run it from there. How about upgrades then? If not in vfs, where to store OpenVPN? In the same place where SKD.
---- OpenVPN and SKD are stationary and stateless pieces
-- SKD as a Windows service
-- SKD/SKU handle "requires a TAP-Windows driver that is at least version 9.9" problem
-- SKD/SKU make the OpenVPN module pluggable so that tun/tap driver can be upgraded easily
+- check if it is possible to include OpenVPN in vfs and run it from there. How about upgrades then? If not in vfs, where to store OpenVPN? 
+- handle "requires a TAP-Windows driver that is at least version 9.9" problem
+- make the OpenVPN module pluggable so that tun/tap driver can be upgraded easily
 - deployment and upgrade code so that we can release early and upgrade often without worrying about supporting legacy stuff
 - it's OK to use existing welcome msg and other API, we need to support it for long time anyway
-- SKU HTTPS get existing welcome message - requires preloaded certificate in SKU
+- HTTPS get existing welcome message - requires preloaded certificate 
 - do canary deployment, new app only for new users from English speaking regions - facilitate feedback
 
 
-- sku run from script: allows change logging easily and running in background
-In sku script redirect only stdout to log file. stderr to console so that we can report errors if GUI cannot be started - that rules out nohup - it will redirect stderr to stdout then
-TODO: handle sku close/quit - give option to close without disconnect?
-TODO: sku handle minimizing to tray. Is it OS/desktop dependent?
+In client script redirect only stdout to log file. stderr to console so that we can report errors if GUI cannot be started - that rules out nohup - it will redirect stderr to stdout then
+TODO: handle close/quit - give option to close without disconnect?
+TODO: handle minimizing to tray. Is it OS/desktop dependent?
 TODO: check Linux AirVPN client for inspiration
 
-TODO sku: cmdline --install-deps --generate-keys
+TODO  cmdline --install-deps --generate-keys
 Problem: we cannot do apt-get/yum/zypper install directly from postinst script because dpkg/rpm is still running and locking package management. Need to:
 + schedule to install later
-- it must be done after dpkg/rpm completed but we need root => it must be done by SKD
-- if initiated from postinst, SKU to send install command to SKD but not wait for response. SKD retry a few times
-- however no need to call this procedure from postinst. It would make sense because installing deps could be part of dpkg/rpm install, but then it must be done asynchronously from SKD anyway
-- so it's better to install deps on first run of SKU, then SKU may wait for response from SKD and report to the user.
+- it must be done after dpkg/rpm completed but we need root => it must be done by daemon
+- if initiated from postinst, send install command to daemon but not wait for response. daemon retry a few times
+- however no need to call this procedure from postinst. It would make sense because installing deps could be part of dpkg/rpm install, but then it must be done asynchronously from daemon anyway
+- so it's better to install deps on first run of gui, then client may wait for response from daemon and report to the user.
 - progress bar to inform user
 + pkg-install and lib-install commands
 
@@ -51,13 +48,12 @@ Service solution for SKT app:
 
 
 
-TODO: skd/sku: script zip upgrade files and sign. In SKD unzip, verify and deploy. Generate and store RSA key
 ==============================
 SKT generated ids/cns require new soft on vbox/skc side. Write it from scratch, get rid of the old cruft. Requirements:
 - simple and minimal
 - to be run on existing Vboxes and not conflict with existing soft and OpenVPN instances
 --- use UDP and TCP ports as a transport channel for OpenVPN instances
---- hide UDP/TCP and port choice from user. Various reconnection attempts handled by SKU
+--- hide UDP/TCP and port choice from user. Various reconnection attempts handled program
 - distributed, split to Vbox and SKC still needed but move most of work to Vbox
 - SKT has no direct communication with SKC, only SKT <-> Vbox, Vbox forwards to SKC via tunnel
 Vbox reqs:
@@ -78,16 +74,15 @@ Vbox reqs:
 TODO:
 - provide CA.crt for tls that signs skw and IP based certs
 - admin side scripts: generate CA.key, create cert from CSR and CA.key, sign the upgrade deb/rpm
-- sku to check for upgrades and download upgrade
-- sku command line option to restart SKD service (only when run with root). Why?
+- command line option to restart daemon service (only when run with root). Why?
 
 # generate key pairs and cn should be only once on -generate-keys
-# signCert may be retried on every sku run
+# signCert may be retried on every fruho run
 
 
 
-We need smarter solution for sku logging - the current one with stdout redirect is not going to work on windows
-Also we need to daemonize from inside sku
+We need smarter solution for  logging - the current one with stdout redirect is not going to work on windows
+Also we need to daemonize from inside the program
 Never again redirect stdout or stderr in OS-portable apps
 
 TODO:

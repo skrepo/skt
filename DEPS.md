@@ -126,6 +126,6 @@ rpmlib(PayloadIsXz) <= 5.2-1
 # ./openvpn 
 ./openvpn: error while loading shared libraries: libssl.so.10: cannot open shared object file: No such file or directory
 
-This is getting messy. Solution: use openvpn provided by OS package manager, and add dependency in deb/rpm package. Check openvpn and openssl version in SKD/SKU
+This is getting messy. Solution: use openvpn provided by OS package manager, and add dependency in deb/rpm package. 
 
-Also we need to avoid unfriendly "missing dependencies error" when installing with dpkg/rpm. Let it install even without openvpn or X11 libraries and cope with it dynamically when loading Tk and OpenVPN. We need root for that so the Tcl script should be started from postinst. That must be the skt with proper option for checking Tk and any (skt/skd) for checking openvpn.
+Also we need to avoid unfriendly "missing dependencies error" when installing with dpkg/rpm. Let it install even without openvpn or X11 libraries and cope with it dynamically when loading Tk and OpenVPN. We need root for that so the Tcl script should be started from postinst. That must be the skt with proper option for checking Tk and any for checking openvpn.

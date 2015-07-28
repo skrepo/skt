@@ -217,13 +217,20 @@ proc generate-csr {privkey csr cn} {
 # Extract common name from certificate
 # Return cn on success, empty string otherwise
 # Throws errors on failure
-proc cn-from-cert {crtpath} {
+# filetype should be crt or csr
+proc extract-cn-from {filetype crtpath} {
     memoize
     if {![file isfile $crtpath]} {
-        error [log "ERROR: cn-from-cert: $crtpath does not exist"]
+        error [log "ERROR: extract-cn-from $filetype: $crtpath does not exist"]
     }
-    log cn-from-cert $crtpath
-    set cmd [list openssl x509 -noout -subject -in $crtpath]
+    log extract-cn-from $filetype $crtpath
+    if {$filetype eq "crt"} {
+        set cmd [list openssl x509 -noout -subject -in $crtpath]
+    } elseif {$filetype eq "csr"} {
+        set cmd [list openssl req -noout -subject -in $crtpath]
+    } else {
+        error [log "Unexpected file type in extract-cn-from: $filetype"]
+    }
     if {[catch {exec {*}$cmd} subject err]} {
         error [log $err]
     }
@@ -234,6 +241,7 @@ proc cn-from-cert {crtpath} {
         error [log Could not extract cn from subject $subject]
     }
 }
+
 
 
 proc memoize {} {

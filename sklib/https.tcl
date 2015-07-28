@@ -216,9 +216,9 @@ proc ::https::parseurl {url} {
 # See https::geturl for detailed options
 # All errors propagated upstream
 # Examples:
-# puts [https curl https://www.securitykiss.com/geo-ip.php]
-# set tok [https curl https://www.securitykiss.com/geo-ip.php -command ::https::curl-callback]
-# puts [https curl https://91.227.221.115/geo-ip.php -expected-hostname www.securitykiss.com]
+# puts [https curl https://example.com/index.html]
+# set tok [https curl https://example.com/index.html -command ::https::curl-callback]
+# puts [https curl https://91.227.221.115/geo-ip.php -expected-hostname example.com]
 proc ::https::curl {url args} {
     set async [expr {[lsearch -exact $args -command] != -1}]
     if {[catch {set tok [https::geturl $url {*}$args]} out err]} {
