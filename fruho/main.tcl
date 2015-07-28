@@ -189,7 +189,6 @@ proc main {} {
     in-ui main
     daemon-monitor
     plan-monitor
-    conn-status-display
 }
 
 
@@ -256,8 +255,6 @@ proc request-cert {chresult} {
             <- $chout {
                 <- $chout
                 puts stderr [log request-cert certificate received]
-                # update the GUI - conn-status-display will check if cert file is actually there
-                conn-status-display
                 $chresult <- 1
             }
             <- $cherr {
@@ -272,38 +269,6 @@ proc request-cert {chresult} {
         log "$e1 $e2"
     }
 }
-
-#TODO make the sign-cert asynchronous
-proc cert-sign-request {csr} {
-    set crt [file join [file rootname $csr] .crt]
-    if {[file exists $crt]} {
-        puts stderr [log CRT $crt already exists]
-    } else {
-        # POST csr and save cert
-        for {set i 0} {$i<[llength $::model::Vigos]} {incr i} {
-            if {[catch {open $csr r} fd err] == 1} {
-                log "Failed to open $csr for reading"
-                log $err
-            }
-            set vigo [get-next-vigo "" $i]
-            log Trying vigo $vigo
-            if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err] == 1} {
-                log $vigo FAILED
-                log $err
-                close $fd
-            } else {
-                log $vigo OK
-                puts stderr [log Received the signed certificate]
-                log crtdata: $crtdata
-                spit $crt $crtdata
-                close $fd
-                return
-            }
-        }
-        puts stderr [log Could not receive the signed certificate]
-    }
-}
-
 
 # This is blocking procedure to be run from command line
 # ruturn 1 on success, 0 otherwise
@@ -652,16 +617,6 @@ proc vigo-curl {chout cherr urlpath args} {
     go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com {*}$args
 }
 
-proc vigo-curl-post {chout cherr urlpath postfromfile} {
-    go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com -postfromfile $postfromfile
-}
-
-proc vigo-wget {chout cherr urlpath gettofile} {
-    go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com -gettofile $gettofile
-# -indiv_timeout 60000
-}
-
-
 
 
 # save main window position and size changes in Config
@@ -707,12 +662,15 @@ proc cert-monitor {} {
         channel chresult 10
         go request-cert $chresult
         if {[<- $chresult] == 1} {
+            # update the GUI - conn-status-display will check if cert file is actually there
+            conn-status-display
             return
         }
-        ticker t1 3000 #2
+        ticker t1 10000 #3
         range t $t1 {
             go request-cert $chresult
             if {[<- $chresult] == 1} {
+                conn-status-display
                 return
             }
         }
@@ -746,7 +704,13 @@ proc conn-status-display {} {
     try {
         # this represents fruhod/openvpn connection status
         set status $::model::Connstatus
+        # Connstatus_enforced represents status set by GUI controls and may overwrite status
+        if {$::model::Connstatus_enforced ne ""} {
+            set status $::model::Connstatus_enforced
+        }
+        puts stderr "conn-status-display status: $status"
         # the GUI status depends also on whether certificate was already signed online - will be checked later
+
         img place 32/status/$status .c.stat.imagestatus
     
         set ip [dict-pop $::model::Current_sitem ip {}]
@@ -781,9 +745,6 @@ proc conn-status-display {} {
             }
         }
         
-        puts stderr [log conn-status-display running]
-
-
         # CSR not completed yet - disable buttons
         if {![is-cert-received]} {
             puts stderr [log conn-status-display cert not received]
@@ -1597,31 +1558,6 @@ proc vigo-hosts {tryout tryerr args} {
 }
 
 
-
-
-
-
-
-
-
-# get next host to try based on the attempt number relative the last succeeded host
-proc get-next-host {hosts host_lastok attempt} {
-    set i [lsearch -exact $hosts $host_lastok]
-    if {$i == -1} {
-        set i 0
-    }
-    set next [expr {($i + $attempt) % [llength $hosts]}]
-    return [lindex $hosts $next]
-}
-
-# get next vigo to try based on the attempt number relative the last succeeded vigo
-proc get-next-vigo {vigo_lastok attempt} {
-    #TODO if connected use vigo internal IP regardless of attempt
-    #else use vigo list
-    return [get-next-host $::model::Vigos $vigo_lastok $attempt]
-}
-
-
 # periodically trigger updating usage meter
 proc plan-monitor {} {
     #puts stderr "########################1"
@@ -1719,6 +1655,7 @@ proc ffread {} {
             set ::model::Ffconn_beat [clock milliseconds]
             set ovpn_config [dict-pop $stat ovpn_config {}]
             set ::model::Current_sitem [lindex [ovconf get $ovpn_config --meta] 0]
+            puts stderr $stat
             conn-status-update $stat
             #TODO heartbeat timeout
             #connstatus update trigger
@@ -1731,16 +1668,14 @@ proc ffread {} {
 
 proc ClickConnect {} {
     try {
-        # we artificially enforce Connstatus and update display 
-        # in order to immediately disable button to prevent double-click
-        # The Connstatus may be corrected by daemon reports
-        set ::model::Connstatus connecting
+        # immediately disable button to prevent double-click
+        set ::model::Connstatus_enforced connecting
+        after 1500 [list set ::model::Connstatus_enforced ""]
         # temporary set Current_sitem - it will be overwritten by meta info
         # received back from daemon
         set ::model::Current_sitem [model selected-sitem [current-provider]]
     
         set localconf [::ovconf::parse [file join $::model::KEYSDIR config.ovpn]]
-        conn-status-display
         set ip [dict get $::model::Current_sitem ip]
         # TODO set ovs according to ovs preferences
         set ovs [lindex [dict get $::model::Current_sitem ovses] 0]
@@ -1749,6 +1684,7 @@ proc ClickConnect {} {
         #TODO not really append, it's rather replace
         append localconf " --proto $proto --remote $ip $port --meta $::model::Current_sitem --cert [file join $::model::KEYSDIR client.crt] --key [file join $::model::KEYSDIR client.key]"
         ffwrite "config $localconf"
+        conn-status-display
     } on error {e1 e2} {
         log "$e1 $e2"
     }
@@ -1756,10 +1692,9 @@ proc ClickConnect {} {
 
 proc ClickDisconnect {} {
     try {
-        # we artificially enforce Connstatus and update display 
-        # in order to immediately disable button to prevent double-click
-        # The Connstatus may be corrected by daemon reports
-        set ::model::Connstatus disconnected
+        # immediately disable button to prevent double-click
+        set ::model::Connstatus_enforced disconnected
+        after 1500 [list set ::model::Connstatus_enforced ""]
         conn-status-display
     
         ffwrite stop

@@ -49,10 +49,15 @@ namespace eval ::model {
     # latest fruho version to upgrade from check-for-updates
     variable Latest_version 0
 
-    # OpenVPN connection status 
+    # OpenVPN connection status as reported by fruhod/openvpn stat reports
     # Although the source of truth for connstatus is fruhod stat reports
     # we keep local copy to know when to update display
     variable Connstatus unknown
+
+    # Connection status enforced temporarily  by GUI controls (pressing button) 
+    # in order to show GUI changes (disabled/enabled) immediately
+    # without waiting for update from reports from fruho/openvpn
+    variable Connstatus_enforced ""
 
     # Last line of log received from fruhod/openvpn server with ovpn prefix
     variable OvpnServerLog ""
