@@ -178,6 +178,14 @@ proc main {} {
     copy-merge [file join [file dir [info script]] certs] $cadir
     https init -cadir $cadir
 
+    # Also copy default config for default provider at first run
+    set defaultovpn [file join $::model::KEYSDIR config.ovpn]
+    if {![file exists $defaultovpn]} {
+        file copy -force [file join [file dir [info script]] ovpn config.ovpn] $defaultovpn
+    }
+
+
+
     in-ui main
     daemon-monitor
     plan-monitor
@@ -222,6 +230,48 @@ proc error-cli {msg} {
     puts stderr $msg
 }
 
+# while we can use default welcome message and ovpn config
+# the cert must be signed online in order to move forward
+proc is-cert-received {} {
+    set f [file join $::model::KEYSDIR client.crt]
+    return [file exists $f]
+}
+
+
+proc request-cert {chresult} {
+    try {
+        set csr [file join $::model::KEYSDIR client.csr]
+        set crt [file join $::model::KEYSDIR client.crt]
+        if {![file exists $csr]} {
+            log request-cert abandoned because $crt does not exist
+            return
+        }
+        if {[file exists $crt]} {
+            log request-cert abandoned because $crt already exists
+            return 
+        }
+        channel {chout cherr} 1
+        vigo-curl $chout $cherr /sign-cert -method POST -postfromfile $csr -gettofile $crt
+        select {
+            <- $chout {
+                <- $chout
+                puts stderr [log request-cert certificate received]
+                # update the GUI - conn-status-display will check if cert file is actually there
+                conn-status-display
+                $chresult <- 1
+            }
+            <- $cherr {
+                set err [<- $cherr]
+                puts stderr [log request-cert failed with error: $err]
+                $chresult <- 0
+            }
+        }
+        $chout close
+        $cherr close
+    } on error {e1 e2} {
+        log "$e1 $e2"
+    }
+}
 
 #TODO make the sign-cert asynchronous
 proc cert-sign-request {csr} {
@@ -237,7 +287,6 @@ proc cert-sign-request {csr} {
             }
             set vigo [get-next-vigo "" $i]
             log Trying vigo $vigo
-            #TODO expected-hostname should not be needed - ensure that vigo provides proper certificate with IP common name
             if {[catch {https curl https://$vigo:10443/sign-cert -timeout 8000 -method POST -type text/plain -querychannel $fd -expected-hostname www.securitykiss.com} crtdata err] == 1} {
                 log $vigo FAILED
                 log $err
@@ -281,9 +330,18 @@ proc main-generate-keys {} {
         }
     }
 
-    # if this fails, retry later when fruho client starts
-    cert-sign-request $csr
-
+    if {![is-cert-received]} {
+        # if this fails, retry later when fruho client starts
+        channel chresult 10
+        go request-cert $chresult
+        #TODO use csp::select with timeout
+        set res [<-! $chresult]
+        if {$res == 1} {
+            puts stderr [log Certificate received]
+        } else {
+            puts stderr [log Certificate NOT received]
+        }
+    }
     return
 }
 
@@ -312,7 +370,7 @@ proc main-gui {} {
     log Running GUI
     # TODO fruho client may be started before all Tk deps are installed, so run in CLI first and check for Tk a few times with delay
     package require Tk 
-    wm title . "Fruho VPN"
+    wm title . "Fruho"
     wm iconphoto . -default [img load 16/logo] [img load 24/logo] [img load 32/logo] [img load 64/logo]
     wm deiconify .
     wm protocol . WM_DELETE_WINDOW {
@@ -356,16 +414,13 @@ proc main-gui {} {
     grid rowconfigure .c 0 -weight 1
     bind . <Configure> [list MovedResized %W %x %y %w %h]
 
-    go check-for-updates ""
     go get-welcome
     go get-ovpnconfig
-
-    #ticker t1 1000 #5
-    #go config-init-monitor $t1
-
-
-
+    go check-for-updates ""
+    go cert-monitor
+    conn-status-display
 }
+
 
 proc check-for-updates {uframe} {
     try {
@@ -504,6 +559,32 @@ proc plan-comparator {tstamp a b} {
     return [expr {[dict-pop $b limit 0] - [dict-pop $a limit 0]}] 
 }
  
+proc get-external-ip {} {
+    try {
+        channel {chout cherr} 1
+        vigo-curl $chout $cherr /ip
+        select {
+            <- $chout {
+                set data [<- $chout]
+                puts stderr [log get-external-ip received: $data]
+                #if valid ip
+                if {[is-valid-ip $data]} {
+                    set ::model::Gui_externalip $data
+                } else {
+                    set ::model::Gui_externalip ""
+                }
+            }
+            <- $cherr {
+                set err [<- $cherr]
+                puts stderr [log get-external-ip failed with error: $err]
+            }
+        }
+        $chout close
+        $cherr close
+    } on error {e1 e2} {
+        log "$e1 $e2"
+    }
+}
 
 proc get-welcome {} {
     try {
@@ -524,6 +605,7 @@ proc get-welcome {} {
                 model slist [current-provider] [current-slist [model now]]
                 set ::model::Gui_externalip [dict-pop $welcome ip ???]
                 usage-meter-update [model now]
+
             }
             <- $cherr {
                 set err [<- $cherr]
@@ -543,17 +625,15 @@ proc get-ovpnconfig {} {
     try {
         set platform [this-os]-[this-arch]
         channel {chout cherr} 1
-        vigo-curl $chout $cherr /ovpnconfig/[build-version]/$platform/$::model::Cn
+        vigo-curl $chout $cherr /ovpnconfig/[build-version]/$platform/$::model::Cn -gettofile [file join $::model::KEYSDIR config.ovpn]
         select {
             <- $chout {
                 set data [<- $chout]
-                puts stderr [log ovpngconfig received]
-                spit [file join $::model::KEYSDIR config.ovpn] $data
-                puts stderr [log ovpnconfig saved]
+                puts stderr [log config.ovpn saved in $::model::KEYSDIR]
             }
             <- $cherr {
                 set err [<- $cherr]
-                puts stderr [log get-welcome failed with error: $err]
+                puts stderr [log get-ovpnconfig failed with error: $err]
             }
         }
         $chout close
@@ -563,15 +643,24 @@ proc get-ovpnconfig {} {
     }
 }
 
-proc vigo-curl {chout cherr urlpath} {
-    go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com
+# example args:
+# -method POST
+# -gettofile filename  (works like wget)
+# -postfromfile filename  (should be used with -method POST, does not exclude using -gettofile)
+proc vigo-curl {chout cherr urlpath args} {
+    #TODO expected-hostname should not be needed - ensure that vigo provides proper certificate with IP common name
+    go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com {*}$args
 }
 
+proc vigo-curl-post {chout cherr urlpath postfromfile} {
+    go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com -postfromfile $postfromfile
+}
 
-proc vigo-wget {chout cherr urlpath filepath} {
-    go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com -filepath $filepath
+proc vigo-wget {chout cherr urlpath gettofile} {
+    go vigo-hosts $chout $cherr -hosts $::model::Vigos -hindex $::model::vigo_lastok -urlpath $urlpath -proto https -port 10443 -expected_hostname www.securitykiss.com -gettofile $gettofile
 # -indiv_timeout 60000
 }
+
 
 
 
@@ -609,18 +698,30 @@ proc conn-status-update {stat} {
     }
 }
 
-proc config-init-update {} {
-}
-
-# trigger config initialization a few times or until succeeded
-proc config-init-monitor {tickerch} {
-    config-init-update
-    range t $tickerch {
-        if {$::model::Config_init_complete} {
-            $tickerch close
-        } else {
-            config-init-update
+proc cert-monitor {} {
+    try {
+        puts stderr [log cert-monitor running]
+        if {[is-cert-received]} {
+            return
         }
+        channel chresult 10
+        go request-cert $chresult
+        if {[<- $chresult] == 1} {
+            return
+        }
+        ticker t1 3000 #2
+        range t $t1 {
+            go request-cert $chresult
+            if {[<- $chresult] == 1} {
+                return
+            }
+        }
+        puts stderr [log All attempts to reqest certificate from CSR failed]
+    } on error {e1 e2} {
+        log "$e1 $e2"
+    } finally {
+        catch {$chresult close}
+        catch {$t1 close}
     }
 }
 
@@ -642,48 +743,63 @@ proc conn-status-reported {stat} {
 
 
 proc conn-status-display {} {
-    set status $::model::Connstatus
-    img place 32/status/$status .c.stat.imagestatus
-
-    set ip [dict-pop $::model::Current_sitem ip {}]
-    set city [dict-pop $::model::Current_sitem city ?]
-    set ccode [dict-pop $::model::Current_sitem ccode ?]
-    set flag EMPTY
-
-    switch $status {
-        unknown {
-            lassign {normal disabled disabled} state1 state2 state3
-            set msg [_ "Unknown"] ;# _a297104e26a168e6
-            set ::model::Gui_externalip ""
-        }
-        disconnected {
-            lassign {normal normal disabled} state1 state2 state3
-            set msg [_ "Disconnected"] ;# _afd638922a7655ae
-            set ::model::Gui_externalip ""
-            after 1000 [list go get-welcome]
-        }
-        connecting {
-            lassign {disabled disabled normal} state1 state2 state3
-            set msg [_ "Connecting to {0}, {1}" $city $ccode] ;# _a9e00a1f366a7a19
-        }
-        connected {
-            lassign {disabled disabled normal} state1 state2 state3
-            set msg [_ "Connected to {0}, {1}" $city $ccode] ;# _540ebc2e02c2c88e
-            # TODO make it more robust - for now we assume external ip after get connected. Check externally.
-            set ::model::Gui_externalip $ip
-            if {$ccode ni {"" ?}} {
-                set flag $ccode
+    try {
+        # this represents fruhod/openvpn connection status
+        set status $::model::Connstatus
+        # the GUI status depends also on whether certificate was already signed online - will be checked later
+        img place 32/status/$status .c.stat.imagestatus
+    
+        set ip [dict-pop $::model::Current_sitem ip {}]
+        set city [dict-pop $::model::Current_sitem city ?]
+        set ccode [dict-pop $::model::Current_sitem ccode ?]
+        set flag EMPTY
+    
+        switch $status {
+            unknown {
+                lassign {normal disabled disabled} state1 state2 state3
+                set msg [_ "Unknown"] ;# _a297104e26a168e6
+                set ::model::Gui_externalip ""
+            }
+            disconnected {
+                lassign {normal normal disabled} state1 state2 state3
+                set msg [_ "Disconnected"] ;# _afd638922a7655ae
+                set ::model::Gui_externalip "Updating..."
+                after 1000 [list go get-external-ip]
+            }
+            connecting {
+                lassign {disabled disabled normal} state1 state2 state3
+                set msg [_ "Connecting to {0}, {1}" $city $ccode] ;# _a9e00a1f366a7a19
+            }
+            connected {
+                lassign {disabled disabled normal} state1 state2 state3
+                set msg [_ "Connected to {0}, {1}" $city $ccode] ;# _540ebc2e02c2c88e
+                # TODO make it more robust - for now we assume external ip after get connected. Check externally.
+                set ::model::Gui_externalip $ip
+                if {$ccode ni {"" ?}} {
+                    set flag $ccode
+                }
             }
         }
-    }
+        
+        puts stderr [log conn-status-display running]
+
+
+        # CSR not completed yet - disable buttons
+        if {![is-cert-received]} {
+            puts stderr [log conn-status-display cert not received]
+            lassign {normal disabled disabled} state1 state2 state3
+        }
     
-    img place 64/flag/$flag .c.stat.flag
-
-    tabset-state $state1
-    .c.bs.connect configure -state $state2
-    .c.bs.disconnect configure -state $state3
-
-    .c.stat.status configure -text $msg
+        img place 64/flag/$flag .c.stat.flag
+    
+        tabset-state $state1
+        .c.bs.connect configure -state $state2
+        .c.bs.disconnect configure -state $state3
+    
+        .c.stat.status configure -text $msg
+    } on error {e1 e2} {
+        puts stderr [log "$e1 $e2"]
+    }
 }
 
 proc usage-meter-update-blank {} {
@@ -1178,17 +1294,18 @@ proc wait-for-items {collector n timeout command} {
 proc download-latest-skt {collector url filepath} {
     try {
         channel {chout cherr} 1
-        vigo-wget $chout $cherr $url $filepath
+        # wget the binary
+        vigo-curl $chout $cherr $url -gettofile $filepath
         log "download-latest-skt started $url $filepath"
         select {
             <- $chout {
-                set data [<- $chout]
+                <- $chout
                 $collector <- $filepath
-                puts stderr "download-latest-skt $url $filepath OK"
+                puts stderr [log "download-latest-skt $url $filepath OK"]
             }
             <- $cherr {
                 set err [<- $cherr]
-                puts stderr "download-latest-skt $url $filepath ERROR: $err"
+                puts stderr [log "download-latest-skt $url $filepath ERROR: $err"]
             }
         }
     } on error {e1 e2} {
@@ -1398,7 +1515,7 @@ proc ShowModal {win args} {
 
 proc vigo-hosts {tryout tryerr args} {
     try {
-        fromargs {-urlpath -indiv_timeout -hosts -hindex -proto -port -expected_hostname -filepath} \
+        fromargs {-urlpath -indiv_timeout -hosts -hindex -proto -port -expected_hostname -method -gettofile -postfromfile} \
                  {/ 5000 {} 0 https}
         if {$proto ne "http" && $proto ne "https"} {
             error "Wrong proto: $proto"
@@ -1418,6 +1535,20 @@ proc vigo-hosts {tryout tryerr args} {
             lappend opts -expected-hostname $expected_hostname
         }
     
+        if {$method ne ""} {
+            lappend opts -method $method
+        }
+        if {$gettofile ne ""} {
+            # in order to prevent opening the file in case when download fails 
+            # (it's not clear then whether file exists or not - file command gets confused)
+            # open temporary file and move on success
+            set tmpgettofile /tmp/gettofile_[rand-big]
+            lappend opts -channel [open $tmpgettofile w]
+        }
+        if {$postfromfile ne ""} {
+            lappend opts -querychannel [open $postfromfile r] -type text/plain
+        }
+
         set hlen [llength $hosts]
         foreach i [seq $hlen] {
             set host_index [expr {($hindex+$i) % $hlen}]
@@ -1427,11 +1558,7 @@ proc vigo-hosts {tryout tryerr args} {
             # Need to catch error in case the handler triggers after the channel was closed (if using select with timer channel for timeouts)
             # or https curl throws error immediately
             try {
-                if {$filepath ne ""} {
-                    https wget $url $filepath {*}$opts -command [-> chhttp]
-                } else {
-                    https curl $url {*}$opts -command [-> chhttp]
-                }
+                https curl $url {*}$opts -command [-> chhttp]
                 set tok [<- $chhttp]
                 upvar #0 $tok state
                 set ncode [http::ncode $tok]
@@ -1440,23 +1567,26 @@ proc vigo-hosts {tryout tryerr args} {
                     set data [http::data $tok]
                     set ::model::vigo_lastok $host_index
                     log "vigo-hosts $url success. data: $data"
+                    if {$gettofile ne ""} {
+                        catch {set fd $state(-channel); close $fd;}
+                        puts stderr "moving $tmpgettofile to $gettofile"
+                        file rename -force $tmpgettofile $gettofile
+                    }
                     $tryout <- $data
                     return
                 } else {
                     log "vigo-hosts $url failed with status: [http::status $tok], error: [http::error $tok]"
-                    if {$filepath ne ""} {
-                        file delete $filepath
+                    if {$gettofile ne ""} {
+                        file delete $gettofile
                     }
                 }
             } on error {e1 e2} { 
                 log "$e1 $e2"
             } finally {
-                catch {
-                    http::cleanup $tok
-                    $chhttp close
-                    set fd $state(-channel)
-                    close $fd
-                }
+                catch {http::cleanup $tok}
+                catch {$chhttp close}
+                catch {set fd $state(-channel); close $fd;}
+                catch {set fd $state(-querychannel); close $fd;}
             }
         }
         $tryerr <- "All hosts failed error"
