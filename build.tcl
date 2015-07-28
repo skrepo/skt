@@ -42,6 +42,7 @@ proc copy-flags {countries {sizes {16 24 64}}} {
 
 proc build-fruho {os arch} {
     spit fruho/builddate.txt $::builddate
+    spit fruho/buildver.txt $::FRUHO_VERSION
     copy-flags {PL GB UK DE FR US EMPTY}
     github-repo csp securitykiss-com  ;#https://github.com/securitykiss-com/csp/archive/0.1.0.zip
     #build $os $arch fruho base-tk-8.6.3.1 {sklib-0.0.0 Tkhtml-3.0 tls-1.6.4 Tclx-8.4 cmdline-1.5 anigif-1.3 json-1.3.3 snit-2.3.2 doctools-1.4.19 textutil::expander-1.3.1 csp-0.1.0}
@@ -56,8 +57,7 @@ proc build-fruho {os arch} {
 
 proc build-fruhod {os arch} {
     spit fruhod/builddate.txt $::builddate
-    # use the fruho client version as fruhod version
-    spit fruhod/buildver.txt [slurp fruho/buildver.txt]
+    spit fruhod/buildver.txt $::FRUHO_VERSION
     build $os $arch fruhod base-tk-8.6.3.1 {sklib-0.0.0 Tclx-8.4}
     #ex sudo service fruhod stop
 
@@ -117,6 +117,8 @@ proc test {} {
     tcltest::runAllTests
 }
 
+
+set ::FRUHO_VERSION 0.0.2
 
 prepare-lib sklib 0.0.0
 
